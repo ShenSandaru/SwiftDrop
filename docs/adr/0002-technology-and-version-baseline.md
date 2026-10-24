@@ -48,9 +48,29 @@ Sources were checked on 2026-10-24.
 | TypeScript | **6.0.x** (`~6.0.3`) | Override (the generator defaults to `^5`) |
 | `@types/node` | **24.x** | Override to match the Node.js runtime (the generator defaults to `^20`) |
 | `@types/react`, `@types/react-dom` | 19.x | Generator |
-| ESLint | **9.x** | Generator (`^9`) |
-| Tailwind CSS | **4.x**, with the PostCSS or Turbopack plugin the generator selects | Generator (`^4`) |
-| shadcn/ui | CLI `shadcn@4.x` via `npx`; components are copied into the repo | Run on demand |
+| ESLint | **9.x**, end-of-life since 2026-08-06 and kept on purpose (see below) | Generator (`^9`) |
+| Tailwind CSS | **4.x** through `@tailwindcss/turbopack`, the Turbopack CSS loader in `next.config.ts`. There is no PostCSS config. | Generator (`^4`) |
+| shadcn/ui | CLI `shadcn@4.x`, `base-nova` preset with neutral base color. Components use **Base UI** (`@base-ui/react`), not Radix. Component source is copied into `components/ui/`. | `shadcn init` |
+| shadcn runtime packages | `shadcn` (provides `shadcn/tailwind.css`, imported by `app/globals.css`), `cn` (class merging; replaces `clsx` + `tailwind-merge`), `@base-ui/react`, `class-variance-authority`, `lucide-react`, `tw-animate-css` | Added by `shadcn init` |
+
+#### ESLint 9 (end-of-life)
+
+ESLint 9 reached end-of-life on 2026-08-06, and ESLint 10 is the only supported line. We still use
+ESLint 9 because the official Next.js 16.4 template installs it. `eslint-config-next` 16.4.3 also
+depends on `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, whose peer
+ranges allow ESLint 9 at most. ESLint is a development-only tool and is not shipped to users.
+Do not force ESLint 10 with peer-dependency overrides or `--legacy-peer-deps`. **Upgrading to
+ESLint 10 is pending** until `eslint-config-next` and its plugins declare support for it.
+
+#### Next.js configuration choices
+
+- **Cache Components: disabled on purpose.** It is part of the generator's "recommended defaults",
+  but it changes the rendering model: dynamic data must sit inside `<Suspense>` or be marked with
+  `'use cache'`, otherwise the build fails. That is an extra source of errors for a team new to
+  Next.js, and the current requirements do not need it. It can be reconsidered later (one option in
+  `next.config.ts`) if the application needs it, and the change should be recorded in an ADR.
+- **React Compiler: disabled** (generator default).
+- No `src/` directory; import alias `@/*`; Turbopack is the default bundler; `AGENTS.md` is included.
 
 ### Infrastructure
 
@@ -120,9 +140,26 @@ Sources were checked on 2026-10-24.
 - `eslint-config-next` 16.4.3 depends on `eslint-plugin-react`, `eslint-plugin-import` and
   `eslint-plugin-jsx-a11y`. Their peer ranges allow ESLint 9 at most, which rules out ESLint 10.
   Source: npm registry metadata
+- ESLint v9 (last release 9.39.5) reached end-of-life on 2026-08-06. v10 is the current line.
+  Source: <https://eslint.org/version-support>
 - shadcn/ui: "All components are updated for Tailwind v4 and React 19." New projects use
   `tw-animate-css`.
   Source: <https://ui.shadcn.com/docs/tailwind-v4>
+- The `cn` package is published by the shadcn maintainer from <https://github.com/shadcn-ui/cn>
+  (MIT). Source: npm registry metadata
+- **Stage 3 scaffold (2026-10-25), verified against the generated files:**
+  - Installed: Next.js 16.4.3, React 19.3.0, TypeScript 6.0.3, `@types/node` 24.19.2, ESLint 9.39.5,
+    `eslint-config-next` 16.4.3, `typescript-eslint` 8.72.0, Tailwind CSS 4.3.3,
+    `@tailwindcss/turbopack` 4.3.3, `shadcn` 4.22.1, `cn` 0.5.0, `@base-ui/react` 1.9.0.
+  - Results: `npm ci`, `npm run lint` and `npm run build` succeed on Node.js 24.22.1.
+- **npm `allow-scripts` warning for `unrs-resolver`:** npm 11 skips this package's postinstall
+  script. The script only runs `napi-postinstall`, a fallback for npm bug
+  [npm/cli#4828](https://github.com/npm/cli/issues/4828), where npm sometimes fails to install the
+  platform-specific native binding. The bindings are normal optional dependencies. The lockfile
+  lists all 22 platform bindings, and on Windows x64 the binding installs and loads correctly.
+  No remediation is needed. If lint ever reports a missing native binding, delete `node_modules`
+  and run `npm ci`. Do not approve install scripts globally.
+  Sources: `node_modules/unrs-resolver/package.json`, `node_modules/napi-postinstall/README.md`
 - Docker Desktop on Windows needs WSL 2.1.5 or later and Windows 11 23H2 or later. The current
   release is 4.96.3, with Engine 29.9.x and Compose v5.6.x.
   Sources: <https://docs.docker.com/desktop/setup/install/windows-install/>,
@@ -133,10 +170,8 @@ Sources were checked on 2026-10-24.
 - **Spring AMQP 4.1 with RabbitMQ 4.3:** no official version matrix exists. Spring AMQP uses
   AMQP 0-9-1 through `amqp-client` 5.x, which RabbitMQ 4.x supports. Stage 6 confirms this with a
   connection smoke test.
-- **shadcn/ui with Next.js 16.4:** shadcn publishes no per-version Next.js matrix. Stage 3 verifies
-  it with `npm run build` and `npm run lint`.
-- **TypeScript 6.0 with `create-next-app` output:** Next.js documents TypeScript 6 support, but the
-  generator defaults to `^5`. Stage 3 verifies the override with a clean build and lint.
+- ~~shadcn/ui with Next.js 16.4~~ and ~~TypeScript 6.0 with the `create-next-app` output~~ were
+  confirmed in Stage 3 by a clean `npm ci`, `npm run lint` and `npm run build` (see evidence above).
 
 ## Alternatives considered
 
@@ -146,7 +181,9 @@ Sources were checked on 2026-10-24.
 - **Maven 3.10.0:** recommended upstream but released four weeks before this decision. 3.9.16 is
   maintained and well proven. Moving to 3.10.x later means changing one line in
   `.mvn/wrapper/maven-wrapper.properties`.
-- **TypeScript 7.0 / ESLint 10:** incompatible with the current lint toolchain (see evidence).
+- **TypeScript 7.0:** typescript-eslint does not support it yet (see evidence).
+- **ESLint 10 now:** supported upstream, but `eslint-config-next` 16.4.3's plugins do not declare
+  support for it. Forcing it would mean peer-dependency overrides.
 - **RabbitMQ 4.4:** newer support window, but its first release was four days old. Revisit after
   4.4.1 or later, or before 4.3 community support ends on 2027-01-31. The change is one image tag.
 - **PostgreSQL 19:** release candidate only.
@@ -156,5 +193,7 @@ Sources were checked on 2026-10-24.
 - Students following Spring Boot 3 tutorials must adjust starter names, Jackson packages and test
   annotations. [CLAUDE.md](../../CLAUDE.md) lists the differences.
 - springdoc-openapi must be re-checked against its compatibility matrix whenever Spring Boot is upgraded.
+- Check whether `eslint-config-next` supports ESLint 10 at each Next.js upgrade, and move to
+  ESLint 10 once it does.
 - Before 2027-01-31, plan the RabbitMQ 4.3 → 4.4 image update.
 - Before 2027-07-31, plan the Spring Boot 4.1 → 4.2 upgrade if the project is still active.
