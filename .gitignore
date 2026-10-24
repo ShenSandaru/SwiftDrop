@@ -1,0 +1,54 @@
+# --- Secrets and local environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+client_secret*.json
+
+# --- Java / Maven ---
+target/
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# --- Node.js / Next.js ---
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+npm-debug.log*
+
+# Only npm is used; keep other package managers' lockfiles out
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# --- IDEs ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.classpath
+.project
+.settings/
+.factorypath
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
