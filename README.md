@@ -19,11 +19,13 @@ Enterprise Application Development project by a team of 10 students.
   authorization, persistence and integrations.
 - **Frontend:** Next.js App Router. It handles presentation only and calls the backend REST API.
 - **Database:** PostgreSQL, with the schema managed exclusively by Flyway migrations.
-- **Messaging:** RabbitMQ (via Spring AMQP) for asynchronous events, notifications and merchant webhook retries.
-- **Real-time tracking:** Server-Sent Events (SSE).
+- **Messaging:** RabbitMQ (via Spring AMQP) for asynchronous events, notifications and merchant
+  webhook retries (planned; only the connection is configured).
+- **Real-time tracking:** Server-Sent Events (SSE) (planned; not implemented).
 - **Local infrastructure:** Docker Compose.
 
-See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md) for the reasoning.
+See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md) for the reasoning and
+[docs/architecture.md](docs/architecture.md) for what is implemented, decided, proposed and open.
 
 ## Technology baseline
 
@@ -31,10 +33,10 @@ See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md) for the reasonin
 |---|---|
 | Backend | Java 21 (Temurin LTS), Spring Boot 4.1.x, Maven (via Maven Wrapper) |
 | Persistence | Spring Data JPA, Hibernate ORM 7, Flyway, PostgreSQL 18 |
-| Security | Spring Security 7, JWT resource server, Google OAuth 2.0 / OpenID Connect |
+| Security | Spring Security 7 (default configuration). Planned, not yet configured: Google OAuth 2.0 / OpenID Connect sign-in and a JWT resource server |
 | Messaging | Spring AMQP, RabbitMQ 4.3 |
 | API docs | springdoc-openapi 3.2.0 |
-| Backend tests | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test, Testcontainers (all Boot-managed) |
+| Backend tests | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test (Boot-managed). Testcontainers is not declared; it is a candidate for future integration tests |
 | Frontend | Node.js 24 LTS, npm, Next.js 16.4.x, React 19, TypeScript 6.0.x, Tailwind CSS 4, shadcn/ui |
 
 Exact versions and the evidence for them are in
@@ -48,11 +50,14 @@ Exact versions and the evidence for them are in
 ├── frontend/             Next.js application (created in Stage 3)
 ├── docs/
 │   ├── adr/              Architecture decision records
+│   ├── architecture.md   Architecture and implementation status
+│   ├── ai-agent-guidelines.md  Rules for AI agents and project rules for everyone
 │   └── development-setup.md
 ├── compose.yaml          Local PostgreSQL and RabbitMQ (created in Stage 5)
 ├── .env.example          Template for the git-ignored local .env file
-├── CLAUDE.md             Coding instructions for contributors and AI assistants
-└── CONTRIBUTING.md       Team workflow
+├── AGENTS.md             Entry point for AI coding agents
+├── CLAUDE.md             Claude Code entry point (imports AGENTS.md and the guidelines)
+└── CONTRIBUTING.md       Task workflow and team conventions
 ```
 
 The setup stages are complete up to the local infrastructure. No business features exist yet.
@@ -60,7 +65,9 @@ The setup stages are complete up to the local infrastructure. No business featur
 ## Getting started
 
 1. Install the prerequisites in [docs/development-setup.md](docs/development-setup.md).
-2. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
+2. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+   [project rules](docs/ai-agent-guidelines.md#project-rules). AI agents start at
+   [AGENTS.md](AGENTS.md).
 3. Start the local infrastructure (from the repository root):
 
    ```powershell
@@ -78,7 +85,9 @@ Details, troubleshooting and how to reset data are in
 
 ## Documentation
 
+- [Architecture](docs/architecture.md)
 - [Development setup (Windows)](docs/development-setup.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Coding instructions](CLAUDE.md)
+- [Contributing guide and task workflow](CONTRIBUTING.md)
+- [AI agent guidelines and project rules](docs/ai-agent-guidelines.md)
+- [Agent entry point](AGENTS.md) and [Claude Code entry point](CLAUDE.md)
 - [Architecture decision records](docs/adr/README.md)

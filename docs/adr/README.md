@@ -1,7 +1,8 @@
 # Architecture decision records
 
 An ADR records one significant decision: its context, the decision itself and its consequences.
-ADRs are reviewed in pull requests like code.
+ADRs are reviewed in pull requests like code. [docs/architecture.md](../architecture.md) shows the
+current state of each decision and lists the open questions that still need one.
 
 ## Index
 

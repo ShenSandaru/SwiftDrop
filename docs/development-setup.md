@@ -1,7 +1,8 @@
 # Development setup (Windows)
 
 Every team member installs the same toolchain. The versions come from
-[ADR 0002](adr/0002-technology-and-version-baseline.md).
+[ADR 0002](adr/0002-technology-and-version-baseline.md). For how the parts fit together, see
+[docs/architecture.md](architecture.md).
 
 ## Required tools
 
@@ -54,7 +55,9 @@ or yarn, in this repository.
    <https://docs.docker.com/desktop/setup/install/windows-install/>, and choose the **WSL 2** backend.
 4. Start Docker Desktop and accept the terms. It is free for education and personal use.
 
-Docker must be running for Docker Compose and for Testcontainers-based integration tests.
+Docker must be running for Docker Compose. It will also be needed for container-based integration
+tests if they are added (see [testing](architecture.md#12-testing)). The current backend tests do not
+need Docker.
 
 ## 4. Configure Git
 

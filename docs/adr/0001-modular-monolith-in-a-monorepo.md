@@ -17,8 +17,8 @@ easy to test, and still show clear separation of concerns.
 
 1. **Single Git monorepo** containing `frontend/`, `backend/`, `docs/` and the Docker Compose setup.
 2. **Backend: one Spring Boot application structured as a modular monolith.** The code is split
-   into business modules with explicit public APIs. The concrete module list and boundary rules are
-   decided in Stage 5 and recorded in a separate ADR.
+   into business modules with explicit public APIs. The business-module layout remains open and
+   will be established by a later architecture decision.
 3. **Frontend: a Next.js App Router application** responsible only for presentation. It calls the
    backend REST API. Business rules, authorization, persistence and integrations belong to the
    backend.

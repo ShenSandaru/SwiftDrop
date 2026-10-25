@@ -264,7 +264,8 @@ ESLint 10 is pending** until `eslint-config-next` and its plugins declare suppor
 ## Consequences
 
 - Students following Spring Boot 3 tutorials must adjust starter names, Jackson packages and test
-  annotations. [CLAUDE.md](../../CLAUDE.md) lists the differences.
+  annotations. The project rules in [docs/ai-agent-guidelines.md](../ai-agent-guidelines.md#project-rules)
+  list the differences.
 - springdoc-openapi must be re-checked against its compatibility matrix whenever Spring Boot is upgraded.
 - Check whether `eslint-config-next` supports ESLint 10 at each Next.js upgrade, and move to
   ESLint 10 once it does.

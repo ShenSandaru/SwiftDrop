@@ -3,7 +3,8 @@
 Next.js App Router frontend for SwiftDrop. It is responsible for presentation only; business rules,
 authorization and persistence live in the Spring Boot backend.
 
-See the root [README](../README.md), [CLAUDE.md](../CLAUDE.md) and
+See the root [README](../README.md), the
+[project rules](../docs/ai-agent-guidelines.md#project-rules) and
 [ADR 0002](../docs/adr/0002-technology-and-version-baseline.md) for the stack and conventions.
 [AGENTS.md](AGENTS.md) is maintained by Next.js and points to the docs bundled with the installed version.
 
@@ -33,10 +34,11 @@ public/           Static assets
 ```
 
 Add shadcn/ui components only when needed. The project uses the `base-nova` preset, so components
-are built on Base UI, not Radix:
+are built on Base UI, not Radix. Use the shadcn CLI installed from `package-lock.json` (not
+`shadcn@latest`, which could download a different major version):
 
 ```bash
-npx shadcn@latest add <component>
+npx --no-install shadcn add <component>
 ```
 
 ## Known npm warnings
