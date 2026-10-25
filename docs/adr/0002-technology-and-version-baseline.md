@@ -35,8 +35,41 @@ Sources were checked on 2026-10-24.
 | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test | 6.0.x, 5.x, 3.x | Boot-managed |
 | Testcontainers | 2.0.x | Boot-managed |
 | Maven | **3.9.16** | Pinned through the Maven Wrapper |
-| Maven Wrapper | 3.3.4, `only-script` type | Generated with `mvn wrapper:wrapper` in Stage 4 |
+| Maven Wrapper | 3.3.4, `only-script` type, with `distributionSha256Sum` | Generated with `mvn wrapper:wrapper` in Stage 4 |
 | Lombok | Not used | Java records instead |
+
+#### Jackson 2 and Jackson 3
+
+Spring Boot 4.1 uses **Jackson 3** (`tools.jackson.*`) as its preferred and default JSON library,
+including for Spring MVC request and response bodies. springdoc-openapi 3.2.0 and its swagger-core
+2.2.x dependency still require **Jackson 2** (`com.fasterxml.jackson.*`), so both lines are on the
+classpath. Both versions are managed by the Spring Boot BOM (3.1.x and 2.21.x).
+
+- The two lines live in different Java packages and are not interchangeable. A Jackson 2
+  `ObjectMapper` is not configured by Spring Boot's `spring.jackson.*` properties.
+- Application code uses the Jackson 3 APIs. Jackson annotations (`@JsonProperty` and others) stay in
+  `com.fasterxml.jackson.annotation` in both lines.
+- Do not add `spring-boot-jackson2` and do not exclude Jackson 2 from springdoc without a new
+  compatibility review. springdoc and swagger-core call Jackson 2 classes at runtime.
+- **Known limitation:** springdoc's schema generation reads only the Jackson 2 versions of
+  `@JsonSerialize` and `@JsonDeserialize`, so the Jackson 3 versions in
+  `tools.jackson.databind.annotation` can produce empty schemas ([springdoc #3333](https://github.com/springdoc/springdoc-openapi/issues/3333)).
+  Prefer plain records with `@JsonProperty` where a name must be explicit, and check the generated
+  OpenAPI schema when DTOs are implemented.
+- Recheck this arrangement whenever Spring Boot, springdoc or swagger-core is upgraded. Once
+  swagger-core supports Jackson 3 ([swagger-core #4991](https://github.com/swagger-api/swagger-core/issues/4991)),
+  Jackson 2 may no longer be needed.
+
+#### Maven distribution checksum
+
+The wrapper verifies the downloaded Maven archive against `distributionSha256Sum` in
+`backend/.mvn/wrapper/maven-wrapper.properties` and refuses to run on a mismatch. Apache publishes
+only SHA-512 checksums and PGP signatures for Maven distributions, not SHA-256. The SHA-256 value
+was therefore computed from the exact `apache-maven-3.9.16-bin.zip` after that archive matched the
+SHA-512 published on Maven Central and downloads.apache.org and its PGP signature verified against
+<https://downloads.apache.org/maven/KEYS>. When the Maven version changes, repeat this procedure;
+never copy a checksum from an unofficial source. The check runs only when the wrapper downloads
+the archive, not for an archive already cached in `~/.m2/wrapper/dists`.
 
 ### Frontend
 
@@ -152,6 +185,26 @@ ESLint 10 is pending** until `eslint-config-next` and its plugins declare suppor
     `eslint-config-next` 16.4.3, `typescript-eslint` 8.72.0, Tailwind CSS 4.3.3,
     `@tailwindcss/turbopack` 4.3.3, `shadcn` 4.22.1, `cn` 0.5.0, `@base-ui/react` 1.9.0.
   - Results: `npm ci`, `npm run lint` and `npm run build` succeed on Node.js 24.22.1.
+- **Stage 4 backend dependencies (2026-10-25), verified with `mvnw dependency:tree -Dverbose`:**
+  - Jackson 3 (`tools.jackson.core:jackson-databind` 3.1.7) comes from `spring-boot-starter-webmvc`
+    → `spring-boot-starter-jackson`. Jackson 2 (`com.fasterxml.jackson.core:jackson-databind`,
+    `jackson-dataformat-yaml`, `jackson-datatype-jsr310` 2.21.7) comes from
+    `springdoc-openapi-starter-common` 3.2.0. Its POM excludes swagger-core's versioned Jackson 2
+    dependencies and redeclares them without a version, so the Boot BOM applies
+    ([springdoc #3373](https://github.com/springdoc/springdoc-openapi/issues/3373)).
+  - swagger-core's `io.swagger.v3.core.util.Json` returns a Jackson 2 `ObjectMapper`, so Jackson 2
+    is a runtime requirement, not an unused leftover.
+  - Spring Boot: "Jackson 3 is the preferred and default library." Jackson 2 support through
+    `spring-boot-jackson2` is deprecated.
+    Sources: <https://docs.spring.io/spring-boot/reference/features/json.html>,
+    <https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide>
+  - Maven 3.9.16 binary zip: SHA-512 `ed41650d…933454af3` matches Maven Central and
+    downloads.apache.org; good PGP signature by key `84789D24DF77A32433CE1F079EB80E92EB2135B1`
+    from the Maven `KEYS` file; SHA-256 computed from it:
+    `5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce`. Both `mvnw` and `mvnw.cmd`
+    rejected a modified checksum and accepted this one when run against an empty wrapper cache.
+    Sources: <https://maven.apache.org/tools/wrapper/>,
+    <https://downloads.apache.org/maven/maven-3/3.9.16/binaries/>
 - **npm `allow-scripts` warning for `unrs-resolver`:** npm 11 skips this package's postinstall
   script. The script only runs `napi-postinstall`, a fallback for npm bug
   [npm/cli#4828](https://github.com/npm/cli/issues/4828), where npm sometimes fails to install the

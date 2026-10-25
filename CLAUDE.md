@@ -50,7 +50,11 @@ Many tutorials target Spring Boot 3. In this project:
 - OAuth2 starters include `security-`, e.g. `spring-boot-starter-security-oauth2-resource-server`.
 - Flyway needs `spring-boot-starter-flyway` **and** `org.flywaydb:flyway-database-postgresql`.
 - Jackson 3 is the default: packages are `tools.jackson.*` (annotations stay in
-  `com.fasterxml.jackson.annotation`).
+  `com.fasterxml.jackson.annotation`). Use Jackson 3 APIs for JSON handling; do not import
+  Jackson 2 classes such as `com.fasterxml.jackson.databind.ObjectMapper`. Jackson 2 is on the
+  classpath only because springdoc needs it: do not exclude it or add `spring-boot-jackson2`
+  without a compatibility review. When changing springdoc or Jackson versions, inspect
+  `mvnw dependency:tree` and rerun the tests. See ADR 0002.
 - In tests, use `@MockitoBean` / `@MockitoSpyBean` (`@MockBean` was removed). JUnit Jupiter is the
   Boot-managed version; do not override it.
 
