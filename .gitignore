@@ -52,3 +52,6 @@ bun.lockb
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Course handout: do not commit; requirements are summarized in docs/project-requirements.md
+/docs/Group Assignment.pdf

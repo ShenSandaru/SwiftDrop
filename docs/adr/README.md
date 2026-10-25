@@ -10,12 +10,15 @@ current state of each decision and lists the open questions that still need one.
 |---|---|---|
 | [0001](0001-modular-monolith-in-a-monorepo.md) | Modular monolith in a monorepo | Accepted |
 | [0002](0002-technology-and-version-baseline.md) | Technology and version baseline | Accepted |
+| [0003](0003-backend-modules-and-boundaries.md) | Backend business modules and boundaries | Accepted |
 
 ## Process
 
 1. Copy the template below into `NNNN-short-title.md` using the next free number.
-2. Set the status to `Proposed` and open a pull request.
-3. Once approved, set the status to `Accepted` and add the ADR to the index.
+2. Set the status to `Proposed`, add the ADR to the index with that status, and open a pull request.
+   A Proposed ADR is not binding.
+3. Only after the decision has been explicitly reviewed and approved, set the status to `Accepted`
+   in the ADR and in the index.
 4. Do not rewrite accepted ADRs. To change a decision, write a new ADR and mark the old one
    `Superseded by NNNN`. Version patch updates within the same baseline may be edited in place.
 

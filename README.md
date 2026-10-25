@@ -1,22 +1,26 @@
 # SwiftDrop
 
 SwiftDrop is a parcel delivery and courier management system, built as a university
-Enterprise Application Development project by a team of 10 students.
+Enterprise Application Development project by a team of 10 students. The assignment requirements
+are summarized in [docs/project-requirements.md](docs/project-requirements.md).
 
 ## User groups
 
-| Role | Main capabilities |
+Required capabilities per role, from the assignment. **None of them is implemented yet.**
+
+| Role | Required capabilities |
 |---|---|
-| Customer | Create delivery requests, estimate fees, track parcels, view delivery history and receipts |
-| Merchant | Create parcel orders through a secured API, monitor orders, receive webhook events |
-| Courier | View assigned deliveries, update delivery status with proof or failure reasons |
-| Dispatcher / Administrator | Assign parcels; manage users, couriers, pricing and delivery zones; view reports |
+| Customer | Sign up and log in (including Google login), create delivery requests, see a fee estimate before confirming, track parcels in real time, view history and download receipts; anyone can track by public tracking number |
+| Merchant | Register (with admin approval), create delivery orders through a secured API, receive status webhooks, view a dashboard of orders |
+| Courier | Log in, view the day's assigned deliveries, update status with a note or proof, mark failed deliveries with a reason |
+| Dispatcher/Admin | Assign unassigned parcels, monitor courier workloads, manage users, merchants, zones and pricing, view reports (deliveries per day, success/failure rate) |
 
 ## Architecture at a glance
 
 - **Single Git monorepo** containing the frontend, backend, documentation and local infrastructure.
 - **Backend:** Spring Boot **modular monolith** (not microservices). It owns all business rules,
-  authorization, persistence and integrations.
+  authorization, persistence and integrations. The business modules are decided in
+  [ADR 0003](docs/adr/0003-backend-modules-and-boundaries.md); none of them is implemented yet.
 - **Frontend:** Next.js App Router. It handles presentation only and calls the backend REST API.
 - **Database:** PostgreSQL, with the schema managed exclusively by Flyway migrations.
 - **Messaging:** RabbitMQ (via Spring AMQP) for asynchronous events, notifications and merchant
@@ -51,6 +55,7 @@ Exact versions and the evidence for them are in
 ├── docs/
 │   ├── adr/              Architecture decision records
 │   ├── architecture.md   Architecture and implementation status
+│   ├── project-requirements.md  Summary of the assignment requirements
 │   ├── ai-agent-guidelines.md  Rules for AI agents and project rules for everyone
 │   └── development-setup.md
 ├── compose.yaml          Local PostgreSQL and RabbitMQ (created in Stage 5)
@@ -85,6 +90,7 @@ Details, troubleshooting and how to reset data are in
 
 ## Documentation
 
+- [Project requirements](docs/project-requirements.md)
 - [Architecture](docs/architecture.md)
 - [Development setup (Windows)](docs/development-setup.md)
 - [Contributing guide and task workflow](CONTRIBUTING.md)

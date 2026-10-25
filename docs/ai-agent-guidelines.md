@@ -29,7 +29,7 @@ reviewers must check that they were followed.
 **Scope**
 
 4. Work only within the approved task or phase. No unrelated refactoring, renaming or reformatting.
-5. Do not implement **Proposed** modules or planned features without an approved task. The proposed module table in `docs/architecture.md` is not an authorization.
+5. Do not implement modules or planned features without an approved task. The modules decided in [ADR 0003](adr/0003-backend-modules-and-boundaries.md) and anything labeled **Proposed** are not an authorization to implement. Change only the modules the task names; changing another module's `api` package, the allowed module dependencies or another module's migrations needs explicit review, so stop and ask.
 6. Do not silently change frameworks, versions, the package manager, module boundaries or the architecture.
 7. Do not install, upgrade or remove dependencies that affect the stack without approval.
 8. Ask before irreversible, broad or security-sensitive changes.
@@ -55,7 +55,8 @@ reviewers must check that they were followed.
 - Modular monolith: one Spring Boot backend split into business modules. No microservices, Kubernetes, Redis, extra message brokers or service meshes.
 - The backend owns business rules, validation that matters, authorization, persistence and integrations. The frontend only presents data and calls the REST API.
 - Authorization is enforced on the backend by role and ownership. Hiding UI is never a security control.
-- A module exposes a small public API; other modules never use its internal classes or repositories. The module layout stays open until ADR 0003 is accepted.
+- A module exposes a small public API; other modules never use its internal classes or repositories. The modules, their allowed dependencies, table ownership and the package rules are decided in the accepted [ADR 0003](adr/0003-backend-modules-and-boundaries.md): import another module only through its `api` package, along the allowed dependency graph. Module dependencies change only through a reviewed ADR.
+- Kubernetes stays excluded although the brief offers it as an optional bonus; it needs a separate, explicitly approved ADR.
 - Asynchronous work (notifications, domain events, webhook delivery with retries) goes through RabbitMQ, using classic or quorum queues, not classic mirrored queues.
 - Real-time tracking uses SSE (`SseEmitter`). WebSockets need a verified requirement and an ADR.
 

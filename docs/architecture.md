@@ -1,7 +1,9 @@
 # SwiftDrop architecture
 
-This is the main description of SwiftDrop's architecture: what exists, what is decided, and what is
-still open. Decisions and their rationale live in the [ADRs](adr/README.md); versions live in
+This is the main description of SwiftDrop's architecture: what exists, what is required, decided
+or proposed, and what is still open. Requirements come from the assignment brief, summarized in
+[docs/project-requirements.md](project-requirements.md) (IDs such as `CUS-1` refer to it).
+Decisions and their rationale live in the [ADRs](adr/README.md); versions live in
 [ADR 0002](adr/0002-technology-and-version-baseline.md) and the package manifests. This document
 links to them instead of repeating them.
 
@@ -10,6 +12,7 @@ links to them instead of repeating them.
 | Label | Meaning |
 |---|---|
 | **Implemented** | Verified in the current code or configuration |
+| **Required** | Stated by the assignment brief ([project requirements](project-requirements.md)); not necessarily implemented |
 | **Decided** | Accepted in an ADR, or a binding rule in [docs/ai-agent-guidelines.md](ai-agent-guidelines.md), but not necessarily implemented |
 | **Proposed** | Recommended, awaiting approval. Do not implement without an approved task. |
 | **Open** | Unresolved; needs a decision |
@@ -19,18 +22,18 @@ When a change implements, decides or rejects something, update its label in the 
 ## 1. Purpose and boundaries
 
 SwiftDrop is a parcel delivery and courier management system, built as a university Enterprise
-Application Development group project. The intended user groups are customers, merchants, couriers
-and dispatchers/administrators (see the role table in the [README](../README.md#user-groups)).
-A written requirements document does not exist yet; the role table is the current source.
+Application Development group project for a courier company operating island-wide.
 
+- **Required:** four roles (Customer, Merchant, Courier, Dispatcher/Admin); customer deliveries
+  with fee estimates and real-time tracking; merchant registration, API orders and webhooks;
+  courier status updates; dispatcher assignment, management and reports; asynchronous status
+  events with a notification consumer; containerized deployment
+  ([project requirements](project-requirements.md)).
 - **Implemented:** project scaffolding only: a frontend placeholder page, a backend with no business
   code, and local PostgreSQL and RabbitMQ containers. **No business feature exists yet.**
-- **Decided:** SwiftDrop is one system with one backend and one database. Merchant webhooks are
-  delivered by the backend ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)). Merchant API
-  access, Google sign-in and notifications are planned capabilities whose designs are still open
-  (sections 7 and 9).
-- **Open:** production hosting, external services beyond Google sign-in (for example email or SMS
-  providers for notifications), and data retention.
+- **Decided:** one system with one backend and one database
+  ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
+- **Open:** production hosting, the email or SMS provider for notifications, and data retention.
 
 ## 2. Technology stack
 
@@ -42,7 +45,7 @@ A written requirements document does not exist yet; the role table is the curren
 | Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
-| Local infrastructure | Docker Compose (`compose.yaml`) | Implemented |
+| Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
 
 Exact versions and compatibility evidence, including why Jackson 2 and Jackson 3 coexist, are in
 [ADR 0002](adr/0002-technology-and-version-baseline.md).
@@ -56,61 +59,76 @@ Exact versions and compatibility evidence, including why Jackson 2 and Jackson 3
 | `frontend/` | Next.js application. Separate build (npm). |
 | `backend/` | Spring Boot application, package root `com.swiftdrop`. Separate build (Maven Wrapper). |
 | `compose.yaml`, `.env.example` | Local PostgreSQL and RabbitMQ; template for the git-ignored `.env` |
-| `docs/` | This document, the agent guidelines, the setup guide and the ADRs |
+| `docs/` | This document, the requirements summary, the agent guidelines, the setup guide and the ADRs |
 
 The frontend and backend share no code. They communicate only over HTTP.
 
 ## 4. Backend: modular monolith
 
-- **Decided:** the backend is one Spring Boot application, structured as a modular monolith. No
-  microservices, service mesh, Kubernetes, Redis or second message broker
+- **Decided:** one Spring Boot application, structured as a modular monolith. No microservices,
+  service mesh, Kubernetes, Redis or second message broker
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Decided:** each business module exposes a small public API. Other modules use only that API and
   never reach into another module's internal classes, entities or repositories.
 - **Implemented:** only the application class `com.swiftdrop.SwiftdropBackendApplication` exists.
   There are no modules yet.
-- **Open:** the module list and the exact boundary rules. They will be set by **ADR 0003**, which
-  has not been written. Until ADR 0003 is accepted, the table below is only a proposal.
+- **Decided:** the module layout, dependencies and package rules below
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). **None of these modules is
+  implemented yet**, and the decision is not an authorization to implement one: that needs an
+  approved task.
 
-### Proposed business modules (pending ADR 0003)
+### Modules (Decided, ADR 0003)
 
-**Proposed.** This table does **not** authorize implementing these modules or their features. It is
-derived from the README role table and is the starting point for ADR 0003.
-
-| Module | Responsibility | May depend on |
+| Module | Responsibility | Owns |
 |---|---|---|
-| `identity` | User accounts, roles, sign-in, issuing and validating the application's tokens | none |
-| `pricing` | Fee estimates, pricing rules, delivery zones | none |
-| `delivery` | Delivery requests, parcels, status lifecycle, history, proof of delivery, receipts | `identity`, `pricing` |
-| `dispatch` | Couriers and the assignment of parcels to couriers | `identity`, `delivery` |
-| `merchant` | Merchant accounts, merchant API credentials, order intake, webhook subscriptions and delivery | `identity`, `delivery` |
-| `notification` | Notifications to users, triggered by events | events from other modules only |
-| `tracking` | Real-time tracking streams (SSE) | events from `delivery` only |
-| `reporting` | Read-only reports for administrators | public APIs of other modules (read only) |
+| `identity` | Signup and login, Google login, JWT, roles, user management | users, roles, user–role links, external identity links |
+| `pricing` | Fee calculation, zones, pricing configuration | zones, pricing rules |
+| `delivery` | Parcels (main aggregate and entity: `Parcel`), status lifecycle and history, current courier assignment, notes, proof, failure reasons, receipts, tracking-number lookup, the two required reports, workload counts | parcels, status history, proof records |
+| `dispatch` | Courier profiles; assignment workflow and courier eligibility; workload view | couriers |
+| `merchant` | Registration and approval, API credentials, order intake, dashboard queries, webhook delivery and retries | merchants, API credentials, webhook endpoints, webhook delivery records |
+| `notification` | Notifications triggered by status events | notification messages |
+| `tracking` | Live SSE connections; no history of its own | nothing persistent |
 
-Proposed dependency rules:
+`reporting` is deferred: the required reports (ADM-4) and workload counts (ADM-2) use data owned by
+`delivery`. ADR 0003 lists what each module must not own.
 
-- Dependencies point one way and have no cycles. A module that is depended on never calls back
-  into its dependants; it publishes an event instead.
-- `notification` and `tracking` react to events; no module depends on them.
-- Cross-cutting code (security configuration, error handling) stays small and holds no business
-  rules.
-- Each module owns its tables. Other modules do not read or write them directly.
+### Dependencies (Decided, ADR 0003)
 
-**Open:** whether to verify these boundaries with a tool (for example Spring Modulith tests) or by
-review only. A tool would be a new dependency and needs approval.
+Allowed calls into another module's `api` package only; the graph is acyclic:
+
+```text
+identity     → none
+pricing      → none
+delivery     → identity, pricing
+dispatch     → identity, delivery
+merchant     → identity, delivery
+notification → identity, delivery
+tracking     → delivery
+```
+
+- No module depends on `notification` or `tracking`; `delivery` never calls `dispatch`,
+  `merchant`, `notification` or `tracking`.
+- Packages per module, only as needed: `api` (the only importable package), `web`, `application`,
+  `domain`, `infrastructure`. `com.swiftdrop.config` is the composition root (imported by no
+  module); `com.swiftdrop.shared` holds technical code only.
+- A dependency-free JUnit test will check these rules once module code exists. Spring Modulith and
+  ArchUnit are not used: neither is managed by Spring Boot
+  ([ADR 0002](adr/0002-technology-and-version-baseline.md) version policy).
 
 ## 5. Frontend and API boundary
 
 - **Decided:** the frontend only presents data and calls the backend REST API. Business rules,
   validation that matters, authorization, persistence and integrations live in the backend. Hiding
   a page or button is never a security control ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
+- **Required:** a responsive UI (IMP-1); a mobile-friendly public tracking page (CUS-6); versioned,
+  validated APIs with centralized error handling (IMP-3).
 - **Decided (project rule):** REST paths are plural nouns in kebab-case under `/api/v1/...`.
 - **Implemented:** the frontend has a placeholder page and one shadcn/ui component. It does not call
   the backend yet. The backend has no business endpoints; springdoc serves its default OpenAPI
   endpoints (behind authentication, see section 9).
 - **Open:** how the frontend calls the backend (directly from the browser, or through Next.js
-  server code), CORS, the API error format and pagination conventions.
+  server code acting as a BFF), CORS, the API error format and pagination conventions. The brief
+  mentions "modular monolith with a BFF" only as an example (DES-3).
 
 ## 6. Database
 
@@ -121,45 +139,89 @@ review only. A tool would be a new dependency and needs approval.
   `spring.jpa.hibernate.ddl-auto=validate` is set, and Flyway runs at startup. There are **no
   migrations and no entities**. On first start, Flyway creates only its own
   `flyway_schema_history` table.
-- **Proposed:** table ownership per module (section 4).
+- **Decided (ADR 0003):**
+  - One shared `public` schema, chosen pragmatically for the team (not a universal best practice).
+  - Each table has one owning module (table in section 4). Only the owner writes its migrations and
+    accesses it.
+  - Cross-module references by ID, never JPA associations. Cross-module foreign keys when justified
+    by referential integrity; no cascading deletes across modules.
+  - Migrations organized per module (for example `db/migration/<module>/`) with versions that do
+    not collide between branches (for example timestamps); Flyway's discovery of module folders is
+    verified before the first business migration.
+  - Neither one schema nor separate schemas isolate access while the backend uses one privileged
+    database account; ownership is enforced by module rules, review and the boundary test.
+- **Required:** the ER diagram must cover users, roles, merchants, parcels, status history,
+  couriers, zones and pricing (DES-2).
+- **Open:** UUID or numeric IDs; the tracking-number format.
 
-## 7. Messaging (RabbitMQ)
+## 7. Messaging (RabbitMQ) and status events
 
-- **Decided:** RabbitMQ through Spring AMQP carries asynchronous work: domain events,
-  notifications and merchant webhook delivery with retries. Classic or quorum queues only; classic
-  mirrored queues were removed in RabbitMQ 4.
+- **Required:** at least one asynchronous integration pattern for status-change events, which
+  trigger notifications and merchant webhooks (SYS-4); a notification service consuming status
+  events (SYS-5); merchant webhooks with retry on failure (IMP-4).
+- **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
+  classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check
   only. **No exchanges, queues, producers or consumers exist.** A connection smoke test against
   RabbitMQ 4.3 succeeded in Stage 5.
-- **Open:** exchange and queue naming, the event format, the retry and dead-letter policy, and how
-  database changes and published events stay consistent (for example a transactional outbox).
+- **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
+  `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
+  in-process. Side effects never block or roll back the status change.
+- **Limitation:** publishing after the database commit does not guarantee delivery. A crash or
+  broker outage between the commit and the publish loses the event.
+- **Open (ADR 0004, before the first messaging feature):** event payload and versioning; exchange,
+  queue and routing-key conventions; publish-after-commit versus a transactional outbox; consumer
+  idempotency and duplicates; retry limits, backoff and dead-lettering; webhook signing, payload and
+  delivery records; notification recipients and channel (email or mock SMS); failure visibility and
+  recovery.
 
-## 8. Real-time tracking (SSE)
+## 8. Delivery lifecycle and real-time tracking
 
-- **Decided:** tracking updates go from backend to browser with Server-Sent Events (Spring MVC
-  `SseEmitter`). Courier status updates use normal REST calls. WebSockets need a new ADR.
+- **Required:** the statuses **Created → Picked Up → In Transit → Out for Delivery → Delivered /
+  Failed** (CUS-4); status updates at each stage with a note or proof, and a reason for failures
+  (COU-3, COU-4); real-time updates (SYS-1, IMP-5); public tracking by tracking number (CUS-6).
+- **Decided:** real-time updates use Server-Sent Events (Spring MVC `SseEmitter`); WebSockets need
+  a new ADR ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
+- **Decided (ADR 0003):** `delivery` alone changes a `Parcel`'s status (`CREATED`, `PICKED_UP`, `IN_TRANSIT`,
+  `OUT_FOR_DELIVERY`, `DELIVERED`, `FAILED`) and records history. Courier assignment is a separate
+  field, not a status. Initial rules: forward one step at a time; `DELIVERED` and `FAILED` are
+  terminal; only the assigned courier makes ordinary updates; a courier must be assigned before
+  `PICKED_UP`; each change records time and actor, `FAILED` requires a reason, notes and proof are
+  recorded as applicable. `tracking` sends the current state on connect and never keeps its own
+  history.
 - **Implemented:** nothing.
-- **Open:** how the browser authenticates the stream. The native `EventSource` API cannot send an
-  `Authorization` header, so a cookie or a short-lived stream token is needed
-  ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md) open questions).
+- **Open:** the stages from which `FAILED` is allowed, reassignment, cancellation, retries after
+  failure, dispatcher/admin overrides, whether proof is mandatory for `DELIVERED`; what the public
+  tracking page may show (proposal: status and timestamps only, no personal data); how the browser
+  authenticates non-public streams (the native `EventSource` API cannot send an `Authorization`
+  header).
 
 ## 9. Authentication and authorization
 
+- **Required:** role-based access control for Customer, Merchant, Courier and Dispatcher/Admin
+  (SYS-2); JWT-based authentication for the application, plus OAuth 2.0 for social login or
+  merchant API access (SYS-3); customer signup and login including Google login (CUS-1); merchant
+  API orders using API keys or OAuth 2.0 client credentials (MER-2); hashed passwords (SYS-7).
 - **Decided:** authorization is enforced on the backend for every protected operation, by role and
   by ownership ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Implemented:** Spring Security with its **default configuration**. Every endpoint except
   `/actuator/health` requires authentication. No users exist and no login is possible.
   The OAuth2 client and resource-server starters are **installed but not configured**: there is no
   Google client registration, no JWT issuer or key configuration, and no roles.
+- **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
+  application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
+  security filter chain.
 - **Open:**
-  - The sign-in flow. The planned direction is Google OAuth 2.0 / OpenID Connect sign-in, after
-    which the backend issues its own JWTs and validates them as a resource server (README stack
-    table, ADR 0001 open questions), but no ADR has decided it. This includes how Google accounts
-    map to SwiftDrop accounts and roles. Whether the OAuth2 client starter stays depends on it.
-  - Merchant API authentication (API keys or OAuth 2.0 client credentials) and webhook signing.
-  - How roles are assigned (for example who creates courier and administrator accounts).
+  - The Google login flow (backend redirect, or a Google token verified by the backend), and
+    whether the OAuth2 client starter stays.
+  - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
+    (needs an authorization server); key format and rotation; webhook signing.
+  - How courier and dispatcher/admin accounts are created.
 
 ## 10. Security and personal data
+
+**Required:** secure handling of personal data (addresses, phone numbers): input validation, hashed
+passwords, no sensitive data in error messages or logs (SYS-7); no hard-coded secrets (IMP-6).
 
 **Decided (project rules):**
 
@@ -169,8 +231,8 @@ review only. A tool would be a new dependency and needs approval.
 - Keep personal data (names, addresses, phone numbers, delivery locations, proof-of-delivery data)
   and secrets out of logs, and expose personal data only to users entitled to it.
 
-**Open:** retention and deletion of personal data, storage for proof-of-delivery files, and whether
-springdoc and Actuator details are exposed outside local development.
+**Open:** retention and deletion of personal data, storage for proof-of-delivery photos, and
+whether springdoc and Actuator details are exposed outside local development.
 
 ## 11. Configuration and secrets
 
@@ -182,12 +244,17 @@ springdoc and Actuator details are exposed outside local development.
   - Local service ports are published on `127.0.0.1` only.
 
   Details are in [docs/development-setup.md](development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq).
+- **Required:** configuration via environment variables, no hard-coded secrets (IMP-6).
 - **Decided (project rule):** configuration is environment-specific; secrets come from the
   environment, never from committed files.
 - **Open:** Spring profiles (none exist yet) and secret handling outside local development.
 
 ## 12. Testing
 
+- **Required:** unit and integration tests for backend services, including at least one test for
+  the event/integration flow (TST-1); authorization tests, for example that a courier cannot access
+  another courier's deliveries (TST-2); measurable code coverage with test results in the
+  submission (TST-3).
 - **Implemented:**
   - One context-load test (`SwiftdropBackendApplicationTests`) that runs without Docker, PostgreSQL
     or RabbitMQ.
@@ -199,37 +266,46 @@ springdoc and Actuator details are exposed outside local development.
 - **Proposed:** Testcontainers for persistence and messaging integration tests. It is **not
   declared in the POM** (its version is Boot-managed, as listed in ADR 0002). It is evaluated when
   the first integration test needs it, because it makes those tests require Docker.
-- **Open:** frontend test tooling, end-to-end tests and continuous integration (there is no CI
-  configuration).
+- **Open (before the related implementation):** the coverage tool (JaCoCo, for example, is not
+  managed by Spring Boot, so it would need a change to ADR 0002's version policy); how
+  integration tests run while the default `clean verify` stays Docker-free; frontend test tooling,
+  end-to-end tests and continuous integration (there is no CI configuration).
 
 ## 13. Deployment and observability
 
-- **Implemented:** local development only (Docker Compose for infrastructure; frontend and backend
-  run on the developer machine). Spring Boot Actuator health includes database and RabbitMQ
-  checks.
-- **Open:** production deployment, hosting, container images for the applications, logging and
-  monitoring beyond Actuator. Kubernetes is excluded by [ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md).
+- **Required:** containerized deployment of frontend, backend, database and message broker
+  (SYS-6); Dockerize all services and use docker-compose for local orchestration (IMP-7).
+- **Implemented:** Docker Compose runs PostgreSQL and RabbitMQ only; the frontend and backend run on
+  the developer machine. Spring Boot Actuator health includes database and RabbitMQ checks.
+- **Open:** Dockerfiles and Compose services for the frontend and backend; production deployment,
+  hosting, logging and monitoring beyond Actuator.
+- **Decided:** Kubernetes is excluded by the project rules and was rejected in
+  [ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)'s alternatives. The brief offers
+  Kubernetes only as an optional bonus (BON-1); pursuing it needs
+  a separate, explicitly reviewed ADR. The AI assistant bonus (BON-2) likewise needs its own
+  decision.
 
 ## 14. Open questions
 
 | Question | Section |
 |---|---|
-| Business-module list and boundary rules (ADR 0003) | 4 |
-| Tool-based boundary verification | 4 |
-| Frontend-to-backend calling pattern, CORS, error format | 5 |
-| RabbitMQ topology, event format, retries, outbox | 7 |
-| SSE stream authentication | 8 |
-| Google sign-in mapping, token issuance, role assignment | 9 |
-| Merchant API authentication and webhook signing | 9 |
-| Personal-data retention, proof-of-delivery storage, exposure of springdoc/Actuator | 10 |
+| Frontend-to-backend calling pattern (BFF or not), CORS, error format | 5 |
+| UUID or numeric IDs, tracking-number format | 6 |
+| Messaging decisions for ADR 0004 | 7 |
+| Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
+| Google login flow, merchant API authentication, creation of courier and admin accounts | 9 |
+| Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
 | Spring profiles and non-local secret handling | 11 |
-| Frontend tests, end-to-end tests, CI | 12 |
-| Production deployment and monitoring | 13 |
+| Coverage tool, integration-test setup, frontend tests, CI | 12 |
+| Application Dockerfiles and Compose services; production deployment; optional bonuses | 13 |
+| Report definitions, "deliveries for the day", fee formula and zones ([not specified by the brief](project-requirements.md#not-specified-by-the-brief)) | - |
 
 ## Related documents
 
+- [Project requirements](project-requirements.md)
 - [ADR 0001: Modular monolith in a monorepo](adr/0001-modular-monolith-in-a-monorepo.md)
 - [ADR 0002: Technology and version baseline](adr/0002-technology-and-version-baseline.md)
+- [ADR 0003: Backend business modules and boundaries](adr/0003-backend-modules-and-boundaries.md)
 - [AI agent guidelines](ai-agent-guidelines.md) and [AGENTS.md](../AGENTS.md)
 - [Contributing and task workflow](../CONTRIBUTING.md)
 - [Development setup](development-setup.md)

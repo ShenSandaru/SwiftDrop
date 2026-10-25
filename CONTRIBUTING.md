@@ -91,6 +91,32 @@ Each pull request should:
 Reviewers check correctness, backend authorization, tests, naming and simplicity. Ask questions
 rather than assume. Authors respond to every comment before merging.
 
+### Module ownership and contracts
+
+These rules follow the accepted [ADR 0003](docs/adr/0003-backend-modules-and-boundaries.md).
+Module owners are not assigned yet.
+
+- Each backend module gets one or two owners from the team. The owners are also recorded in the
+  contribution sheet required by the assignment.
+- Changes to a module's `api` package (its public interface, records and event types) need a review
+  from that module's owner. Keep changes additive where possible; an incompatible change is
+  coordinated with the modules that use it in the same pull request.
+- Adding or removing an allowed dependency between modules needs a new or superseding ADR.
+- Never use another module's entities, repositories or implementation classes; use its `api`.
+
+### Database migrations
+
+Table ownership and migration ownership follow the accepted
+[ADR 0003](docs/adr/0003-backend-modules-and-boundaries.md).
+
+- Each table has exactly one owning module ([ownership](docs/architecture.md#4-backend-modular-monolith)).
+  Only the owning module adds migrations for its tables, and its owner reviews them.
+- File names follow `V<n>__<description>.sql`. To avoid version collisions between parallel
+  branches, use a timestamp version with the module first in the description, for example
+  `V202610251430__delivery_create_parcels.sql`, in a per-module folder (`db/migration/<module>/`).
+  Flyway's discovery of these folders is verified before the first business migration is merged.
+- Never edit a migration that has been merged to `main`; add a new one.
+
 ## Architectural decisions
 
 Significant decisions (new technology, module boundaries, security approach, messaging design) are
