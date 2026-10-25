@@ -33,7 +33,8 @@ Application Development group project for a courier company operating island-wid
   code, and local PostgreSQL and RabbitMQ containers. **No business feature exists yet.**
 - **Decided:** one system with one backend and one database
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
-- **Open:** production hosting, the email or SMS provider for notifications, and data retention.
+- **Open:** production hosting, a real email or SMS provider (notifications use a mock SMS channel
+  for now, [ADR 0004](adr/0004-messaging-and-integration-reliability.md)), and data retention.
 
 ## 2. Technology stack
 
@@ -167,13 +168,42 @@ tracking     → delivery
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
-- **Limitation:** publishing after the database commit does not guarantee delivery. A crash or
-  broker outage between the commit and the publish loses the event.
-- **Open (ADR 0004, before the first messaging feature):** event payload and versioning; exchange,
-  queue and routing-key conventions; publish-after-commit versus a transactional outbox; consumer
-  idempotency and duplicates; retry limits, backoff and dead-lettering; webhook signing, payload and
-  delivery records; notification recipients and channel (email or mock SMS); failure visibility and
-  recovery.
+- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).**
+  **None of it is implemented yet**, and the decision is not an authorization to implement it
+  without an approved task:
+  - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
+    Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
+  - **Event:** `parcel.status-changed`, a versioned JSON envelope with event ID and per-parcel
+    `sequence`, and no personal data.
+  - **Publishing:** a transactional outbox owned by `delivery` and a single relay (PostgreSQL
+    advisory lock) with publisher confirms and the mandatory flag. A failing row blocks only its own
+    parcel; unpublished rows are never deleted.
+  - **Topology:** topic exchange `swiftdrop.events` (owned by `delivery`) and one durable quorum
+    queue per consumer (`notification.parcel-status-changed`, `merchant.parcel-status-changed`),
+    each with an explicit delivery limit, at-least-once dead-lettering (needs the `stream_queue`
+    feature flag and `reject-publish` overflow), a maximum length and a `<queue>.dlq`.
+  - **Consumers:** acknowledge after commit; deduplicate by event ID; apply each parcel's events in
+    sequence order, hold early events as pending and reconcile gaps from `delivery`'s history;
+    bounded in-process retries, never requeue, dead-letter malformed messages at once; audited
+    replays.
+  - **Webhooks:** database-driven delivery records per event and endpoint with bounded exponential
+    backoff; HMAC-SHA256 signatures with timestamp; secrets encrypted with AES-256-GCM and
+    environment-supplied keys; SSRF protection with checks before every attempt and Apache
+    HttpClient 5 with a validating DNS resolver (approved dependency, not yet added); merchants see
+    only their own records; audited, bounded manual redelivery.
+  - **Notifications:** a mock SMS channel stored by `notification`; the owning customer of a
+    customer-created parcel is notified on `PICKED_UP`, `OUT_FOR_DELIVERY`, `DELIVERED` and
+    `FAILED`; merchant-created parcels are reported to the merchant by webhook only.
+  - **Tables added by the decision:** `delivery` owns the outbox; `notification` and `merchant` own
+    their processed-event, last-applied-sequence and pending-event tables; `merchant` also owns the
+    webhook attempt history. Initial operational values are in ADR 0004, section 9.
+- **Open (implementation questions listed in ADR 0004):** the dead-letter replay mechanism, queue
+  arguments versus RabbitMQ policies, repair of stuck parcels and unpublishable outbox rows,
+  suppressing superseded notifications, failure-reason codes, notifications for recipients of
+  merchant parcels, endpoints per merchant and secret rotation, the demo receiver, encryption-key
+  variable names, and the final tuning values. ADR 0004 also lists broker and client behavior
+  that must be verified during implementation, including the five mandatory checks for the
+  webhook HTTP client.
 
 ## 8. Delivery lifecycle and real-time tracking
 
@@ -215,7 +245,8 @@ tracking     → delivery
   - The Google login flow (backend redirect, or a Google token verified by the backend), and
     whether the OAuth2 client starter stays.
   - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
-    (needs an authorization server); key format and rotation; webhook signing.
+    (needs an authorization server); key format and rotation. Webhook signing is decided in
+    [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
   - How courier and dispatcher/admin accounts are created.
 
 ## 10. Security and personal data
@@ -230,6 +261,11 @@ passwords, no sensitive data in error messages or logs (SYS-7); no hard-coded se
 - Never commit secrets, credentials, tokens or personal data.
 - Keep personal data (names, addresses, phone numbers, delivery locations, proof-of-delivery data)
   and secrets out of logs, and expose personal data only to users entitled to it.
+
+**Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):**
+events and webhook payloads carry no personal data; webhook secrets are encrypted with AES-256-GCM
+(keys from the environment, rotation by key ID); outbound webhook requests are restricted to
+validated public destinations (not yet implemented).
 
 **Open:** retention and deletion of personal data, storage for proof-of-delivery photos, and
 whether springdoc and Actuator details are exposed outside local development.
@@ -247,7 +283,8 @@ whether springdoc and Actuator details are exposed outside local development.
 - **Required:** configuration via environment variables, no hard-coded secrets (IMP-6).
 - **Decided (project rule):** configuration is environment-specific; secrets come from the
   environment, never from committed files.
-- **Open:** Spring profiles (none exist yet) and secret handling outside local development.
+- **Open:** Spring profiles (none exist yet), secret handling outside local development, and the
+  names of the webhook encryption-key variables (ADR 0004).
 
 ## 12. Testing
 
@@ -263,6 +300,10 @@ whether springdoc and Actuator details are exposed outside local development.
   - The frontend has lint and type checking (`npm run lint`, `npm run build`) and no tests.
 - **Decided (project rules):** new business logic comes with tests; logic is unit-tested with
   Mockito; H2 is not used as a PostgreSQL substitute.
+- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):** the messaging
+  and webhook test requirements (outbox crash windows, ordering and gaps, dead-letter recovery,
+  SSRF, signatures, secret encryption, retries and merchant isolation). Unit and component tests
+  stay Docker-free.
 - **Proposed:** Testcontainers for persistence and messaging integration tests. It is **not
   declared in the POM** (its version is Boot-managed, as listed in ADR 0002). It is evaluated when
   the first integration test needs it, because it makes those tests require Docker.
@@ -277,6 +318,9 @@ whether springdoc and Actuator details are exposed outside local development.
   (SYS-6); Dockerize all services and use docker-compose for local orchestration (IMP-7).
 - **Implemented:** Docker Compose runs PostgreSQL and RabbitMQ only; the frontend and backend run on
   the developer machine. Spring Boot Actuator health includes database and RabbitMQ checks.
+- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):** messaging
+  metrics through Micrometer (outbox backlog, consumer failures, pending and stuck parcels, dead
+  letters, webhook outcomes) and log lines without personal data or secrets. Not implemented yet.
 - **Open:** Dockerfiles and Compose services for the frontend and backend; production deployment,
   hosting, logging and monitoring beyond Actuator.
 - **Decided:** Kubernetes is excluded by the project rules and was rejected in
@@ -291,7 +335,7 @@ whether springdoc and Actuator details are exposed outside local development.
 |---|---|
 | Frontend-to-backend calling pattern (BFF or not), CORS, error format | 5 |
 | UUID or numeric IDs, tracking-number format | 6 |
-| Messaging decisions for ADR 0004 | 7 |
+| Open messaging implementation questions ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)) | 7 |
 | Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
 | Google login flow, merchant API authentication, creation of courier and admin accounts | 9 |
 | Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
@@ -306,6 +350,7 @@ whether springdoc and Actuator details are exposed outside local development.
 - [ADR 0001: Modular monolith in a monorepo](adr/0001-modular-monolith-in-a-monorepo.md)
 - [ADR 0002: Technology and version baseline](adr/0002-technology-and-version-baseline.md)
 - [ADR 0003: Backend business modules and boundaries](adr/0003-backend-modules-and-boundaries.md)
+- [ADR 0004: Messaging and integration reliability](adr/0004-messaging-and-integration-reliability.md)
 - [AI agent guidelines](ai-agent-guidelines.md) and [AGENTS.md](../AGENTS.md)
 - [Contributing and task workflow](../CONTRIBUTING.md)
 - [Development setup](development-setup.md)

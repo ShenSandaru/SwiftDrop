@@ -11,6 +11,7 @@ current state of each decision and lists the open questions that still need one.
 | [0001](0001-modular-monolith-in-a-monorepo.md) | Modular monolith in a monorepo | Accepted |
 | [0002](0002-technology-and-version-baseline.md) | Technology and version baseline | Accepted |
 | [0003](0003-backend-modules-and-boundaries.md) | Backend business modules and boundaries | Accepted |
+| [0004](0004-messaging-and-integration-reliability.md) | Messaging and integration reliability | Accepted |
 
 ## Process
 
