@@ -37,6 +37,29 @@ Checks by area (commands verified in this repository):
 | `compose.yaml` | `docker compose config --quiet`; start the services only if the task needs it (see [development setup](docs/development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq)) |
 | Any change | `git diff --check`; update the owning documentation ([owners](docs/ai-agent-guidelines.md#documentation-owners)) |
 
+## Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests targeting `main` and
+on pushes to `main`, with read-only `contents: read` permissions and no secrets:
+
+| Status check | Runs |
+|---|---|
+| `CI / frontend` | Node.js from `.nvmrc` (24): `npm ci`, `npm run lint`, `npm run build` in `frontend/` |
+| `CI / backend` | Temurin JDK 21: `./mvnw --batch-mode --no-transfer-progress clean verify` in `backend/` |
+
+The backend job runs the same Docker-free verification as locally. It does not start PostgreSQL or
+RabbitMQ, so no persistence or messaging integration is tested in CI yet.
+
+Actions are pinned to full commit SHAs with the release tag in a comment. To update an action, look
+up the new tag's commit (`git ls-remote https://github.com/<owner>/<action> refs/tags/<tag>`) and
+change both the SHA and the comment.
+
+Required status checks are a manual GitHub repository setting; no branch protection or ruleset is
+configured from this repository. A repository admin should add a branch protection rule or ruleset
+for `main` that requires pull requests and the status checks `frontend` and `backend` (shown as
+`CI / frontend` and `CI / backend` on pull requests). The checks appear in the settings list only
+after the workflow has run once on GitHub.
+
 ## Team conventions
 
 > **Status:** the branch and pull-request rules below are **proposed defaults** that the team has
