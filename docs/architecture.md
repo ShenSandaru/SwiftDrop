@@ -71,11 +71,13 @@ The frontend and backend share no code. They communicate only over HTTP.
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Decided:** each business module exposes a small public API. Other modules use only that API and
   never reach into another module's internal classes, entities or repositories.
-- **Implemented:** only the application class `com.swiftdrop.SwiftdropBackendApplication` exists.
-  There are no modules yet.
+- **Implemented:** the application class `com.swiftdrop.SwiftdropBackendApplication` and an empty
+  package skeleton: `com.swiftdrop.<module>` with an `api` sub-package for each of the seven modules
+  below, plus `com.swiftdrop.config` and `com.swiftdrop.shared`. They contain only
+  `package-info.java` files; no module has business code yet.
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). **None of these modules is
-  implemented yet**, and the decision is not an authorization to implement one: that needs an
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). No module has business code
+  yet, and the decision is not an authorization to implement one: that needs an
   approved task.
 
 ### Modules (Decided, ADR 0003)
@@ -112,7 +114,11 @@ tracking     → delivery
 - Packages per module, only as needed: `api` (the only importable package), `web`, `application`,
   `domain`, `infrastructure`. `com.swiftdrop.config` is the composition root (imported by no
   module); `com.swiftdrop.shared` holds technical code only.
-- A dependency-free JUnit test will check these rules once module code exists. Spring Modulith and
+- **Implemented:** the dependency-free JUnit test `ModuleBoundaryTest` (`backend/src/test/java`)
+  scans the main sources in every build and fails on any `com.swiftdrop.*` reference outside a
+  module's own packages, its allowed modules' `api` packages and `shared`; on a module referencing
+  `config`; on `shared` referencing a module; and on unknown top-level packages. It is textual and
+  cannot see reflection. Spring Modulith and
   ArchUnit are not used: neither is managed by Spring Boot
   ([ADR 0002](adr/0002-technology-and-version-baseline.md) version policy).
 
