@@ -262,15 +262,29 @@ tracking     → delivery
     become `ROLE_<name>` authorities, and `@PreAuthorize` is enabled. CSRF is disabled because
     tokens are sent only in the `Authorization` header and there are no sessions. The key comes
     from `SWIFTDROP_JWT_SECRET`; startup fails without one of at least 32 bytes.
-  - Not implemented: refresh tokens and logout, Google login (the OAuth2 client starter is still
-    unconfigured), account linking, merchant API credentials. No role-restricted business endpoint
-    exists yet.
+  - Not implemented: refresh tokens and logout, linking Google to an existing account, merchant
+    API credentials. No role-restricted business endpoint exists yet.
+- **Implemented:** Google sign-in (CUS-1) with OpenID Connect through Spring Security's
+  `oauth2Login`, a backend redirect flow. It is active only when `SWIFTDROP_GOOGLE_CLIENT_ID` (and
+  then `SWIFTDROP_GOOGLE_CLIENT_SECRET`) is set; otherwise its endpoints do not exist.
+  - `GET /oauth2/authorization/google` redirects to Google; `GET /login/oauth2/code/google`
+    handles the callback. Spring Security checks the state, exchanges the code and validates the
+    ID token (Google's signing keys, issuer, audience, expiry, nonce). The identity module adds a
+    separate filter chain for these two paths; an HTTP session holds only the pending
+    authorization request and is invalidated when the callback completes.
+  - The account is found by Google's `sub` claim in `external_identities` (unique per provider
+    and subject), never by email. A first-time user with `email_verified = true` gets a new
+    passwordless `CUSTOMER` account and link. An unverified email returns 403; an email that
+    belongs to an existing unlinked account returns 409 and nothing is linked. Roles come only
+    from the stored account.
+  - The callback returns the same JSON token body as `POST /api/v1/auth/tokens`. How the frontend
+    receives it (the callback is a browser navigation) is still open.
 - **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
   application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
   security filter chain.
 - **Open:**
-  - The Google login flow (backend redirect, or a Google token verified by the backend), and
-    whether the OAuth2 client starter stays.
+  - How the frontend receives the token after Google sign-in, and an authenticated flow for
+    linking Google to an existing account.
   - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
     (needs an authorization server); key format and rotation. Webhook signing is decided in
     [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
@@ -364,7 +378,7 @@ whether springdoc and Actuator details are exposed outside local development.
 | Tracking-number format | 6 |
 | Open messaging implementation questions ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)) | 7 |
 | Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
-| Google login flow, merchant API authentication, creation of courier and admin accounts | 9 |
+| Google sign-in token handoff and account linking, merchant API authentication, creation of courier and admin accounts | 9 |
 | Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
 | Spring profiles and non-local secret handling | 11 |
 | Coverage tool, integration-test setup, frontend tests, CI | 12 |

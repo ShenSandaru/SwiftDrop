@@ -48,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.jayway.jsonpath.JsonPath;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
+import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 
 /**
@@ -59,7 +60,8 @@ import com.swiftdrop.identity.domain.UserRepository;
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
-        "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789"})
+        "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
+        "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @Import(AuthenticationApiTest.RoleFixtureController.class)
 class AuthenticationApiTest {
@@ -74,6 +76,8 @@ class AuthenticationApiTest {
     private PasswordEncoder passwordEncoder;
     @MockitoBean
     private UserRepository users;
+    @MockitoBean
+    private ExternalIdentityRepository identities;
 
     @BeforeEach
     void setUp() {
@@ -206,6 +210,17 @@ class AuthenticationApiTest {
             mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                     .andExpect(role == Role.DISPATCHER_ADMIN ? status().isOk() : status().isForbidden());
         }
+    }
+
+    @Test
+    void withoutGoogleConfigurationGoogleLoginIsUnavailableAndLocalLoginWorks() throws Exception {
+        mvc.perform(get("/oauth2/authorization/google")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/login/oauth2/code/google").param("code", "c").param("state", "s"))
+                .andExpect(status().isUnauthorized());
+
+        User alice = withId(user(passwordEncoder.encode("correct horse"), Role.CUSTOMER));
+        when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(alice));
+        login("alice@example.com", "correct horse").andExpect(status().isOk());
     }
 
     @Test

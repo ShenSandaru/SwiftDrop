@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 
 /**
@@ -17,11 +18,14 @@ import com.swiftdrop.identity.domain.UserRepository;
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
-        "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789"})
+        "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
+        "swiftdrop.security.google.client-id="})
 class SwiftdropBackendApplicationTests {
 
     @MockitoBean
     private UserRepository users;
+    @MockitoBean
+    private ExternalIdentityRepository identities;
 
     @Test
     void contextLoads() {

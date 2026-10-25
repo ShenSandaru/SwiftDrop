@@ -152,6 +152,13 @@ set the working directory to `backend/` or define the `SWIFTDROP_*` variables in
 configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
 (see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
 
+Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
+create a Google OAuth client of type "Web application" with the authorized redirect URI
+`http://localhost:8080/login/oauth2/code/google`, set `SWIFTDROP_GOOGLE_CLIENT_ID` and
+`SWIFTDROP_GOOGLE_CLIENT_SECRET` in your `.env`, restart the backend and open
+`http://localhost:8080/oauth2/authorization/google` in a browser. The callback responds with the
+same JSON token body as `POST /api/v1/auth/tokens`.
+
 ### Reset data (deletes everything)
 
 Only when you intend to wipe your local database and broker, for example after changing the
