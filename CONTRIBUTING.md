@@ -39,8 +39,10 @@ Checks by area (commands verified in this repository):
 
 ## Continuous integration
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests targeting `main` and
-on pushes to `main`, with read-only `contents: read` permissions and no secrets:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests targeting either
+protected branch (`dev` or `main`) and on pushes to `dev` and `main`, with read-only
+`contents: read` permissions and no secrets. Feature pull requests into `dev` and release pull
+requests from `dev` into `main` therefore run the same checks:
 
 | Status check | Runs |
 |---|---|
@@ -55,12 +57,14 @@ up the new tag's commit (`git ls-remote https://github.com/<owner>/<action> refs
 change both the SHA and the comment.
 
 Required status checks are a manual GitHub repository setting; no branch protection or ruleset is
-configured from this repository, and none is enabled yet. The checks appear in the settings list
-only after the workflow has run once on GitHub, so push the workflow first. Then a repository admin:
+configured from this repository, and it has not been verified that any status check is required
+yet. The checks appear in the settings list only after the workflow has run once on GitHub, so let
+it run on a pull request into `dev` first. Then a repository admin, for both `dev` and `main`:
 
 1. Opens **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (or the classic
    **Settings → Branches → Add branch protection rule**).
-2. Sets enforcement to **Active** and targets the default branch (`main`).
+2. Sets enforcement to **Active** and targets `dev` and `main` (one ruleset with both branches, or
+   one per branch).
 3. Enables **Require a pull request before merging** with at least one required approval.
 4. Enables **Require status checks to pass** and adds `frontend` and `backend` (source: GitHub
    Actions). Enable **Require branches to be up to date before merging** if wanted.
@@ -71,20 +75,23 @@ The job names `frontend` and `backend` are the check names; on pull requests the
 
 ## Team conventions
 
-> **Status:** the branch and pull-request rules below are **proposed defaults** that the team has
-> not yet confirmed. So far, the setup commits were made locally on `main` and have not been
-> pushed; how they are published is still to be decided. The commit format is already used by
+> **Status:** the branch workflow below is the team's policy. The other pull-request rules are
+> **proposed defaults** that the team has not yet confirmed. The commit format is already used by
 > every commit in the history.
 
 ### Branches
 
-- `main` is always buildable. Nobody pushes to it directly; changes arrive through pull requests.
-- Create one short-lived branch per task from the latest `main`:
+- `dev` is the protected integration branch and `main` the protected stable/release branch. Both
+  are always buildable; nobody pushes to them directly, and changes arrive through reviewed pull
+  requests.
+- Create one short-lived branch per task from the latest `dev`:
   - `feature/<short-description>`, e.g. `feature/parcel-tracking-sse`
   - `fix/<short-description>`
   - `docs/<short-description>`
   - `chore/<short-description>` (build, configuration, dependencies)
-- Keep branches small and rebase or merge `main` into them often to avoid large conflicts.
+- Workflow: feature pull request into `dev` → review and CI → merge; for a release, a separate pull
+  request from `dev` into `main` → review and CI → merge.
+- Keep branches small and rebase or merge `dev` into them often to avoid large conflicts.
 
 ### Commits
 

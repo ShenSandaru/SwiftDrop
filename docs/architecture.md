@@ -339,6 +339,9 @@ whether springdoc and Actuator details are exposed outside local development.
   - The Boot-managed JUnit Jupiter, Mockito, AssertJ and Spring test starters are declared.
   - `.\mvnw.cmd clean verify` must pass without Docker.
   - The frontend has lint and type checking (`npm run lint`, `npm run build`) and no tests.
+  - CI (`.github/workflows/ci.yml`) runs the frontend lint/build and the Docker-free backend
+    `clean verify` on pull requests targeting `dev` or `main` and on pushes to them
+    ([CONTRIBUTING](../CONTRIBUTING.md#continuous-integration)).
 - **Decided (project rules):** new business logic comes with tests; logic is unit-tested with
   Mockito; H2 is not used as a PostgreSQL substitute.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):** the messaging
@@ -351,7 +354,7 @@ whether springdoc and Actuator details are exposed outside local development.
 - **Open (before the related implementation):** the coverage tool (JaCoCo, for example, is not
   managed by Spring Boot, so it would need a change to ADR 0002's version policy); how
   integration tests run while the default `clean verify` stays Docker-free; frontend test tooling,
-  end-to-end tests and continuous integration (there is no CI configuration).
+  end-to-end tests, and running integration tests in CI.
 
 ## 13. Deployment and observability
 
