@@ -1,8 +1,8 @@
 # SwiftDrop backend
 
 Spring Boot 4 / Java 21 modular monolith. It will own all business rules, authorization,
-persistence and integrations; the seven module packages exist as an empty skeleton without
-business code. See the root [README](../README.md),
+persistence and integrations; the seven module packages exist; only `identity` has code (its
+persistence model). See the root [README](../README.md),
 [docs/architecture.md](../docs/architecture.md) and
 [ADR 0003](../docs/adr/0003-backend-modules-and-boundaries.md) for the modules and their boundaries.
 
@@ -37,6 +37,10 @@ precedence. The variables are listed in [`.env.example`](../.env.example).
   or broker.
 - `ModuleBoundaryTest` checks the module dependency graph and the `api`-only rule of
   [ADR 0003](../docs/adr/0003-backend-modules-and-boundaries.md) by scanning `src/main/java`.
+- `MigrationConventionTest` checks that each Flyway migration is in its module's folder
+  (`db/migration/<module>/`), is named `V<yyyyMMddHHmm>__<module>_<description>.sql` and has a
+  unique version. It does not run Flyway.
+- `identity.domain.UserTest` unit-tests the `User` entity.
 
 There are no integration tests against PostgreSQL or RabbitMQ yet
 (see [testing](../docs/architecture.md#12-testing)).

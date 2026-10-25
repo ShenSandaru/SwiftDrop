@@ -29,8 +29,9 @@ Application Development group project for a courier company operating island-wid
   courier status updates; dispatcher assignment, management and reports; asynchronous status
   events with a notification consumer; containerized deployment
   ([project requirements](project-requirements.md)).
-- **Implemented:** project scaffolding only: a frontend placeholder page, a backend with no business
-  code, and local PostgreSQL and RabbitMQ containers. **No business feature exists yet.**
+- **Implemented:** project scaffolding, a frontend placeholder page, local PostgreSQL and RabbitMQ
+  containers, and email/password authentication in `identity` (section 9). **No business feature
+  exists yet.**
 - **Decided:** one system with one backend and one database
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Open:** production hosting, a real email or SMS provider (notifications use a mock SMS channel
@@ -42,8 +43,8 @@ Application Development group project for a courier company operating island-wid
 |---|---|---|
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
-| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (connection only) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only) |
+| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity tables only) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (identity tables only) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -74,10 +75,13 @@ The frontend and backend share no code. They communicate only over HTTP.
 - **Implemented:** the application class `com.swiftdrop.SwiftdropBackendApplication` and an empty
   package skeleton: `com.swiftdrop.<module>` with an `api` sub-package for each of the seven modules
   below, plus `com.swiftdrop.config` and `com.swiftdrop.shared`. They contain only
-  `package-info.java` files; no module has business code yet.
+  `package-info.java` files, except `identity`, whose `domain` package holds the `User` entity,
+  the `Role` enum and `UserRepository`, with `application` (registration, login), `security` (JWT
+  signing and verification), `web` (REST controllers) and `api` (`IdentityClaims`, the token claim
+  names). `config` holds the security filter chain.
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). No module has business code
-  yet, and the decision is not an authorization to implement one: that needs an
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). Only `identity` has code so
+  far, and the decision is not an authorization to implement one: that needs an
   approved task.
 
 ### Modules (Decided, ADR 0003)
@@ -131,8 +135,10 @@ tracking     → delivery
   validated APIs with centralized error handling (IMP-3).
 - **Decided (project rule):** REST paths are plural nouns in kebab-case under `/api/v1/...`.
 - **Implemented:** the frontend has a placeholder page and one shadcn/ui component. It does not call
-  the backend yet. The backend has no business endpoints; springdoc serves its default OpenAPI
-  endpoints (behind authentication, see section 9).
+  the backend yet. The backend has only the identity endpoints of section 9; springdoc serves its
+  default OpenAPI endpoints (behind authentication). Identity errors use RFC 9457 problem details.
+  CORS allows the origins in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on
+  `/api/**`, without credentials.
 - **Open:** how the frontend calls the backend (directly from the browser, or through Next.js
   server code acting as a BFF), CORS, the API error format and pagination conventions. The brief
   mentions "modular monolith with a BFF" only as an example (DES-3).
@@ -143,9 +149,11 @@ tracking     → delivery
   migrations (`V<n>__<description>.sql`, `snake_case` names). Merged migrations are never edited.
   Hibernate only validates the schema.
 - **Implemented:** the backend connects to PostgreSQL through `SWIFTDROP_POSTGRES_*` settings,
-  `spring.jpa.hibernate.ddl-auto=validate` is set, and Flyway runs at startup. There are **no
-  migrations and no entities**. On first start, Flyway creates only its own
-  `flyway_schema_history` table.
+  `spring.jpa.hibernate.ddl-auto=validate` is set, and Flyway runs at startup. The first migration,
+  `db/migration/identity/V202610251600__identity_create_users_and_roles.sql`, creates `roles`
+  (seeded with `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER_ADMIN`), `users` and `user_roles`.
+  `MigrationConventionTest` checks the folder, naming and unique versions without a database.
+  Applying the migration and Hibernate validation against PostgreSQL have not yet been run.
 - **Decided (ADR 0003):**
   - One shared `public` schema, chosen pragmatically for the team (not a universal best practice).
   - Each table has one owning module (table in section 4). Only the owner writes its migrations and
@@ -159,7 +167,9 @@ tracking     → delivery
     database account; ownership is enforced by module rules, review and the boundary test.
 - **Required:** the ER diagram must cover users, roles, merchants, parcels, status history,
   couriers, zones and pricing (DES-2).
-- **Open:** UUID or numeric IDs; the tracking-number format.
+- **Decided (team, milestone 2; no ADR yet):** entity IDs are UUIDs (`uuid` columns, generated by
+  Hibernate). Reference data may use a natural key, as `roles.name` does.
+- **Open:** the tracking-number format.
 
 ## 7. Messaging (RabbitMQ) and status events
 
@@ -240,16 +250,41 @@ tracking     → delivery
   API orders using API keys or OAuth 2.0 client credentials (MER-2); hashed passwords (SYS-7).
 - **Decided:** authorization is enforced on the backend for every protected operation, by role and
   by ownership ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
-- **Implemented:** Spring Security with its **default configuration**. Every endpoint except
-  `/actuator/health` requires authentication. No users exist and no login is possible.
-  The OAuth2 client and resource-server starters are **installed but not configured**: there is no
-  Google client registration, no JWT issuer or key configuration, and no roles.
+- **Implemented:** email/password authentication with stateless JWT access tokens:
+  - `POST /api/v1/users` (public) registers a user with the `CUSTOMER` role only; the request has
+    no role field. Email is trimmed and lower-cased; duplicates return 409, with the unique
+    constraint as the final check. Passwords (8-72 characters, at most 72 bytes) are hashed with
+    BCrypt through Spring Security's delegating encoder.
+  - `POST /api/v1/auth/tokens` (public) returns an HS256 access token (`sub` = user ID, `roles`,
+    `iss`, `iat`, `exp`; default lifetime 15 minutes). Every failure returns the same 401.
+  - `GET /api/v1/users/me` (authenticated) returns the caller's account.
+  - The resource server checks signature, expiry, issuer and the `sub`/`roles` claims; roles
+    become `ROLE_<name>` authorities, and `@PreAuthorize` is enabled. CSRF is disabled because
+    tokens are sent only in the `Authorization` header and there are no sessions. The key comes
+    from `SWIFTDROP_JWT_SECRET`; startup fails without one of at least 32 bytes.
+  - Not implemented: refresh tokens and logout, linking Google to an existing account, merchant
+    API credentials. No role-restricted business endpoint exists yet.
+- **Implemented:** Google sign-in (CUS-1) with OpenID Connect through Spring Security's
+  `oauth2Login`, a backend redirect flow. It is active only when `SWIFTDROP_GOOGLE_CLIENT_ID` (and
+  then `SWIFTDROP_GOOGLE_CLIENT_SECRET`) is set; otherwise its endpoints do not exist.
+  - `GET /oauth2/authorization/google` redirects to Google; `GET /login/oauth2/code/google`
+    handles the callback. Spring Security checks the state, exchanges the code and validates the
+    ID token (Google's signing keys, issuer, audience, expiry, nonce). The identity module adds a
+    separate filter chain for these two paths; an HTTP session holds only the pending
+    authorization request and is invalidated when the callback completes.
+  - The account is found by Google's `sub` claim in `external_identities` (unique per provider
+    and subject), never by email. A first-time user with `email_verified = true` gets a new
+    passwordless `CUSTOMER` account and link. An unverified email returns 403; an email that
+    belongs to an existing unlinked account returns 409 and nothing is linked. Roles come only
+    from the stored account.
+  - The callback returns the same JSON token body as `POST /api/v1/auth/tokens`. How the frontend
+    receives it (the callback is a browser navigation) is still open.
 - **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
   application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
   security filter chain.
 - **Open:**
-  - The Google login flow (backend redirect, or a Google token verified by the backend), and
-    whether the OAuth2 client starter stays.
+  - How the frontend receives the token after Google sign-in, and an authenticated flow for
+    linking Google to an existing account.
   - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
     (needs an authorization server); key format and rotation. Webhook signing is decided in
     [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
@@ -304,6 +339,9 @@ whether springdoc and Actuator details are exposed outside local development.
   - The Boot-managed JUnit Jupiter, Mockito, AssertJ and Spring test starters are declared.
   - `.\mvnw.cmd clean verify` must pass without Docker.
   - The frontend has lint and type checking (`npm run lint`, `npm run build`) and no tests.
+  - CI (`.github/workflows/ci.yml`) runs the frontend lint/build and the Docker-free backend
+    `clean verify` on pull requests targeting `dev` or `main` and on pushes to them
+    ([CONTRIBUTING](../CONTRIBUTING.md#continuous-integration)).
 - **Decided (project rules):** new business logic comes with tests; logic is unit-tested with
   Mockito; H2 is not used as a PostgreSQL substitute.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):** the messaging
@@ -316,7 +354,7 @@ whether springdoc and Actuator details are exposed outside local development.
 - **Open (before the related implementation):** the coverage tool (JaCoCo, for example, is not
   managed by Spring Boot, so it would need a change to ADR 0002's version policy); how
   integration tests run while the default `clean verify` stays Docker-free; frontend test tooling,
-  end-to-end tests and continuous integration (there is no CI configuration).
+  end-to-end tests, and running integration tests in CI.
 
 ## 13. Deployment and observability
 
@@ -340,10 +378,10 @@ whether springdoc and Actuator details are exposed outside local development.
 | Question | Section |
 |---|---|
 | Frontend-to-backend calling pattern (BFF or not), CORS, error format | 5 |
-| UUID or numeric IDs, tracking-number format | 6 |
+| Tracking-number format | 6 |
 | Open messaging implementation questions ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)) | 7 |
 | Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
-| Google login flow, merchant API authentication, creation of courier and admin accounts | 9 |
+| Google sign-in token handoff and account linking, merchant API authentication, creation of courier and admin accounts | 9 |
 | Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
 | Spring profiles and non-local secret handling | 11 |
 | Coverage tool, integration-test setup, frontend tests, CI | 12 |

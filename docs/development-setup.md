@@ -144,11 +144,20 @@ cd backend
 .\mvnw.cmd spring-boot:run           # Unix: ./mvnw spring-boot:run
 ```
 
-On startup Flyway connects and reports "No migrations found" until the first migration exists, and
-creates its `flyway_schema_history` table. `http://localhost:8080/actuator/health` returns
+On startup Flyway connects, applies the migrations under
+`backend/src/main/resources/db/migration/` and records them in `flyway_schema_history`; Hibernate
+then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
-configuration. `.\mvnw.cmd clean verify` does not need the containers.
+configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
+(see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
+
+Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
+create a Google OAuth client of type "Web application" with the authorized redirect URI
+`http://localhost:8080/login/oauth2/code/google`, set `SWIFTDROP_GOOGLE_CLIENT_ID` and
+`SWIFTDROP_GOOGLE_CLIENT_SECRET` in your `.env`, restart the backend and open
+`http://localhost:8080/oauth2/authorization/google` in a browser. The callback responds with the
+same JSON token body as `POST /api/v1/auth/tokens`.
 
 ### Reset data (deletes everything)
 
