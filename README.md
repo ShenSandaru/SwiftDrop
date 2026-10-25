@@ -49,20 +49,32 @@ Exact versions and the evidence for them are in
 ├── docs/
 │   ├── adr/              Architecture decision records
 │   └── development-setup.md
-├── docker-compose.yml    Local PostgreSQL and RabbitMQ (created in Stage 6)
+├── compose.yaml          Local PostgreSQL and RabbitMQ (created in Stage 5)
+├── .env.example          Template for the git-ignored local .env file
 ├── CLAUDE.md             Coding instructions for contributors and AI assistants
 └── CONTRIBUTING.md       Team workflow
 ```
 
-Only the documentation and repository configuration exist so far. The applications and
-infrastructure are added in later setup stages.
+The setup stages are complete up to the local infrastructure. No business features exist yet.
 
 ## Getting started
 
 1. Install the prerequisites in [docs/development-setup.md](docs/development-setup.md).
 2. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
-3. Build and run instructions will be added here once the frontend, backend and Docker Compose
-   setup exist.
+3. Start the local infrastructure (from the repository root):
+
+   ```powershell
+   Copy-Item .env.example .env   # once; then change the passwords in .env
+   docker compose up -d
+   docker compose ps             # wait until both services are "healthy"
+   ```
+
+4. Build and test the backend: `cd backend`, then `.\mvnw.cmd clean verify`. The tests do not need
+   the containers. Run the backend against them with `.\mvnw.cmd spring-boot:run`.
+5. Frontend: see [frontend/README.md](frontend/README.md).
+
+Details, troubleshooting and how to reset data are in
+[docs/development-setup.md](docs/development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq).
 
 ## Documentation
 

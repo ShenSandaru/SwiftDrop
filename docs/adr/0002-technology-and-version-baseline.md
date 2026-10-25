@@ -213,6 +213,25 @@ ESLint 10 is pending** until `eslint-config-next` and its plugins declare suppor
   No remediation is needed. If lint ever reports a missing native binding, delete `node_modules`
   and run `npm ci`. Do not approve install scripts globally.
   Sources: `node_modules/unrs-resolver/package.json`, `node_modules/napi-postinstall/README.md`
+- **Stage 5 local infrastructure (2026-10-25), verified with Docker Engine 29.8.2 / Compose v5.6.0:**
+  - `postgres:18-alpine` contains PostgreSQL 18.6 and sets `PGDATA=/var/lib/postgresql/18/docker`
+    with `VOLUME /var/lib/postgresql`. `compose.yaml` mounts the named volume at
+    `/var/lib/postgresql`.
+  - `rabbitmq:4.3-management-alpine` contains RabbitMQ 4.3.7 (Erlang 27.3.4.19). 4.3.7 was released
+    on 2026-10-20 (GitHub releases). RabbitMQ stores data per node name, which defaults to the
+    hostname, so `compose.yaml` sets `hostname: rabbitmq`. `RABBITMQ_DEFAULT_USER` and
+    `RABBITMQ_DEFAULT_PASS` are still supported; the `*_FILE` variants were removed in 3.9.
+  - Neither image defines a `HEALTHCHECK`. Compose uses `pg_isready` over TCP and
+    `rabbitmq-diagnostics -q check_port_connectivity`.
+  - A throwaway database and a durable queue survived `docker compose restart` and
+    `docker compose down` / `up` (new containers, same volumes, same PostgreSQL system identifier).
+  - The backend started against both services: Flyway 12.4.0 validated 0 migrations on
+    PostgreSQL 18.6, and `/actuator/health` reported `db` and `rabbit` (4.3.7) as `UP`.
+  Sources: image configuration via `docker buildx imagetools inspect`,
+  <https://github.com/docker-library/docs/blob/master/postgres/content.md>,
+  <https://github.com/docker-library/docs/blob/master/rabbitmq/content.md>,
+  <https://www.rabbitmq.com/docs/monitoring#health-checks>,
+  <https://github.com/rabbitmq/rabbitmq-server/releases>
 - Docker Desktop on Windows needs WSL 2.1.5 or later and Windows 11 23H2 or later. The current
   release is 4.96.3, with Engine 29.9.x and Compose v5.6.x.
   Sources: <https://docs.docker.com/desktop/setup/install/windows-install/>,
@@ -221,8 +240,9 @@ ESLint 10 is pending** until `eslint-config-next` and its plugins declare suppor
 ## Assumptions (not explicitly documented; verified by later stages)
 
 - **Spring AMQP 4.1 with RabbitMQ 4.3:** no official version matrix exists. Spring AMQP uses
-  AMQP 0-9-1 through `amqp-client` 5.x, which RabbitMQ 4.x supports. Stage 6 confirms this with a
-  connection smoke test.
+  AMQP 0-9-1 through `amqp-client` 5.x, which RabbitMQ 4.x supports. A connection smoke test in
+  Stage 5 succeeded (Actuator `rabbit` health `UP` against RabbitMQ 4.3.7); message publishing and
+  consuming are verified when the first messaging feature is built.
 - ~~shadcn/ui with Next.js 16.4~~ and ~~TypeScript 6.0 with the `create-next-app` output~~ were
   confirmed in Stage 3 by a clean `npm ci`, `npm run lint` and `npm run build` (see evidence above).
 

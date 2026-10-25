@@ -1,0 +1,55 @@
+# Local development infrastructure for SwiftDrop. Not for production.
+# Settings come from the git-ignored .env file next to this file (see .env.example).
+# Ports are published on 127.0.0.1 only, so the services are not reachable from the network.
+
+name: swiftdrop
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      # Only applied when the data volume is empty (first start)
+      POSTGRES_DB: ${SWIFTDROP_POSTGRES_DB:-swiftdrop}
+      POSTGRES_USER: ${SWIFTDROP_POSTGRES_USER:-swiftdrop}
+      POSTGRES_PASSWORD: ${SWIFTDROP_POSTGRES_PASSWORD:?Set SWIFTDROP_POSTGRES_PASSWORD in .env (copy .env.example)}
+    ports:
+      - "127.0.0.1:${SWIFTDROP_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images keep PGDATA under /var/lib/postgresql/18/docker; mount the parent
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # TCP check: the temporary server used during first-time initialization listens on the
+      # Unix socket only, so it is not reported as ready
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:4.3-management-alpine
+    # RabbitMQ stores its data per node name, which is derived from the hostname.
+    # A fixed hostname keeps the data in the volume usable when the container is recreated.
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      # Only applied when the data volume is empty (first start)
+      RABBITMQ_DEFAULT_USER: ${SWIFTDROP_RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_DEFAULT_PASS: ${SWIFTDROP_RABBITMQ_PASSWORD:?Set SWIFTDROP_RABBITMQ_PASSWORD in .env (copy .env.example)}
+    ports:
+      - "127.0.0.1:${SWIFTDROP_RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${SWIFTDROP_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      # Checks that the AMQP and management listeners accept TCP connections
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
