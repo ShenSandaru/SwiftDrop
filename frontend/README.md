@@ -24,6 +24,9 @@ npm run build   # production build (includes type checking)
 npm start       # serve the production build
 ```
 
+CI (`frontend` job in `../.github/workflows/ci.yml`) runs `npm ci`, `npm run lint` and `npm run build`
+on Node.js 24 for every pull request to `main`; run the same commands before opening one.
+
 ## Structure
 
 ```text

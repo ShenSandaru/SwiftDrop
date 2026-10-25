@@ -50,6 +50,7 @@ Exact versions and the evidence for them are in
 
 ```text
 .
+├── .github/workflows/    GitHub Actions CI
 ├── backend/              Spring Boot application (created in Stage 4)
 ├── frontend/             Next.js application (created in Stage 3)
 ├── docs/
@@ -65,28 +66,127 @@ Exact versions and the evidence for them are in
 └── CONTRIBUTING.md       Task workflow and team conventions
 ```
 
-The setup stages are complete up to the local infrastructure. No business features exist yet.
+Each application has its own README: [backend/README.md](backend/README.md) and
+[frontend/README.md](frontend/README.md).
+
+## Current status
+
+**Works today:** the project skeleton. The frontend builds and serves a placeholder start page, the
+backend starts and connects to PostgreSQL and RabbitMQ, Flyway runs (no migrations yet), the
+Actuator health endpoint reports both services, and CI runs lint, build and tests.
+
+**Not implemented yet:** every business feature, including accounts and login, roles, parcels and
+delivery requests, pricing, tracking, courier assignment, notifications, merchant API and webhooks,
+and reports. Spring Security runs with its default configuration, so every endpoint except
+`/actuator/health` requires authentication and no login is possible.
 
 ## Getting started
 
-1. Install the prerequisites in [docs/development-setup.md](docs/development-setup.md).
-2. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
-   [project rules](docs/ai-agent-guidelines.md#project-rules). AI agents start at
-   [AGENTS.md](AGENTS.md).
-3. Start the local infrastructure (from the repository root):
+### 1. Prerequisites
 
-   ```powershell
-   Copy-Item .env.example .env   # once; then change the passwords in .env
-   docker compose up -d
-   docker compose ps             # wait until both services are "healthy"
-   ```
+| Tool | Version | Source of truth |
+|---|---|---|
+| Eclipse Temurin JDK | 21 | `java.version` in `backend/pom.xml` |
+| Node.js / npm | 24 LTS / npm 11 | `.nvmrc`, `engines` in `frontend/package.json` |
+| Docker Desktop (Compose) | current 4.x | only needed to run the backend locally |
+| Git | any current | |
 
-4. Build and test the backend: `cd backend`, then `.\mvnw.cmd clean verify`. The tests do not need
-   the containers. Run the backend against them with `.\mvnw.cmd spring-boot:run`.
-5. Frontend: see [frontend/README.md](frontend/README.md).
+Maven is not installed separately; the Maven Wrapper pins it. Installation steps (Windows) and a
+version check are in [docs/development-setup.md](docs/development-setup.md).
 
-Details, troubleshooting and how to reset data are in
-[docs/development-setup.md](docs/development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq).
+### 2. Clone and configure
+
+```powershell
+git clone <repository-url>
+cd SwiftDrop
+Copy-Item .env.example .env      # Linux/macOS: cp .env.example .env
+```
+
+Edit `.env` and replace the two `change-me-...` passwords with your own local values. `.env` is
+git-ignored; never commit it. It is read by Docker Compose and by the backend:
+
+| Variable | Default in `.env.example` | Purpose |
+|---|---|---|
+| `SWIFTDROP_POSTGRES_DB` / `_USER` | `swiftdrop` | Database name and user |
+| `SWIFTDROP_POSTGRES_PASSWORD` | `change-me-local-postgres` | Set your own; required |
+| `SWIFTDROP_POSTGRES_PORT` | `5432` | Host port; change if 5432 is taken |
+| `SWIFTDROP_RABBITMQ_USER` | `swiftdrop` | Broker user |
+| `SWIFTDROP_RABBITMQ_PASSWORD` | `change-me-local-rabbitmq` | Set your own; required |
+| `SWIFTDROP_RABBITMQ_PORT` / `_MANAGEMENT_PORT` | `5672` / `15672` | Host ports |
+
+Credentials are applied only when the Docker volumes are first created; see
+[resetting data](docs/development-setup.md#reset-data-deletes-everything).
+
+### 3. Start and stop the local infrastructure (needs Docker)
+
+From the repository root:
+
+```powershell
+docker compose up -d     # start PostgreSQL and RabbitMQ
+docker compose ps        # wait until both show "(healthy)"
+docker compose stop      # stop when done; data is kept
+```
+
+### 4. Run the applications
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run       # Linux/macOS: ./mvnw spring-boot:run (needs step 3)
+```
+
+```bash
+cd frontend
+npm ci                           # first time and after package-lock.json changes
+npm run dev
+```
+
+| What | URL |
+|---|---|
+| Frontend (dev server) | <http://localhost:3000> |
+| Backend health | <http://localhost:8080/actuator/health> (`{"status":"UP"}` when both services are reachable) |
+| RabbitMQ management UI | <http://localhost:15672> (user and password from `.env`) |
+
+The backend API under `/api/v1/...` and the springdoc API docs (`/swagger-ui.html`,
+`/v3/api-docs`) do not exist in usable form yet: there are no endpoints, and the default security
+configuration requires authentication for them.
+
+### 5. Checks (no Docker needed)
+
+These are the same checks CI runs:
+
+```powershell
+cd frontend; npm ci; npm run lint; npm run build
+cd ../backend; .\mvnw.cmd clean verify       # Linux/macOS: ./mvnw clean verify
+```
+
+### Troubleshooting
+
+- **`java -version` is not 21:** `JAVA_HOME` or `PATH` points to another JDK.
+- **Port already allocated:** another service uses 5432, 5672 or 15672. Do not stop other projects'
+  containers; set a free port in `.env` (e.g. `SWIFTDROP_POSTGRES_PORT=5433`) and run
+  `docker compose up -d` again.
+- **`required variable SWIFTDROP_..._PASSWORD is missing a value`:** `.env` is missing; create it
+  from `.env.example`.
+- **`password authentication failed`:** the volume was created with other credentials than the
+  current `.env`.
+- **Backend cannot find its settings when started from an IDE:** set the working directory to
+  `backend/`.
+
+More cases are in [development setup](docs/development-setup.md#troubleshooting) and
+[frontend/README.md](frontend/README.md#known-npm-warnings).
+
+## Git workflow
+
+1. `git switch main`, `git pull`, then `git switch -c feature/<short-description>`.
+2. Make a small change within the approved task.
+3. Run the checks above and `git diff --check`.
+4. Commit with [Conventional Commits](https://www.conventionalcommits.org/), push the branch and
+   open a pull request to `main`.
+5. Wait for the `frontend` and `backend` CI checks and an approving review before merging.
+
+Details are in [CONTRIBUTING.md](CONTRIBUTING.md), including the
+[CI checks and branch protection](CONTRIBUTING.md#continuous-integration). AI agents start at
+[AGENTS.md](AGENTS.md).
 
 ## Documentation
 

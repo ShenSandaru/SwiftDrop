@@ -55,10 +55,19 @@ up the new tag's commit (`git ls-remote https://github.com/<owner>/<action> refs
 change both the SHA and the comment.
 
 Required status checks are a manual GitHub repository setting; no branch protection or ruleset is
-configured from this repository. A repository admin should add a branch protection rule or ruleset
-for `main` that requires pull requests and the status checks `frontend` and `backend` (shown as
-`CI / frontend` and `CI / backend` on pull requests). The checks appear in the settings list only
-after the workflow has run once on GitHub.
+configured from this repository, and none is enabled yet. The checks appear in the settings list
+only after the workflow has run once on GitHub, so push the workflow first. Then a repository admin:
+
+1. Opens **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (or the classic
+   **Settings → Branches → Add branch protection rule**).
+2. Sets enforcement to **Active** and targets the default branch (`main`).
+3. Enables **Require a pull request before merging** with at least one required approval.
+4. Enables **Require status checks to pass** and adds `frontend` and `backend` (source: GitHub
+   Actions). Enable **Require branches to be up to date before merging** if wanted.
+5. Enables **Block force pushes** and keeps **Restrict deletions** on.
+
+The job names `frontend` and `backend` are the check names; on pull requests they are displayed as
+`CI / frontend` and `CI / backend`.
 
 ## Team conventions
 
