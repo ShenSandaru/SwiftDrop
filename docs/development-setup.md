@@ -144,8 +144,9 @@ cd backend
 .\mvnw.cmd spring-boot:run           # Unix: ./mvnw spring-boot:run
 ```
 
-On startup Flyway connects and reports "No migrations found" until the first migration exists, and
-creates its `flyway_schema_history` table. `http://localhost:8080/actuator/health` returns
+On startup Flyway connects, applies the migrations under
+`backend/src/main/resources/db/migration/` and records them in `flyway_schema_history`; Hibernate
+then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
 configuration. `.\mvnw.cmd clean verify` does not need the containers.
