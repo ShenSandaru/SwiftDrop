@@ -72,13 +72,15 @@ Each application has its own README: [backend/README.md](backend/README.md) and
 ## Current status
 
 **Works today:** the project skeleton. The frontend builds and serves a placeholder start page, the
-backend starts and connects to PostgreSQL and RabbitMQ, Flyway runs (no migrations yet), the
-Actuator health endpoint reports both services, and CI runs lint, build and tests.
+backend starts and connects to PostgreSQL and RabbitMQ, Flyway creates the identity tables, the
+Actuator health endpoint reports both services, and CI runs lint, build and tests. The backend has
+email/password customer registration (`POST /api/v1/users`), login returning a JWT access token
+(`POST /api/v1/auth/tokens`) and `GET /api/v1/users/me`; every other endpoint except
+`/actuator/health` requires a valid bearer token.
 
-**Not implemented yet:** every business feature, including accounts and login, roles, parcels and
-delivery requests, pricing, tracking, courier assignment, notifications, merchant API and webhooks,
-and reports. Spring Security runs with its default configuration, so every endpoint except
-`/actuator/health` requires authentication and no login is possible.
+**Not implemented yet:** every business feature, including Google login, refresh tokens, merchant,
+courier and admin accounts, parcels and delivery requests, pricing, tracking, courier assignment,
+notifications, merchant API and webhooks, and reports. The frontend does not call the backend yet.
 
 ## Getting started
 
@@ -102,7 +104,8 @@ cd SwiftDrop
 Copy-Item .env.example .env      # Linux/macOS: cp .env.example .env
 ```
 
-Edit `.env` and replace the two `change-me-...` passwords with your own local values. `.env` is
+Edit `.env`, replace the two `change-me-...` passwords with your own local values and set
+`SWIFTDROP_JWT_SECRET` (the file explains how to generate one). `.env` is
 git-ignored; never commit it. It is read by Docker Compose and by the backend:
 
 | Variable | Default in `.env.example` | Purpose |
@@ -113,6 +116,9 @@ git-ignored; never commit it. It is read by Docker Compose and by the backend:
 | `SWIFTDROP_RABBITMQ_USER` | `swiftdrop` | Broker user |
 | `SWIFTDROP_RABBITMQ_PASSWORD` | `change-me-local-rabbitmq` | Set your own; required |
 | `SWIFTDROP_RABBITMQ_PORT` / `_MANAGEMENT_PORT` | `5672` / `15672` | Host ports |
+| `SWIFTDROP_JWT_SECRET` | empty | Token signing key, at least 32 bytes; required by the backend |
+| `SWIFTDROP_JWT_ISSUER` / `_ACCESS_TOKEN_TTL` | `swiftdrop` / `PT15M` | Optional token settings |
+| `SWIFTDROP_CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Optional; browser origins for `/api/**` |
 
 Credentials are applied only when the Docker volumes are first created; see
 [resetting data](docs/development-setup.md#reset-data-deletes-everything).
@@ -146,9 +152,8 @@ npm run dev
 | Backend health | <http://localhost:8080/actuator/health> (`{"status":"UP"}` when both services are reachable) |
 | RabbitMQ management UI | <http://localhost:15672> (user and password from `.env`) |
 
-The backend API under `/api/v1/...` and the springdoc API docs (`/swagger-ui.html`,
-`/v3/api-docs`) do not exist in usable form yet: there are no endpoints, and the default security
-configuration requires authentication for them.
+Only the identity endpoints listed under [Current status](#current-status) exist under `/api/v1/...`.
+The springdoc API docs (`/swagger-ui.html`, `/v3/api-docs`) require a bearer token.
 
 ### 5. Checks (no Docker needed)
 

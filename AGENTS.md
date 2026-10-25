@@ -6,7 +6,8 @@ it directly.
 SwiftDrop is a parcel delivery and courier management system (university group project). It is a
 monorepo with a Next.js frontend (`frontend/`, npm) and a Spring Boot 4 / Java 21 backend
 (`backend/`, Maven Wrapper) structured as a **modular monolith**, with PostgreSQL + Flyway,
-RabbitMQ and Docker Compose for local infrastructure. No business feature exists yet.
+RabbitMQ and Docker Compose for local infrastructure. Only email/password authentication exists;
+no business feature exists yet.
 
 ## Read before changing files
 

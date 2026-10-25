@@ -149,7 +149,8 @@ On startup Flyway connects, applies the migrations under
 then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
-configuration. `.\mvnw.cmd clean verify` does not need the containers.
+configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
+(see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
 
 ### Reset data (deletes everything)
 
