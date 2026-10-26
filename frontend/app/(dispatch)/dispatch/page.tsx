@@ -1,25 +1,26 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PortalPlaceholderCard } from "@/components/portal";
 
 export default function DispatchPortalPage() {
   return (
-    <main className="container mx-auto flex-1 px-4 py-12 max-w-4xl space-y-4">
-      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-        <span className="size-1.5 rounded-full bg-primary" />
-        Dispatch Workspace · WS7
-      </div>
-      <Card className="rounded-xl bg-card border-border shadow-xs">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-foreground">Dispatcher Portal</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Courier workload management and parcel assignment.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This route group is reserved for dispatcher operations.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+    <div className="space-y-6">
+      <PortalPlaceholderCard
+        title="Fleet Dispatch & Parcel Assignment"
+        description="Monitor active courier workloads, assign unassigned parcels, and resolve delivery exceptions."
+        workstream="WS7 — Dispatcher Assignment & Workload"
+        contractRef="ADM-1, ADM-2 · Contract §4.2"
+        plannedEndpoints={[
+          "GET /api/v1/unassigned-parcels (planned)",
+          "POST /api/v1/parcel-assignments (planned)",
+          "GET /api/v1/courier-workloads (planned)",
+          "GET /api/v1/couriers (planned)",
+        ]}
+        plannedFeatures={[
+          "Live queue of unassigned parcels requiring courier dispatch",
+          "Courier capacity and active workload overview per delivery zone",
+          "One-click parcel assignment and reassignment workflow",
+          "Fleet status monitoring and bottleneck alerts",
+        ]}
+      />
+    </div>
   );
 }

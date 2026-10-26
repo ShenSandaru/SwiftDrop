@@ -33,7 +33,7 @@ class SecurityConfiguration {
     SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/tokens").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/tokens", "/api/v1/auth/google/exchanges").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         // OpenAPI / Swagger UI: public for development; to be protected or restricted under SD-702
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()

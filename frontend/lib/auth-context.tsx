@@ -42,8 +42,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   useEffect(() => {
-    onUnauthorized(() => {
+    const unsubscribe = onUnauthorized(() => {
       clearAuth();
+      if (typeof window !== "undefined") {
+        const publicPaths = ["/login", "/signup", "/track", "/"];
+        const currentPath = window.location.pathname;
+        const isPublic = publicPaths.includes(currentPath) || currentPath.startsWith("/track");
+        if (!isPublic) {
+          const targetUrl = new URL(`/login?expired=true&redirect=${encodeURIComponent(currentPath)}`, window.location.origin).href;
+          window.location.assign(targetUrl);
+        }
+      }
     });
 
     let isMounted = true;
@@ -78,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [clearAuth]);
 

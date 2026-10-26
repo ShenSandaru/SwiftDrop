@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +36,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
@@ -59,6 +61,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.jayway.jsonpath.JsonPath;
 import com.swiftdrop.identity.domain.ExternalIdentity;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
+import com.swiftdrop.identity.domain.GoogleLoginCode;
+import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.IdentityProvider;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
@@ -66,10 +70,8 @@ import com.swiftdrop.identity.domain.UserRepository;
 
 /**
  * The Google OIDC login through the real filter chain, without Google: the redirect, the callback
- * with Spring Security's state, nonce and ID token validation, and the account resolution. Only
- * the provider boundary is replaced: the token endpoint is mocked, and the ID tokens are signed
- * with HS256 and the client secret (a signing method OIDC allows) instead of Google's RSA keys,
- * so that the test can sign them. All claim validation is Spring Security's default.
+ * with Spring Security's state, nonce and ID token validation, exchange code issuance, and account resolution.
+ * All claim validation is Spring Security's default.
  */
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -78,7 +80,8 @@ import com.swiftdrop.identity.domain.UserRepository;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id=" + GoogleLoginApiTest.CLIENT_ID,
-        "swiftdrop.security.google.client-secret=" + GoogleLoginApiTest.CLIENT_SECRET})
+        "swiftdrop.security.google.client-secret=" + GoogleLoginApiTest.CLIENT_SECRET,
+        "swiftdrop.frontend.base-url=http://localhost:3000"})
 @AutoConfigureMockMvc
 class GoogleLoginApiTest {
 
@@ -94,12 +97,36 @@ class GoogleLoginApiTest {
     @MockitoBean
     private ExternalIdentityRepository identities;
     @MockitoBean
+    private GoogleLoginCodeRepository codeRepository;
+    @MockitoBean
     private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenEndpoint;
+
+    private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
     @BeforeEach
     void setUp() {
+        storedCodes.clear();
         when(users.findByEmail(any())).thenReturn(Optional.empty());
         when(users.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
+        when(codeRepository.save(any(GoogleLoginCode.class))).thenAnswer(call -> {
+            GoogleLoginCode code = call.getArgument(0);
+            storedCodes.put(code.getCodeHash(), code);
+            return code;
+        });
+        when(codeRepository.markUsedIfValid(any(), any())).thenAnswer(call -> {
+            String hash = call.getArgument(0);
+            Instant now = call.getArgument(1);
+            GoogleLoginCode code = storedCodes.get(hash);
+            if (code != null && code.getUsedAt() == null && code.getExpiresAt().isAfter(now)) {
+                ReflectionTestUtils.setField(code, "usedAt", now);
+                return 1;
+            }
+            return 0;
+        });
+        when(codeRepository.findById(any())).thenAnswer(call -> {
+            String hash = call.getArgument(0);
+            return Optional.ofNullable(storedCodes.get(hash));
+        });
     }
 
     @Test
@@ -117,14 +144,15 @@ class GoogleLoginApiTest {
     }
 
     @Test
-    void firstSignInCreatesCustomerAndReturnsWorkingSwiftDropToken() throws Exception {
-        String body = callback(claims -> { })
-                .andExpect(status().isOk())
+    void firstSignInCreatesCustomerAndRedirectsWithExchangeCode() throws Exception {
+        MvcResult callbackResult = callback(claims -> { })
+                .andExpect(status().is3xxRedirection())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
-                .andReturn().getResponse().getContentAsString();
-        String token = JsonPath.read(body, "$.accessToken");
+                .andExpect(header().string(HttpHeaders.LOCATION, startsWith("http://localhost:3000/auth/google/callback?code=")))
+                .andReturn();
+        String location = callbackResult.getResponse().getHeader(HttpHeaders.LOCATION);
+        String code = UriComponentsBuilder.fromUriString(location).build().getQueryParams().getFirst("code");
+        assertThat(code).isNotNull().hasSizeGreaterThanOrEqualTo(32);
 
         User created = savedUser();
         assertThat(created.getRoles()).containsExactly(Role.CUSTOMER);
@@ -132,6 +160,16 @@ class GoogleLoginApiTest {
         verify(identities).saveAndFlush(any(ExternalIdentity.class));
 
         when(users.findById(created.getId())).thenReturn(Optional.of(created));
+
+        String exchangeBody = mvc.perform(post("/api/v1/auth/google/exchanges")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\": \"%s\"}".formatted(code)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andReturn().getResponse().getContentAsString();
+        String token = JsonPath.read(exchangeBody, "$.accessToken");
+
         mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(created.getId().toString()))
@@ -146,47 +184,67 @@ class GoogleLoginApiTest {
         when(users.findById(alice.getId())).thenReturn(Optional.of(alice));
 
         for (String email : List.of("alice@example.com", "alice.new@example.com")) {
-            String body = callback(claims -> claims.claim("email", email))
+            MvcResult callbackResult = callback(claims -> claims.claim("email", email))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string(HttpHeaders.LOCATION, startsWith("http://localhost:3000/auth/google/callback?code=")))
+                    .andReturn();
+            String code = UriComponentsBuilder.fromUriString(callbackResult.getResponse().getHeader(HttpHeaders.LOCATION))
+                    .build().getQueryParams().getFirst("code");
+
+            String exchangeBody = mvc.perform(post("/api/v1/auth/google/exchanges")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"code\": \"%s\"}".formatted(code)))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
+
             mvc.perform(get("/api/v1/users/me")
-                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + JsonPath.read(body, "$.accessToken")))
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + JsonPath.read(exchangeBody, "$.accessToken")))
                     .andExpect(jsonPath("$.id").value(alice.getId().toString()));
         }
         verify(users, never()).saveAndFlush(any());
     }
 
     @Test
-    void matchingEmailWithoutLinkIsRejectedAndNotLinked() throws Exception {
+    void matchingEmailWithoutLinkIsRejectedWithConflictEmailExistsErrorRedirect() throws Exception {
         when(users.findByEmail("alice@example.com"))
                 .thenReturn(Optional.of(withId(new User("alice@example.com", "{bcrypt}x", "Alice", Set.of(Role.CUSTOMER)))));
 
         callback(claims -> { })
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.accessToken").doesNotExist())
-                .andExpect(jsonPath("$.detail").value(startsWith("An account with this email address already exists")));
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string(HttpHeaders.LOCATION,
+                        "http://localhost:3000/auth/google/callback?error=conflict_email_exists"));
         verify(users, never()).saveAndFlush(any());
         verify(identities, never()).saveAndFlush(any());
     }
 
     @Test
-    void unverifiedOrMissingEmailVerificationDoesNotCreateAnAccount() throws Exception {
-        callback(claims -> claims.claim("email_verified", false)).andExpect(status().isForbidden());
-        callback(claims -> claims.claims(c -> c.remove("email_verified"))).andExpect(status().isForbidden());
-        callback(claims -> claims.claim("email_verified", "yes")).andExpect(status().isForbidden());
+    void unverifiedOrMissingEmailVerificationRedirectsWithUnverifiedEmailError() throws Exception {
+        List<Consumer<JwtClaimsSet.Builder>> unverified = List.of(
+                claims -> claims.claim("email_verified", false),
+                claims -> claims.claims(c -> c.remove("email_verified")),
+                claims -> claims.claim("email_verified", "yes"));
+        for (Consumer<JwtClaimsSet.Builder> change : unverified) {
+            callback(change)
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string(HttpHeaders.LOCATION,
+                            "http://localhost:3000/auth/google/callback?error=unverified_email"));
+        }
         verify(users, never()).saveAndFlush(any());
     }
 
     @Test
     void privilegedRoleClaimsFromGoogleAreIgnored() throws Exception {
         callback(claims -> claims.claim("roles", List.of("DISPATCHER_ADMIN", "MERCHANT", "COURIER")))
-                .andExpect(status().isOk());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.LOCATION, startsWith("http://localhost:3000/auth/google/callback?code=")));
 
         assertThat(savedUser().getRoles()).containsExactly(Role.CUSTOMER);
     }
 
     @Test
-    void rejectsIdTokensThatFailValidation() throws Exception {
+    void rejectsIdTokensThatFailValidationWithOAuthFailedErrorRedirect() throws Exception {
         Instant now = Instant.now();
         List<Consumer<JwtClaimsSet.Builder>> invalid = List.of(
                 claims -> claims.issuer("https://evil.example"),
@@ -196,30 +254,60 @@ class GoogleLoginApiTest {
                 claims -> claims.claims(c -> c.remove("nonce")),
                 claims -> claims.claims(c -> c.remove("sub")));
         for (Consumer<JwtClaimsSet.Builder> change : invalid) {
-            callback(change).andExpect(status().isUnauthorized())
-                    .andExpect(jsonPath("$.detail").value("Google sign-in failed"))
-                    .andExpect(jsonPath("$.accessToken").doesNotExist());
+            callback(change)
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string(HttpHeaders.LOCATION,
+                            "http://localhost:3000/auth/google/callback?error=oauth_failed"));
         }
         verifyNoInteractions(users, identities);
     }
 
     @Test
-    void rejectsIdTokenWithForgedSignature() throws Exception {
+    void rejectsIdTokenWithForgedSignatureWithOAuthFailedErrorRedirect() throws Exception {
         callback(claims -> { }, "another-secret-that-is-long-enough-for-hs256")
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string(HttpHeaders.LOCATION,
+                        "http://localhost:3000/auth/google/callback?error=oauth_failed"));
         verifyNoInteractions(users, identities);
     }
 
     @Test
-    void rejectsCallbackWithWrongOrMissingState() throws Exception {
+    void rejectsCallbackWithWrongOrMissingStateWithOAuthFailedErrorRedirect() throws Exception {
         MvcResult authorization = mvc.perform(get("/oauth2/authorization/google")).andReturn();
         MockHttpSession session = (MockHttpSession) authorization.getRequest().getSession();
 
         mvc.perform(get("/login/oauth2/code/google").session(session)
                         .param("code", "code").param("state", "forged-state"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string(HttpHeaders.LOCATION,
+                        "http://localhost:3000/auth/google/callback?error=oauth_failed"));
+
         mvc.perform(get("/login/oauth2/code/google").param("code", "code").param("state", "any"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string(HttpHeaders.LOCATION,
+                        "http://localhost:3000/auth/google/callback?error=oauth_failed"));
+
+        verifyNoInteractions(tokenEndpoint, users, identities);
+    }
+
+    @Test
+    void cancelledCallbackRedirectsWithCancelledError() throws Exception {
+        MvcResult authorization = mvc.perform(get("/oauth2/authorization/google")).andReturn();
+        MockHttpSession session = (MockHttpSession) authorization.getRequest().getSession();
+        Map<String, String> query = query(authorization);
+
+        mvc.perform(get("/login/oauth2/code/google").session(session)
+                        .param("error", "access_denied")
+                        .param("state", query.get("state")))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string(HttpHeaders.LOCATION,
+                        "http://localhost:3000/auth/google/callback?error=cancelled"));
+
         verifyNoInteractions(tokenEndpoint, users, identities);
     }
 

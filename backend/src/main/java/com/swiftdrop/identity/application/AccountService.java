@@ -9,8 +9,16 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.swiftdrop.shared.web.PageLimit;
 
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
@@ -56,6 +64,14 @@ public class AccountService implements UserDirectory {
         return registerUser(fullName, email, rawPassword, EnumSet.of(Role.COURIER));
     }
 
+    /** Registers a staff account (COURIER or DISPATCHER_ADMIN). */
+    public User registerStaff(String fullName, String email, String rawPassword, Role role) {
+        if (role != Role.COURIER && role != Role.DISPATCHER_ADMIN) {
+            throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER_ADMIN");
+        }
+        return registerUser(fullName, email, rawPassword, EnumSet.of(role));
+    }
+
     private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles) {
         if (tooLong(rawPassword)) {
             throw new InvalidPasswordException("Password must be at most " + MAX_PASSWORD_BYTES + " bytes");
@@ -94,6 +110,28 @@ public class AccountService implements UserDirectory {
     /** Returns all users for administrative management. */
     public List<User> findAllUsers() {
         return users.findAll();
+    }
+
+    /** Returns a paged list of users, optionally filtered by role. */
+    public Page<User> findUsers(int page, int size, Role roleFilter) {
+        int clampedSize = PageLimit.clampSize(size);
+        int safePage = Math.max(0, page);
+        Pageable pageable = PageRequest.of(safePage, clampedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (roleFilter != null) {
+            return users.findByRole(roleFilter, pageable);
+        }
+        return users.findAll(pageable);
+    }
+
+    /** Enables or disables a user account. An administrator cannot disable their own account. */
+    public User updateUserStatus(UUID targetUserId, boolean enabled, UUID actingAdminId) {
+        if (targetUserId.equals(actingAdminId) && !enabled) {
+            throw new SelfDisablingException("An administrator cannot disable their own account");
+        }
+        User user = users.findById(targetUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        user.setEnabled(enabled);
+        return users.saveAndFlush(user);
     }
 
     @Override

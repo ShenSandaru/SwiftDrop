@@ -28,7 +28,7 @@ const PORTALS = [
   },
   {
     title: "Dispatcher Portal",
-    role: "DISPATCHER",
+    role: "DISPATCHER_ADMIN",
     description: "Fleet tracking, parcel assignment, route monitoring, and exception handling.",
     href: "/dispatch",
     action: "Access Dispatch Portal",

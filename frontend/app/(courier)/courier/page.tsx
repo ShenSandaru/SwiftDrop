@@ -1,25 +1,25 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PortalPlaceholderCard } from "@/components/portal";
 
 export default function CourierPortalPage() {
   return (
-    <main className="container mx-auto flex-1 px-4 py-12 max-w-4xl space-y-4">
-      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-        <span className="size-1.5 rounded-full bg-primary" />
-        Courier Workspace · WS6
-      </div>
-      <Card className="rounded-xl bg-card border-border shadow-xs">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-foreground">Courier Portal</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Assigned deliveries, status updates, and proof of delivery.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This route group is reserved for courier operations.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+    <div className="space-y-6">
+      <PortalPlaceholderCard
+        title="Courier Run Sheet & Deliveries"
+        description="Assigned parcel deliveries, sequence-optimized stops, and digital proof-of-delivery capture."
+        workstream="WS6 — Courier Operations & Delivery Proof"
+        contractRef="COU-2, COU-3, COU-4 · Contract §4.2"
+        plannedEndpoints={[
+          "GET /api/v1/courier/parcels (planned)",
+          "POST /api/v1/parcels/{id}/status-changes (planned)",
+          "PUT /api/v1/parcels/{id}/proof (planned)",
+        ]}
+        plannedFeatures={[
+          "Daily assigned delivery stops with customer contact information",
+          "Step-by-step parcel status advancement (PICKED_UP, IN_TRANSIT, DELIVERED)",
+          "Camera-enabled proof-of-delivery photo upload and recipient signature",
+          "Delivery failure recording with standard exception reasons (e.g. customer unavailable)",
+        ]}
+      />
+    </div>
   );
 }

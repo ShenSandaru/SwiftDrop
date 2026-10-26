@@ -134,14 +134,14 @@ tracking     → delivery
 - **Required:** a responsive UI (IMP-1); a mobile-friendly public tracking page (CUS-6); versioned,
   validated APIs with centralized error handling (IMP-3).
 - **Decided (project rule):** REST paths are plural nouns in kebab-case under `/api/v1/...`.
-- **Implemented:** the frontend has a placeholder page and one shadcn/ui component. It does not call
-  the backend yet. The backend has only the identity endpoints of section 9; springdoc serves its
-  default OpenAPI endpoints (behind authentication). Identity errors use RFC 9457 problem details.
-  CORS allows the origins in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on
-  `/api/**`, without credentials.
+- **Implemented:** the frontend uses Next.js with a typed API client and auth context calling the
+  backend REST API. The backend provides project-wide RFC 9457 Problem Details error handling
+  (`com.swiftdrop.shared.web.GlobalExceptionHandler`) and standardized pagination (`PageResponse<T>`,
+  `PageLimit`) across all modules (SD-002). Module-specific exception handlers (such as
+  `IdentityExceptionHandler`) take precedence within their own package. CORS allows the origins
+  in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on `/api/**`, without credentials.
 - **Open:** how the frontend calls the backend (directly from the browser, or through Next.js
-  server code acting as a BFF), CORS, the API error format and pagination conventions. The brief
-  mentions "modular monolith with a BFF" only as an example (DES-3).
+  server code acting as a BFF), CORS. The brief mentions "modular monolith with a BFF" only as an example (DES-3).
 
 ## 6. Database
 
@@ -277,14 +277,15 @@ tracking     → delivery
     passwordless `CUSTOMER` account and link. An unverified email returns 403; an email that
     belongs to an existing unlinked account returns 409 and nothing is linked. Roles come only
     from the stored account.
-  - The callback returns the same JSON token body as `POST /api/v1/auth/tokens`. How the frontend
-    receives it (the callback is a browser navigation) is still open.
+  - Decided ([ADR 0005](adr/0005-google-oauth-token-handoff.md)): Google sign-in token handoff
+    redirects to the frontend callback with a short-lived (60 s), single-use hashed exchange code
+    stored in `google_login_codes`, exchanged via `POST /api/v1/auth/google/exchanges`. Tokens are
+    never placed in URLs.
 - **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
   application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
   security filter chain.
 - **Open:**
-  - How the frontend receives the token after Google sign-in, and an authenticated flow for
-    linking Google to an existing account.
+  - An authenticated flow for linking Google to an existing account.
   - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
     (needs an authorization server); key format and rotation. Webhook signing is decided in
     [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
@@ -381,7 +382,7 @@ whether springdoc and Actuator details are exposed outside local development.
 | Tracking-number format | 6 |
 | Open messaging implementation questions ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)) | 7 |
 | Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
-| Google sign-in token handoff and account linking, merchant API authentication, creation of courier and admin accounts | 9 |
+| Account linking to existing accounts, merchant API authentication, creation of courier and admin accounts | 9 |
 | Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
 | Spring profiles and non-local secret handling | 11 |
 | Coverage tool, integration-test setup, frontend tests, CI | 12 |
