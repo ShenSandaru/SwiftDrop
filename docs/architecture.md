@@ -134,14 +134,14 @@ tracking     → delivery
 - **Required:** a responsive UI (IMP-1); a mobile-friendly public tracking page (CUS-6); versioned,
   validated APIs with centralized error handling (IMP-3).
 - **Decided (project rule):** REST paths are plural nouns in kebab-case under `/api/v1/...`.
-- **Implemented:** the frontend has a placeholder page and one shadcn/ui component. It does not call
-  the backend yet. The backend has only the identity endpoints of section 9; springdoc serves its
-  default OpenAPI endpoints (behind authentication). Identity errors use RFC 9457 problem details.
-  CORS allows the origins in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on
-  `/api/**`, without credentials.
+- **Implemented:** the frontend uses Next.js with a typed API client and auth context calling the
+  backend REST API. The backend provides project-wide RFC 9457 Problem Details error handling
+  (`com.swiftdrop.shared.web.GlobalExceptionHandler`) and standardized pagination (`PageResponse<T>`,
+  `PageLimit`) across all modules (SD-002). Module-specific exception handlers (such as
+  `IdentityExceptionHandler`) take precedence within their own package. CORS allows the origins
+  in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on `/api/**`, without credentials.
 - **Open:** how the frontend calls the backend (directly from the browser, or through Next.js
-  server code acting as a BFF), CORS, the API error format and pagination conventions. The brief
-  mentions "modular monolith with a BFF" only as an example (DES-3).
+  server code acting as a BFF), CORS. The brief mentions "modular monolith with a BFF" only as an example (DES-3).
 
 ## 6. Database
 
