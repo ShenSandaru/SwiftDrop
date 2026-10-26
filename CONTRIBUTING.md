@@ -120,6 +120,8 @@ Each pull request should:
 - Describe what changed, why, and how it was tested.
 - Pass the build, lint and tests locally before review is requested.
 - Include tests for new backend business logic.
+- Include authorization matrix tests for new or modified backend endpoints using the shared test
+  harness (`com.swiftdrop.test.security`).
 - Include a new Flyway migration for any schema change (never edit a merged migration).
 - Explain any new dependency and keep [ADR 0002](docs/adr/0002-technology-and-version-baseline.md)
   up to date if a version baseline changes.
@@ -129,6 +131,30 @@ Each pull request should:
 
 Reviewers check correctness, backend authorization, tests, naming and simplicity. Ask questions
 rather than assume. Authors respond to every comment before merging.
+
+### Authorization test matrix (TST-2)
+
+Every pull request introducing or modifying backend HTTP endpoints must include authorization matrix
+tests using the shared test harness in `com.swiftdrop.test.security`:
+
+- Declare rows with `AuthorizationMatrixRow.row(...)` or the builder, specifying the scenario
+  description, HTTP method, target URL path, `TestPrincipal`, and expected `HttpStatus`.
+- Use `TestPrincipal` to declare the caller state: `anonymous()`, `customer()`, `merchant()`,
+  `courier()`, `dispatcherAdmin()`, `user(UUID, Role...)` for custom subject IDs, or `apiKey(String)`
+  for merchant API keys.
+- Customize requests where valid payloads or headers are required to reach authorization or
+  assert validation outcomes using `customize(Consumer<MockHttpServletRequestBuilder>)`, for example:
+  `.customize(req -> req.contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"user@example.com\"}))`
+- Execute rows as dynamic tests with `@TestFactory` returning `AuthorizationMatrixExecutor.toDynamicTests(mvc, rows)`,
+  or in batch with `AuthorizationMatrixExecutor.executeAll(mvc, rows)`.
+- For each endpoint, assert:
+  1. Anonymous access behavior (201/200 for public/registration/login, 401 for protected).
+  2. Allowed roles receive the expected successful status code.
+  3. Disallowed roles receive `403 Forbidden` (or `401 Unauthorized` where unauthenticated).
+  4. Resource ownership (e.g., customer accessing their own resource vs. another customer's resource)
+     where ownership rules apply.
+- Note: `TestPrincipal` JWTs simulate authenticated tokens for Spring Security authorization and
+  `@PreAuthorize` evaluation; they do not replace dedicated token signing, decoding, or provider tests.
 
 ### Module ownership and contracts
 

@@ -163,7 +163,7 @@ when DEM-1's live tracking works from containers and the demo script is rehearse
 - **Tests:** unit tests.
 
 #### SD-104 · Google sign-in handoff to the frontend
-- **Area:** identity · **Owner:** Member 1 · **P1 · M** · **Blocked (D-02)** · **Depends on:** SD-008
+- **Area:** identity · **Owner:** Member 1 · **P1 · M** · **Depends on:** SD-008, [ADR 0005](adr/0005-google-oauth-token-handoff.md)
 - **Acceptance criteria:** 1. Callback no longer returns the JWT in the page; it redirects to the configured frontend URL with a one-time code. 2. Code is hashed at rest, single use, expires in 60 s. 3. `POST /api/v1/auth/google/exchanges` returns the standard token body; reused/expired codes return the same 401. 4. Rejections (409/403) redirect with an error code, not a code. 5. Existing Google tests updated; frontend callback page stores the token.
 - **Tests:** MockMvc + existing OIDC test harness. **Docs:** architecture §9, development-setup.
 

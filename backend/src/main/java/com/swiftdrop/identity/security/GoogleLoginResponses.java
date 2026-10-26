@@ -1,8 +1,8 @@
 package com.swiftdrop.identity.security;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -10,10 +10,9 @@ import jakarta.servlet.http.HttpSession;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -22,16 +21,16 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-import tools.jackson.databind.json.JsonMapper;
-
+import com.swiftdrop.identity.application.GoogleExchangeService;
 import com.swiftdrop.identity.application.GoogleIdentity;
 import com.swiftdrop.identity.application.GoogleSignInRejectedException;
 import com.swiftdrop.identity.application.GoogleSignInService;
-import com.swiftdrop.identity.web.AccessTokenResponse;
+import com.swiftdrop.identity.domain.User;
 
 /**
- * Responses of the Google callback: the same token body as {@code POST /api/v1/auth/tokens} on
- * success, an RFC 9457 problem otherwise. Error details never contain tokens or profile data.
+ * Handles the completion of the Google OAuth flow: generates a single-use exchange code on success
+ * and redirects to the frontend callback, or redirects with an allowlisted error code on failure (ADR 0005).
+ * Bearer tokens are never sent in redirect URLs.
  */
 @Component
 @Conditional(GoogleLoginConfiguration.ClientIdPresent.class)
@@ -40,13 +39,18 @@ class GoogleLoginResponses implements AuthenticationSuccessHandler, Authenticati
     private static final Logger log = LoggerFactory.getLogger(GoogleLoginResponses.class);
 
     private final GoogleSignInService signIn;
-    private final AccessTokenIssuer tokens;
-    private final JsonMapper json;
+    private final GoogleExchangeService exchangeService;
+    private final String frontendBaseUrl;
 
-    GoogleLoginResponses(GoogleSignInService signIn, AccessTokenIssuer tokens, JsonMapper json) {
+    GoogleLoginResponses(
+            GoogleSignInService signIn,
+            GoogleExchangeService exchangeService,
+            @Value("${swiftdrop.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.signIn = signIn;
-        this.tokens = tokens;
-        this.json = json;
+        this.exchangeService = exchangeService;
+        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
     }
 
     @Override
@@ -54,24 +58,21 @@ class GoogleLoginResponses implements AuthenticationSuccessHandler, Authenticati
             Authentication authentication) throws IOException {
         endSession(request);
         if (!(authentication.getPrincipal() instanceof OidcUser oidc)) {
-            problem(response, HttpStatus.UNAUTHORIZED, "Google sign-in failed");
+            redirectError(response, "oauth_failed");
             return;
         }
         GoogleIdentity identity = new GoogleIdentity(oidc.getSubject(), oidc.getEmail(),
                 Boolean.TRUE.equals(oidc.getEmailVerified()), oidc.getFullName());
-        AccessTokenIssuer.AccessToken token;
+        User user;
         try {
-            token = tokens.issue(signIn.signIn(identity));
+            user = signIn.signIn(identity);
         } catch (GoogleSignInRejectedException e) {
             log.info("Google sign-in rejected: {}", e.getReason());
-            rejected(response, e.getReason());
+            redirectRejected(response, e.getReason());
             return;
         }
-        response.setStatus(HttpStatus.OK.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        json.writeValue(response.getOutputStream(),
-                new AccessTokenResponse(token.value(), "Bearer", token.lifetime().toSeconds()));
+        String exchangeCode = exchangeService.createExchangeCode(user.getId());
+        redirect(response, "code", exchangeCode);
     }
 
     /** Invalid state, failed code exchange or an ID token that failed validation. */
@@ -79,38 +80,37 @@ class GoogleLoginResponses implements AuthenticationSuccessHandler, Authenticati
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
             AuthenticationException exception) throws IOException {
         endSession(request);
+        String errorCode = "oauth_failed";
         if (exception instanceof OAuth2AuthenticationException oauth2) {
-            log.info("Google sign-in failed: {}", oauth2.getError().getErrorCode());
+            String error = oauth2.getError().getErrorCode();
+            log.info("Google sign-in failed: {}", error);
+            if ("access_denied".equalsIgnoreCase(error)) {
+                errorCode = "cancelled";
+            }
         }
-        problem(response, HttpStatus.UNAUTHORIZED, "Google sign-in failed");
+        redirectError(response, errorCode);
     }
 
-    private void rejected(HttpServletResponse response, GoogleSignInRejectedException.Reason reason)
+    private void redirectRejected(HttpServletResponse response, GoogleSignInRejectedException.Reason reason)
             throws IOException {
-        switch (reason) {
-            case EMAIL_NOT_VERIFIED -> problem(response, HttpStatus.FORBIDDEN,
-                    "The Google account has no verified email address");
-            case EMAIL_ALREADY_REGISTERED -> problem(response, HttpStatus.CONFLICT,
-                    "An account with this email address already exists. Sign in with your email and"
-                            + " password; linking a Google account to it is not supported yet");
-            case ACCOUNT_UNAVAILABLE -> problem(response, HttpStatus.FORBIDDEN,
-                    "Google sign-in is not available for this account");
-            case CONFLICT -> problem(response, HttpStatus.CONFLICT,
-                    "Google sign-in could not be completed; try again");
-            case INVALID_IDENTITY -> problem(response, HttpStatus.UNAUTHORIZED, "Google sign-in failed");
-        }
+        String errorCode = switch (reason) {
+            case EMAIL_NOT_VERIFIED -> "unverified_email";
+            case EMAIL_ALREADY_REGISTERED -> "conflict_email_exists";
+            case ACCOUNT_UNAVAILABLE -> "account_disabled";
+            case CONFLICT, INVALID_IDENTITY -> "oauth_failed";
+        };
+        redirectError(response, errorCode);
     }
 
-    private void problem(HttpServletResponse response, HttpStatus status, String detail) throws IOException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("type", "about:blank");
-        body.put("title", status.getReasonPhrase());
-        body.put("status", status.value());
-        body.put("detail", detail);
-        response.setStatus(status.value());
-        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+    private void redirectError(HttpServletResponse response, String errorCode) throws IOException {
+        redirect(response, "error", errorCode);
+    }
+
+    private void redirect(HttpServletResponse response, String paramName, String paramValue) throws IOException {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        json.writeValue(response.getOutputStream(), body);
+        String encodedValue = URLEncoder.encode(paramValue, StandardCharsets.UTF_8);
+        String targetUrl = frontendBaseUrl + "/auth/google/callback?" + paramName + "=" + encodedValue;
+        response.sendRedirect(targetUrl);
     }
 
     /** The session held only the authorization request and Google's tokens; neither is needed now. */

@@ -12,7 +12,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.swiftdrop.identity.application.EmailAlreadyRegisteredException;
 import com.swiftdrop.identity.application.InvalidCredentialsException;
+import com.swiftdrop.identity.application.InvalidExchangeCodeException;
 import com.swiftdrop.identity.application.InvalidPasswordException;
+import com.swiftdrop.identity.application.InvalidRoleException;
+import com.swiftdrop.identity.application.SelfDisablingException;
 
 /**
  * Safe RFC 9457 error bodies for the identity endpoints; rejected values are never echoed. The
@@ -46,6 +49,21 @@ class IdentityExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     ProblemDetail invalidCredentials(InvalidCredentialsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidExchangeCodeException.class)
+    ProblemDetail invalidExchangeCode(InvalidExchangeCodeException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRoleException.class)
+    ProblemDetail invalidRole(InvalidRoleException e) {
+        return invalid(e.getMessage(), List.of("role"));
+    }
+
+    @ExceptionHandler(SelfDisablingException.class)
+    ProblemDetail selfDisabling(SelfDisablingException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 
     private static ProblemDetail invalid(String detail, List<String> fields) {
