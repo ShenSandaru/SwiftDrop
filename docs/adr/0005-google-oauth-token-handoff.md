@@ -20,7 +20,7 @@ A mechanism is needed to hand off the authenticated session from the backend cal
 
 1. **No tokens in URLs:** Placing the application JWT into a query parameter or URL fragment (e.g. `SWIFTDROP_FRONTEND_BASE_URL/callback#token=...`) exposes bearer tokens to browser history, intermediate proxy logs, server access logs, and HTTP `Referer` headers.
 2. **Stateless backend:** The backend application REST API is stateless; authentication uses bearer JWTs in the `Authorization` header. Sessions must not be retained after the OAuth exchange completes.
-3. **Open redirect prevention:** Callback redirections must not enable external phishing redirects or open redirects.
+3. **Open redirect prevention:** Neither OAuth state, backend redirection, nor frontend callback query parameters may be used to redirect users to external origins.
 4. **Account takeover prevention:** Google accounts must never be linked automatically to existing local accounts solely by matching email address.
 5. **Architectural consistency:** The identity module owns authentication and credential tables (ADR 0001, ADR 0003). All database schema changes must be versioned Flyway migrations.
 
@@ -33,6 +33,8 @@ We propose the **Backend-Mediated Authorization Code Exchange Flow (D-02)** for 
 ```
 [Browser / Frontend]                [Backend API]                  [Google OIDC]
         |                                 |                              |
+        |-- Store sanitized return path   |                              |
+        |   in sessionStorage             |                              |
         |--- 1. Click "Google Sign In" -->|                              |
         |    GET /oauth2/authorization/google                            |
         |<-- 2. 302 Redirect to Google ---|                              |
@@ -45,38 +47,39 @@ We propose the **Backend-Mediated Authorization Code Exchange Flow (D-02)** for 
         |                                 |<-- 7. Verified ID Token -----|
         |                                 |                              |
         |                                 |-- Resolve identity / user    |
+        |                                 |-- Opportunistic code purge   |
         |                                 |-- Generate 32-byte code      |
         |                                 |-- Persist SHA-256(code)      |
         |<-- 8. 302 Redirect with code ---|                              |
         |    ${FRONTEND_BASE_URL}/auth/google/callback?code=...          |
         |                                 |                              |
         |--- 9. POST /api/v1/auth/google/exchanges { code } ------------>|
-        |                                 |-- Verify & mark used         |
+        |                                 |-- Atomic conditional UPDATE  |
         |                                 |-- Issue application JWT      |
         |<-- 10. 200 OK { accessToken } --|                              |
         |                                 |                              |
+        |-- Retrieve & sanitize return    |                              |
+        |   path from sessionStorage      |                              |
+        |-- Navigate to safe target       |                              |
 ```
 
 ### 1. OAuth Handshake and Callback Redirection
 
 1. The backend initiates and completes the OIDC handshake with Google using Spring Security's `oauth2Login`.
 2. Upon successful authentication, the backend generates a cryptographically secure, high-entropy exchange code.
-3. The backend sets HTTP response status 302 and redirects the user's browser to the frontend callback page:
+3. The backend sets HTTP response status 302 and redirects the user's browser strictly to the frontend callback page:
    ```
    ${SWIFTDROP_FRONTEND_BASE_URL}/auth/google/callback?code=<raw_code>
    ```
-4. If an optional, sanitized post-login internal destination was requested (e.g. `/track?code=SWD-1234`), it is passed to the frontend callback via a sanitized `redirect` parameter:
-   ```
-   ${SWIFTDROP_FRONTEND_BASE_URL}/auth/google/callback?code=<raw_code>&redirect=<sanitized_path>
-   ```
+4. **No Arbitrary Destinations in URLs:** The backend redirection URL carries **only** the single-use `code` (or `error`). Arbitrary post-login return URLs are **not** forwarded through backend redirection URLs or OAuth `state`, completely preventing open redirects at the backend boundary.
 5. The application JWT is **never** sent via redirection URLs.
 
-### 2. Exchange Code Security
+### 2. Exchange Code Security and Atomic Redemption
 
 1. **Entropy:** The exchange code is generated using `java.security.SecureRandom`, containing at least 256 bits of entropy (32 random bytes), formatted as a URL-safe Base64 string without padding.
 2. **Storage:** The raw exchange code is never persisted in plain text. The backend computes the SHA-256 digest (64-character lowercase hexadecimal string) and persists only the hash in the database.
 3. **Lifetime:** The exchange code expires after 60 seconds (`expires_at = now() + INTERVAL '60 seconds'`).
-4. **Single-Use and Atomic Redemption:** The code can be redeemed exactly once. When the frontend exchanges the code, the backend performs an atomic conditional update:
+4. **Atomic Single-Use Redemption:** The code can be redeemed exactly once. Redemption is performed via an atomic conditional SQL update inside a database transaction:
    ```sql
    UPDATE google_login_codes
    SET used_at = CURRENT_TIMESTAMP
@@ -85,7 +88,18 @@ We propose the **Backend-Mediated Authorization Code Exchange Flow (D-02)** for 
      AND expires_at > CURRENT_TIMESTAMP
    RETURNING user_id;
    ```
-   If no row is updated (code not found, expired, or already used), the request is rejected with HTTP `401 Unauthorized` and an RFC 9457 Problem Details body (`"Invalid or expired exchange code"`). Concurrent requests with the same code will result in exactly one successful redemption.
+5. **Transactional Consistency & Failure Semantics:**
+   - The conditional update and user lookup execute within an `@Transactional` boundary in the `identity` module.
+   - If user retrieval, token signing, or database connectivity fails unexpectedly before the transaction commits, the transaction rolls back, leaving the code unconsumed so the user may re-attempt the exchange before the 60-second expiry.
+   - Once committed, `used_at` is permanently set.
+6. **Concurrent Requests & Race Prevention:**
+   - PostgreSQL row-level locks on the `code_hash` primary key ensure serial evaluation.
+   - If concurrent requests submit the same code, exactly one transaction updates the row and receives the `user_id`. The competing transaction updates 0 rows and immediately fails.
+7. **No Replay or Weakened Guarantees:**
+   - Single-use guarantees are **never weakened** to support automatic client retries. If an exchange fails after consumption (e.g. network disconnection before the frontend receives the response), the code remains dead and the user must re-initiate login from `/login`.
+8. **Uniform Generic 401 Response:**
+   - If no row is updated (missing, malformed, expired, non-existent, or already-redeemed code), the endpoint returns HTTP `401 Unauthorized` with an RFC 9457 Problem Details body (`title: "Unauthorized"`, `detail: "Invalid or expired exchange code"`).
+   - The exact same response is returned regardless of whether the code was expired, invalid, or replayed, preventing timing and enumeration oracles.
 
 ### 3. Frontend Redemption Endpoint
 
@@ -106,8 +120,8 @@ The `identity` module exposes a public REST endpoint:
   }
   ```
 - **Error Responses:**
-  - `400 Bad Request`: Missing or malformed code payload.
-  - `401 Unauthorized`: Invalid, expired, or previously redeemed code.
+  - `400 Bad Request`: Missing or blank code field.
+  - `401 Unauthorized`: Invalid, expired, or already-used exchange code.
 
 ### 4. Failure Redirect Contract
 
@@ -125,17 +139,23 @@ ${SWIFTDROP_FRONTEND_BASE_URL}/auth/google/callback?error=<error_code>
 | `cancelled` | User denied consent or cancelled login at Google | "Google sign-in was cancelled." |
 | `oauth_failed` | State parameter mismatch, invalid code, or provider communication error | "Google sign-in failed. Please try again." |
 
-Under no circumstances are internal stack traces, database exceptions, or raw provider error descriptions forwarded in redirect query parameters.
+#### Security Constraints on Failure Handling:
+- **Prohibition of Raw Error Leakage:** The backend never forwards arbitrary exception messages, stack traces, or raw provider error descriptions in query parameters.
+- **Strict UI Mapping:** The frontend callback page maps `error` strictly against this hardcoded dictionary to display an alert banner.
+- **No Dynamic External Navigation on Error:** Error parameters cannot specify or influence navigation targets. Any interactive fallback link (such as "Return to Sign In") navigates strictly to a hardcoded internal route (`/login`).
 
 ### 5. Safe Post-Login Navigation
 
-1. Post-login internal paths (such as `/customer` or `/track?code=...`) may be preserved across the Google OAuth flow by encoding the target into the OAuth `state` parameter or reading it from client storage.
-2. The frontend callback page (`/auth/google/callback`) must sanitize all post-login destinations using the project's standard redirect sanitization helper (`sanitizeRedirectTarget`):
-   - Must start with `/`.
-   - Must reject `//` and `/\`.
+1. **Frontend Storage:** Before navigating the browser to `GET /oauth2/authorization/google`, the login page inspects any requested post-login internal destination (e.g. from `?redirect=...`).
+2. **Double Sanitization:**
+   - **First Pass (Pre-OAuth):** The frontend sanitizes the path using `sanitizeRedirectTarget(...)` and, if valid and not `/login`, stores it in browser `sessionStorage` under key `swiftdrop_auth_redirect`.
+   - **Second Pass (Post-Callback):** After successful redemption at `/auth/google/callback`, the frontend retrieves the item from `sessionStorage`, immediately removes it (`sessionStorage.removeItem("swiftdrop_auth_redirect")`), and passes it through `sanitizeRedirectTarget(...)` once more before invoking `router.push()`.
+3. **Sanitization Rules (`sanitizeRedirectTarget`):**
+   - Must start with a single forward slash `/`.
+   - Must reject protocol-relative destinations (`//`) and Windows directory separators (`/\`).
    - Must reject CRLF or control characters (`[\x00-\x1F\x7F]`).
-   - Must evaluate origin against `http://localhost` dummy base to guarantee the destination remains within the frontend application.
-   - Any invalid, external, or malformed value defaults safely to `/customer` (or `/` if unauthenticated).
+   - Must parse against a dummy base origin (`http://localhost`) and verify that `parsed.origin` remains `http://localhost` and `parsed.pathname` starts with `/`.
+4. **Safe Default:** If the stored path is missing, empty, or fails sanitization, navigation defaults safely to `/customer` (or `/` if unauthenticated).
 
 ### 6. Account Identity and Linking Rules
 
@@ -144,7 +164,7 @@ Under no circumstances are internal stack traces, database exceptions, or raw pr
 3. **New Customer Creation:** If no link exists and the email is unused, a new `User` is created with role `CUSTOMER`, `password_hash = null`, `enabled = true`, and a link in `external_identities`.
 4. **Authenticated Account Linking:** Linking an existing local account to a Google account requires an authenticated in-app confirmation flow, which is out of scope for this decision and deferred to a future enhancement.
 
-### 7. Database Storage and Cleanup
+### 7. Database Storage and Opportunistic Cleanup
 
 The `identity` module owns the exchange code table via a Flyway migration (`backend/src/main/resources/db/migration/identity/`):
 
@@ -160,10 +180,16 @@ CREATE TABLE google_login_codes (
 CREATE INDEX idx_google_login_codes_expires_at ON google_login_codes (expires_at);
 ```
 
-#### Cleanup Strategy
-Because exchange codes expire in 60 seconds and the volume is modest:
-- **Opportunistic cleanup:** During code redemption or issuance, delete codes expired more than 5 minutes ago (`DELETE FROM google_login_codes WHERE expires_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'`).
-- Alternatively, a lightweight scheduled task in `identity` runs every 15 minutes to delete expired records.
+#### Bounded Opportunistic Cleanup
+To keep the database clean without background daemon overhead:
+- **No Scheduled Background Task:** We reject adding `@EnableScheduling` or periodic cron tasks solely for cleaning up login codes. Background threads add unnecessary memory overhead, complicate automated tests, and create concurrency issues across multiple backend replicas.
+- **Opportunistic Batch Purge:** During exchange code issuance or redemption, the backend executes a lightweight, bounded deletion:
+  ```sql
+  DELETE FROM google_login_codes
+  WHERE expires_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+     OR (used_at IS NOT NULL AND used_at < CURRENT_TIMESTAMP - INTERVAL '1 hour');
+  ```
+- Because codes expire in 60 seconds and code generation is low-frequency, opportunistic deletion keeps table size small and bounded with negligible performance impact.
 
 ### 8. Configuration
 
@@ -182,13 +208,15 @@ No secrets are exposed. The required environment variables are:
 
 ## Alternatives Considered
 
-1. **Return JWT in URL Fragment (`#access_token=...`):**
+1. **Passing Destination in OAuth `state` or Redirect URL:**
+   - *Why rejected:* Echoing URLs through third-party OAuth state or backend redirect query parameters widens the open-redirect attack surface and requires stateful encryption or backend URL allowlisting. `sessionStorage` confines the navigation state entirely within the client origin.
+2. **Scheduled Cleanup Background Task:**
+   - *Why rejected:* Introduces unnecessary scheduler infrastructure, timer threads, and test mocking complexity for a transient 60-second code table. Opportunistic cleanup achieves the same storage bounds with zero background overhead.
+3. **Return JWT in URL Fragment (`#access_token=...`):**
    - *Why rejected:* The fragment is accessible to client scripts and browser extensions, remains in browser history, and cannot be revoked or controlled once delivered. Passing credentials via URLs violates project security guidelines.
-2. **Return JWT directly in HTTP response body on callback:**
-   - *Why rejected:* This is the current implementation. Because the callback is initiated by a browser redirect from Google, the user sees raw JSON text in their browser window on the backend port. It breaks single-page application integration.
-3. **Session Cookie + Backend-for-Frontend (BFF):**
-   - *Why rejected:* SwiftDrop is an API-first modular monolith with a separate Next.js presentation frontend. Introducing server-side sessions, cookies, and CSRF tokens across origins would violate ADR 0001 and ADR 0002.
-4. **Automatic Account Linking by Email:**
+4. **Return JWT directly in HTTP response body on callback:**
+   - *Why rejected:* Current implementation leaves the browser displaying raw JSON on the backend port (`http://localhost:8080/login/oauth2/code/google`), breaking frontend SPA flow.
+5. **Automatic Account Linking by Email:**
    - *Why rejected:* High security risk. If a malicious user registers an account with a victim's email before the victim signs in with Google, or if an email provider reassigns an email, accounts could be hijacked.
 
 ---
@@ -197,15 +225,15 @@ No secrets are exposed. The required environment variables are:
 
 ### Positive
 - Tokens are never exposed in browser URLs, server logs, or referrer headers.
-- Seamless user experience: user clicks "Sign in with Google", authenticates, and returns cleanly to the frontend dashboard.
-- Clear separation of concerns: Spring Security handles OIDC; frontend handles UI and token storage.
+- Safe post-login navigation without exposing open redirect vulnerabilities on either backend or frontend.
+- Zero background scheduler overhead via bounded opportunistic cleanup.
 - Atomic single-use semantics prevent code replay and race conditions.
-- Strict allowlist of error codes prevents information disclosure while providing clear feedback.
+- Strict allowlist of error codes prevents information disclosure while providing clear user feedback.
 
 ### Negative / Trade-offs
 - Requires an additional network hop (`POST /api/v1/auth/google/exchanges`) by the frontend before reaching the authenticated state.
-- Requires a new database table (`google_login_codes`) and a periodic cleanup policy.
-- Local development requires configuring `SWIFTDROP_FRONTEND_BASE_URL` and a Google Cloud OAuth client.
+- If a client network disconnects after the code has been marked `used_at` but before the response is received, the code cannot be reused; the user must log in again. (This is a deliberate security trade-off to preserve strict single-use semantics).
+- Requires a new database table (`google_login_codes`).
 
 ---
 
@@ -213,10 +241,10 @@ No secrets are exposed. The required environment variables are:
 
 Once this ADR is reviewed and accepted by the team:
 1. **Database:** Add Flyway migration `V202610...__identity_create_google_login_codes.sql`.
-2. **Backend Domain & Repository:** Implement `GoogleLoginCode` entity/record and atomic redemption repository query.
-3. **Backend Service:** Refactor `GoogleLoginResponses` to generate codes, record SHA-256 hashes, and redirect to frontend callback on success and failure.
+2. **Backend Domain & Repository:** Implement `GoogleLoginCode` entity/record and atomic redemption repository query with opportunistic cleanup.
+3. **Backend Service:** Refactor `GoogleLoginResponses` to generate codes, record SHA-256 hashes, and redirect to frontend callback on success (`?code=...`) and failure (`?error=...`).
 4. **Backend Endpoint:** Implement `POST /api/v1/auth/google/exchanges` in `identity.web.AccessTokenController`.
-5. **Frontend Callback Route:** Implement `frontend/app/auth/google/callback/page.tsx` with code exchange, error display, and sanitized post-login navigation.
+5. **Frontend Callback Route:** Implement `frontend/app/auth/google/callback/page.tsx` with code exchange, allowlisted error display, and double-sanitized `sessionStorage` post-login navigation.
 6. **Tests:** Update `GoogleLoginApiTest.java` to verify:
    - Successful redirection with 32-byte code.
    - Code exchange returning valid JWT.
