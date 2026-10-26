@@ -68,15 +68,33 @@ export function NavHeader() {
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Link
                 href="/track"
+                className={
+                  buttonVariants({ variant: "ghost", size: "sm" }) +
+                  " text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent hidden sm:inline-flex"
+                }
+              >
+                Track
+              </Link>
+              <Link
+                href="/login"
                 className={
                   buttonVariants({ variant: "ghost", size: "sm" }) +
                   " text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 }
               >
-                Track
+                Sign In
+              </Link>
+              <Link
+                href="/signup"
+                className={
+                  buttonVariants({ variant: "default", size: "sm" }) +
+                  " font-semibold shadow-xs"
+                }
+              >
+                Register
               </Link>
             </div>
           )}

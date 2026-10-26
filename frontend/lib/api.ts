@@ -46,8 +46,13 @@ type UnauthorizedHandler = () => void;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 
-export function onUnauthorized(handler: UnauthorizedHandler): void {
+export function onUnauthorized(handler: UnauthorizedHandler): () => void {
   unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = null;
+    }
+  };
 }
 
 export function getApiBaseUrl(): string {
