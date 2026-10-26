@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -61,6 +62,18 @@ class AccountServiceTest {
         assertThat(user.getPasswordHash()).doesNotContain("secret-admin-pass").startsWith("{bcrypt}");
         assertThat(encoder.matches("secret-admin-pass", user.getPasswordHash())).isTrue();
         verify(users).findByEmail("admin@example.com");
+    }
+
+    @Test
+    void registerCourierCreatesCourierUser() {
+        User user = service.registerCourier(" Bob Courier ", "Bob@Example.COM", "secure courier pass");
+
+        assertThat(user.getEmail()).isEqualTo("bob@example.com");
+        assertThat(user.getFullName()).isEqualTo("Bob Courier");
+        assertThat(user.getRoles()).containsExactly(Role.COURIER);
+        assertThat(user.getPasswordHash()).doesNotContain("secure courier pass").startsWith("{bcrypt}");
+        assertThat(encoder.matches("secure courier pass", user.getPasswordHash())).isTrue();
+        verify(users).findByEmail("bob@example.com");
     }
 
     @Test
@@ -187,6 +200,18 @@ class AccountServiceTest {
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(alice));
 
         assertThat(service.authenticate(" ALICE@example.com", "correct horse")).isSameAs(alice);
+    }
+
+    @Test
+    void findAllUsersReturnsAllUsersFromRepository() {
+        User alice = existing("h1");
+        User bob = withId(new User("bob@example.com", "h2", "Bob", Set.of(Role.COURIER)));
+        when(users.findAll()).thenReturn(List.of(alice, bob));
+
+        List<User> result = service.findAllUsers();
+
+        assertThat(result).containsExactly(alice, bob);
+        verify(users).findAll();
     }
 
     @Test

@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/** Public registration. There is deliberately no role field; unknown JSON fields are ignored. */
+/** Registration request for customers and staff. There is deliberately no role field; unknown JSON fields are ignored. */
 public record RegisterUserRequest(
         @NotBlank @Size(max = 200) String fullName,
         @NotBlank @Email @Size(max = 320) String email,

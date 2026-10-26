@@ -2,6 +2,7 @@ package com.swiftdrop.identity.application;
 
 import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -50,6 +51,11 @@ public class AccountService implements UserDirectory {
         return registerUser("System Administrator", email, rawPassword, EnumSet.of(Role.DISPATCHER_ADMIN));
     }
 
+    /** Registers a courier staff account. */
+    public User registerCourier(String fullName, String email, String rawPassword) {
+        return registerUser(fullName, email, rawPassword, EnumSet.of(Role.COURIER));
+    }
+
     private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles) {
         if (tooLong(rawPassword)) {
             throw new InvalidPasswordException("Password must be at most " + MAX_PASSWORD_BYTES + " bytes");
@@ -83,6 +89,11 @@ public class AccountService implements UserDirectory {
 
     public Optional<User> findById(UUID id) {
         return users.findById(id);
+    }
+
+    /** Returns all users for administrative management. */
+    public List<User> findAllUsers() {
+        return users.findAll();
     }
 
     @Override
