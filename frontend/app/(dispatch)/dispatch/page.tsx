@@ -2,12 +2,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function DispatchPortalPage() {
   return (
-    <main className="container mx-auto flex-1 p-6 max-w-4xl">
-      <Card>
+    <main className="container mx-auto flex-1 px-4 py-12 max-w-4xl space-y-4">
+      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
+        <span className="size-1.5 rounded-full bg-primary" />
+        Dispatch Workspace · WS7
+      </div>
+      <Card className="rounded-xl bg-card border-border shadow-xs">
         <CardHeader>
-          <CardTitle>Dispatcher Portal</CardTitle>
-          <CardDescription>
-            Courier workload management and parcel assignment (WS7).
+          <CardTitle className="text-xl font-bold text-foreground">Dispatcher Portal</CardTitle>
+          <CardDescription className="text-sm text-muted-foreground">
+            Courier workload management and parcel assignment.
           </CardDescription>
         </CardHeader>
         <CardContent>
