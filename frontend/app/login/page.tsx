@@ -39,8 +39,12 @@ function sanitizeRedirectTarget(target: string | null | undefined): string {
 
   try {
     const parsed = new URL(trimmed, "http://localhost");
-    // Ensure the host authority was not parsed and origin remains unchanged
-    if (parsed.origin !== "http://localhost" || !parsed.pathname.startsWith("/")) {
+    // Ensure the host authority was not parsed, origin remains unchanged, and destination is not a login loop
+    if (
+      parsed.origin !== "http://localhost" ||
+      !parsed.pathname.startsWith("/") ||
+      parsed.pathname === "/login"
+    ) {
       return "/";
     }
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
@@ -196,6 +200,15 @@ function LoginForm() {
                 variant="outline"
                 className="w-full font-medium"
                 onClick={() => {
+                  if (typeof window !== "undefined") {
+                    const rawRedirect = searchParams.get("redirect");
+                    const targetPath = sanitizeRedirectTarget(rawRedirect);
+                    if (targetPath && targetPath !== "/" && targetPath !== "/login") {
+                      window.sessionStorage.setItem("swiftdrop_auth_redirect", targetPath);
+                    } else {
+                      window.sessionStorage.removeItem("swiftdrop_auth_redirect");
+                    }
+                  }
                   const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
                   window.location.assign(target);
                 }}
