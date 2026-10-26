@@ -17,6 +17,26 @@ export interface UserResponse {
   email: string;
   fullName: string;
   roles: string[];
+  enabled: boolean;
+}
+
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface CreateStaffUserRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role?: "COURIER" | "DISPATCHER_ADMIN";
+}
+
+export interface UpdateUserStatusRequest {
+  enabled: boolean;
 }
 
 export interface AccessTokenResponse {
