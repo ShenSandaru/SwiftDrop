@@ -1,25 +1,26 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PortalPlaceholderCard } from "@/components/portal";
 
 export default function MerchantPortalPage() {
   return (
-    <main className="container mx-auto flex-1 px-4 py-12 max-w-4xl space-y-4">
-      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-        <span className="size-1.5 rounded-full bg-primary" />
-        Merchant Workspace · WS4 & WS5
-      </div>
-      <Card className="rounded-xl bg-card border-border shadow-xs">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-foreground">Merchant Portal</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Merchant dashboard, bulk orders, API keys, and webhook endpoints.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This route group is reserved for merchant operations.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+    <div className="space-y-6">
+      <PortalPlaceholderCard
+        title="Merchant Logistics Dashboard"
+        description="Bulk shipment intake, cash-on-delivery settlements, and e-commerce API integration."
+        workstream="WS4 & WS5 — Merchant Registration, Orders & Webhooks"
+        contractRef="MER-1, MER-2 · Contract §4.2"
+        plannedEndpoints={[
+          "POST /api/v1/merchant-orders (planned)",
+          "GET /api/v1/merchants/me/orders (planned)",
+          "GET/POST /api/v1/merchants/me/api-keys (planned)",
+          "PUT /api/v1/merchants/me/webhook-endpoint (planned)",
+        ]}
+        plannedFeatures={[
+          "Merchant dashboard showing daily shipment volumes and delivery success rates",
+          "Bulk CSV parcel manifest import and automatic label generation",
+          "Scoped API key generation and secret management for external stores",
+          "HMAC-SHA256 signed webhook endpoint configuration for delivery updates",
+        ]}
+      />
+    </div>
   );
 }

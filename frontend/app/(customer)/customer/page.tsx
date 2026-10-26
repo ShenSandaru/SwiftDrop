@@ -1,25 +1,26 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PortalPlaceholderCard } from "@/components/portal";
 
 export default function CustomerPortalPage() {
   return (
-    <main className="container mx-auto flex-1 px-4 py-12 max-w-4xl space-y-4">
-      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-        <span className="size-1.5 rounded-full bg-primary" />
-        Customer Workspace · WS2
-      </div>
-      <Card className="rounded-xl bg-card border-border shadow-xs">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-foreground">Customer Portal</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Manage deliveries, request fee quotes, and view parcel history.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This route group is reserved for customer delivery workflows.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+    <div className="space-y-6">
+      <PortalPlaceholderCard
+        title="Customer Delivery Overview"
+        description="Book parcel pickups, calculate instant fee estimates, and view shipment tracking history."
+        workstream="WS2 — Customer Booking & Pricing Integration"
+        contractRef="CUS-2, CUS-3, CUS-5 · Contract §4.2"
+        plannedEndpoints={[
+          "POST /api/v1/parcels (planned)",
+          "POST /api/v1/price-quotes (planned)",
+          "GET /api/v1/parcels (planned)",
+          "GET /api/v1/parcels/{id}/receipt (planned)",
+        ]}
+        plannedFeatures={[
+          "Interactive delivery booking form with sender and recipient addresses",
+          "Dynamic delivery fee calculation based on parcel weight and delivery zone",
+          "Personal parcel tracking history with real-time status indicators",
+          "Digital delivery receipt generation and printable summary",
+        ]}
+      />
+    </div>
   );
 }
