@@ -228,6 +228,83 @@ class AccountServiceTest {
                 .isInstanceOf(InvalidCredentialsException.class).hasMessage("Invalid email or password");
     }
 
+    @Test
+    void registerStaffAllowsCourierAndDispatcherAdmin() {
+        User courier = service.registerStaff("Courier Bob", "courier@example.com", "password123", Role.COURIER);
+        assertThat(courier.getRoles()).containsExactly(Role.COURIER);
+
+        User admin = service.registerStaff("Admin Dave", "admin2@example.com", "password123", Role.DISPATCHER_ADMIN);
+        assertThat(admin.getRoles()).containsExactly(Role.DISPATCHER_ADMIN);
+    }
+
+    @Test
+    void registerStaffRejectsCustomerAndMerchantRoles() {
+        assertThatThrownBy(() -> service.registerStaff("Cust", "cust@example.com", "password123", Role.CUSTOMER))
+                .isInstanceOf(InvalidRoleException.class)
+                .hasMessage("Staff account role must be COURIER or DISPATCHER_ADMIN");
+
+        assertThatThrownBy(() -> service.registerStaff("Merch", "merch@example.com", "password123", Role.MERCHANT))
+                .isInstanceOf(InvalidRoleException.class)
+                .hasMessage("Staff account role must be COURIER or DISPATCHER_ADMIN");
+    }
+
+    @Test
+    void updateUserStatusEnablesAndDisablesUser() {
+        UUID adminId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User targetUser = withId(new User("user@example.com", "hash", "Target User", Set.of(Role.CUSTOMER)));
+        ReflectionTestUtils.setField(targetUser, "id", targetId);
+        when(users.findById(targetId)).thenReturn(Optional.of(targetUser));
+
+        User disabled = service.updateUserStatus(targetId, false, adminId);
+        assertThat(disabled.isEnabled()).isFalse();
+
+        User enabled = service.updateUserStatus(targetId, true, adminId);
+        assertThat(enabled.isEnabled()).isTrue();
+    }
+
+    @Test
+    void updateUserStatusRejectsAdminDisablingThemself() {
+        UUID adminId = UUID.randomUUID();
+        User adminUser = withId(new User("admin@example.com", "hash", "Admin", Set.of(Role.DISPATCHER_ADMIN)));
+        ReflectionTestUtils.setField(adminUser, "id", adminId);
+
+        assertThatThrownBy(() -> service.updateUserStatus(adminId, false, adminId))
+                .isInstanceOf(SelfDisablingException.class)
+                .hasMessage("An administrator cannot disable their own account");
+
+        // Enabling oneself or keeping enabled is permitted
+        when(users.findById(adminId)).thenReturn(Optional.of(adminUser));
+        User result = service.updateUserStatus(adminId, true, adminId);
+        assertThat(result.isEnabled()).isTrue();
+    }
+
+    @Test
+    void updateUserStatusThrowsNotFoundForNonExistentUser() {
+        UUID adminId = UUID.randomUUID();
+        UUID unknownId = UUID.randomUUID();
+        when(users.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateUserStatus(unknownId, false, adminId))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("User not found");
+    }
+
+    @Test
+    void findUsersPaginatesAndFiltersByRole() {
+        org.springframework.data.domain.Page<User> pageMock = new org.springframework.data.domain.PageImpl<>(List.of(existing("h1")));
+        when(users.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(pageMock);
+        when(users.findByRole(any(Role.class), any(org.springframework.data.domain.Pageable.class))).thenReturn(pageMock);
+
+        org.springframework.data.domain.Page<User> allPage = service.findUsers(0, 20, null);
+        assertThat(allPage.getContent()).hasSize(1);
+        verify(users).findAll(any(org.springframework.data.domain.Pageable.class));
+
+        org.springframework.data.domain.Page<User> courierPage = service.findUsers(0, 20, Role.COURIER);
+        assertThat(courierPage.getContent()).hasSize(1);
+        verify(users).findByRole(any(Role.class), any(org.springframework.data.domain.Pageable.class));
+    }
+
     private static User existing(String passwordHash) {
         return withId(new User("alice@example.com", passwordHash, "Alice", Set.of(Role.CUSTOMER)));
     }

@@ -142,8 +142,9 @@ tests using the shared test harness in `com.swiftdrop.test.security`:
 - Use `TestPrincipal` to declare the caller state: `anonymous()`, `customer()`, `merchant()`,
   `courier()`, `dispatcherAdmin()`, `user(UUID, Role...)` for custom subject IDs, or `apiKey(String)`
   for merchant API keys.
-- Add request bodies (`withJsonBody(...)`) and headers (`withHeader(...)`) where the endpoint requires
-  valid input to reach authorization or asserts specific validation outcomes.
+- Customize requests where valid payloads or headers are required to reach authorization or
+  assert validation outcomes using `customize(Consumer<MockHttpServletRequestBuilder>)`, for example:
+  `.customize(req -> req.contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"user@example.com\"}))`
 - Execute rows as dynamic tests with `@TestFactory` returning `AuthorizationMatrixExecutor.toDynamicTests(mvc, rows)`,
   or in batch with `AuthorizationMatrixExecutor.executeAll(mvc, rows)`.
 - For each endpoint, assert:
