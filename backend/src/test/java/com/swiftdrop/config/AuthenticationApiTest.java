@@ -2,6 +2,7 @@ package com.swiftdrop.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -212,6 +213,112 @@ class AuthenticationApiTest {
         }
     }
 
+    // Admin user management (SD-102)
+
+    @Test
+    void dispatcherAdminSuccessfullyCreatesCourierWithoutExposingCredentials() throws Exception {
+        String adminToken = adminToken();
+
+        createStaff(adminToken, """
+                {"fullName": " Bob Courier ", "email": " Bob.Courier@Example.COM ", "password": "courier-password-123"}""")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.email").value("bob.courier@example.com"))
+                .andExpect(jsonPath("$.fullName").value("Bob Courier"))
+                .andExpect(jsonPath("$.roles", contains("COURIER")))
+                .andExpect(jsonPath("$.password").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+
+        User saved = savedUser();
+        assertThat(saved.getEmail()).isEqualTo("bob.courier@example.com");
+        assertThat(saved.getFullName()).isEqualTo("Bob Courier");
+        assertThat(saved.getRoles()).containsExactly(Role.COURIER);
+        assertThat(saved.getPasswordHash()).doesNotContain("courier-password-123").startsWith("{bcrypt}");
+        assertThat(passwordEncoder.matches("courier-password-123", saved.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void staffCreationCannotGrantArbitraryRoles() throws Exception {
+        String adminToken = adminToken();
+
+        createStaff(adminToken, """
+                {"fullName": "Bob", "email": "bob@example.com", "password": "password123",
+                 "roles": ["DISPATCHER_ADMIN"], "role": "DISPATCHER_ADMIN"}""")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles", contains("COURIER")));
+
+        User saved = savedUser();
+        assertThat(saved.getRoles()).containsExactly(Role.COURIER);
+    }
+
+    @Test
+    void unauthenticatedCallerCannotCreateCourierOrListUsers() throws Exception {
+        createStaff(null, """
+                {"fullName": "Bob", "email": "bob@example.com", "password": "password123"}""")
+                .andExpect(status().isUnauthorized());
+
+        listUsers(null).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void nonAdminRolesCannotCreateCourierOrListUsers() throws Exception {
+        Instant now = Instant.now();
+        for (Role role : List.of(Role.CUSTOMER, Role.MERCHANT, Role.COURIER)) {
+            String token = token(claims(now, now.plusSeconds(600), "swiftdrop", role));
+
+            createStaff(token, """
+                    {"fullName": "Bob", "email": "bob@example.com", "password": "password123"}""")
+                    .andExpect(status().isForbidden());
+
+            listUsers(token).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void dispatcherAdminCanListUsersWithoutExposingPasswordHashes() throws Exception {
+        User admin = withId(new User("admin@swiftdrop.com", "{bcrypt}hash1", "Admin", Set.of(Role.DISPATCHER_ADMIN)));
+        User courier = withId(new User("courier@swiftdrop.com", "{bcrypt}hash2", "Courier Bob", Set.of(Role.COURIER)));
+        User customer = withId(new User("customer@swiftdrop.com", "{bcrypt}hash3", "Customer Alice", Set.of(Role.CUSTOMER)));
+        when(users.findAll()).thenReturn(List.of(admin, courier, customer));
+
+        listUsers(adminToken())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].email").value("admin@swiftdrop.com"))
+                .andExpect(jsonPath("$[0].roles", contains("DISPATCHER_ADMIN")))
+                .andExpect(jsonPath("$[1].email").value("courier@swiftdrop.com"))
+                .andExpect(jsonPath("$[1].roles", contains("COURIER")))
+                .andExpect(jsonPath("$[2].email").value("customer@swiftdrop.com"))
+                .andExpect(jsonPath("$[2].roles", contains("CUSTOMER")))
+                .andExpect(jsonPath("$[*].password").doesNotExist())
+                .andExpect(jsonPath("$[*].passwordHash").doesNotExist());
+    }
+
+    @Test
+    void rejectsInvalidStaffCreationWithoutEchoingValues() throws Exception {
+        String adminToken = adminToken();
+
+        createStaff(adminToken, """
+                {"fullName": " ", "email": "not-an-email", "password": "short"}""")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.invalidFields", contains("email", "fullName", "password")))
+                .andExpect(content -> assertThat(content.getResponse().getContentAsString())
+                        .doesNotContain("not-an-email", "short"));
+
+        createStaff(adminToken, "{\"fullName\": \"A\", \"email\": \"a@example.com\", \"password\": \""
+                + "x".repeat(73) + "\"}")
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsDuplicateEmailOnStaffCreation() throws Exception {
+        when(users.findByEmail("bob@example.com")).thenReturn(Optional.of(user("x", Role.COURIER)));
+
+        createStaff(adminToken(), """
+                {"fullName": "Bob", "email": "BOB@example.com", "password": "password123"}""")
+                .andExpect(status().isConflict());
+    }
+
     @Test
     void withoutGoogleConfigurationGoogleLoginIsUnavailableAndLocalLoginWorks() throws Exception {
         mvc.perform(get("/oauth2/authorization/google")).andExpect(status().isUnauthorized());
@@ -245,6 +352,27 @@ class AuthenticationApiTest {
     private ResultActions login(String email, String password) throws Exception {
         return mvc.perform(post("/api/v1/auth/tokens").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password)));
+    }
+
+    private ResultActions createStaff(String token, String json) throws Exception {
+        var req = post("/api/v1/users/staff").contentType(MediaType.APPLICATION_JSON).content(json);
+        if (token != null) {
+            req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return mvc.perform(req);
+    }
+
+    private ResultActions listUsers(String token) throws Exception {
+        var req = get("/api/v1/users");
+        if (token != null) {
+            req.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return mvc.perform(req);
+    }
+
+    private String adminToken() {
+        Instant now = Instant.now();
+        return token(claims(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN));
     }
 
     private User savedUser() {

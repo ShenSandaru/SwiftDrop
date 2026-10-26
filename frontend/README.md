@@ -12,6 +12,12 @@ See the root [README](../README.md), the
 
 - Node.js 24 LTS and npm (see [development setup](../docs/development-setup.md))
 
+## Environment variables
+
+Local frontend settings can be configured in `.env.local` (see `.env.example`):
+
+- `NEXT_PUBLIC_API_BASE_URL`: Base URL for the Spring Boot REST API (defaults to `http://localhost:8080`).
+
 ## Commands
 
 Run from this directory:
