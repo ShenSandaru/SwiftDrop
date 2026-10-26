@@ -52,6 +52,18 @@ class AccountServiceTest {
     }
 
     @Test
+    void bootstrapAdminCreatesDispatcherAdminUser() {
+        User user = service.bootstrapAdmin(" Admin@Example.COM ", "secret-admin-pass");
+
+        assertThat(user.getEmail()).isEqualTo("admin@example.com");
+        assertThat(user.getFullName()).isEqualTo("System Administrator");
+        assertThat(user.getRoles()).containsExactly(Role.DISPATCHER_ADMIN);
+        assertThat(user.getPasswordHash()).doesNotContain("secret-admin-pass").startsWith("{bcrypt}");
+        assertThat(encoder.matches("secret-admin-pass", user.getPasswordHash())).isTrue();
+        verify(users).findByEmail("admin@example.com");
+    }
+
+    @Test
     void rejectsAlreadyRegisteredEmailInAnyCase() {
         when(users.findByEmail("alice@example.com")).thenReturn(Optional.of(existing("x")));
 

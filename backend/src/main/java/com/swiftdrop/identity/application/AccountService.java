@@ -45,6 +45,11 @@ public class AccountService implements UserDirectory {
         return registerUser(fullName, email, rawPassword, EnumSet.of(Role.MERCHANT)).getId();
     }
 
+    /** Bootstraps the initial administrator account on startup. */
+    public User bootstrapAdmin(String email, String rawPassword) {
+        return registerUser("System Administrator", email, rawPassword, EnumSet.of(Role.DISPATCHER_ADMIN));
+    }
+
     private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles) {
         if (tooLong(rawPassword)) {
             throw new InvalidPasswordException("Password must be at most " + MAX_PASSWORD_BYTES + " bytes");
