@@ -1,10 +1,7 @@
 # 0005. Google OAuth token handoff
 
-- Status: Proposed (NOT ACCEPTED)
+- Status: Accepted
 - Date: 2026-10-26
-
-> [!IMPORTANT]
-> **PROPOSED — NOT ACCEPTED**. This document is a draft architecture decision record prepared for team review under task SD-001 / SD-104. It has not been approved and does not authorize implementation.
 
 ## Context
 

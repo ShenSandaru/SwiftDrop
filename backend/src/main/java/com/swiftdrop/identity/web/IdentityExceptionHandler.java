@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.swiftdrop.identity.application.EmailAlreadyRegisteredException;
 import com.swiftdrop.identity.application.InvalidCredentialsException;
+import com.swiftdrop.identity.application.InvalidExchangeCodeException;
 import com.swiftdrop.identity.application.InvalidPasswordException;
 
 /**
@@ -45,6 +46,11 @@ class IdentityExceptionHandler {
 
     @ExceptionHandler(InvalidCredentialsException.class)
     ProblemDetail invalidCredentials(InvalidCredentialsException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidExchangeCodeException.class)
+    ProblemDetail invalidExchangeCode(InvalidExchangeCodeException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
     }
 
