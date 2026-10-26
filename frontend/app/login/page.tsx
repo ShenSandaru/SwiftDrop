@@ -10,6 +10,45 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/**
+ * Validates and sanitizes a post-login redirect path to prevent open redirect vulnerabilities.
+ * Accepts only safe relative paths starting with a single '/' (e.g. "/customer", "/track?code=123").
+ * Rejects protocol-relative URLs ('//'), backslash tricks ('/\'), scheme prefixes ('https:', 'javascript:'),
+ * and control characters, falling back to the default home path.
+ */
+function sanitizeRedirectTarget(target: string | null | undefined): string {
+  if (!target || typeof target !== "string") {
+    return "/";
+  }
+
+  const trimmed = target.trim();
+
+  if (trimmed === "/") {
+    return "/";
+  }
+
+  // Must begin with a single '/' and not be followed by '/' or '\'
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
+    return "/";
+  }
+
+  // Reject CRLF or control characters
+  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
+    return "/";
+  }
+
+  try {
+    const parsed = new URL(trimmed, "http://localhost");
+    // Ensure the host authority was not parsed and origin remains unchanged
+    if (parsed.origin !== "http://localhost" || !parsed.pathname.startsWith("/")) {
+      return "/";
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,7 +61,7 @@ function LoginForm() {
 
   const registered = searchParams.get("registered") === "true";
   const expired = searchParams.get("expired") === "true";
-  const redirectTarget = searchParams.get("redirect") || "/";
+  const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
 
   // Google button is enabled only when explicitly configured via environment flag (AC-2)
   const isGoogleLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true";
