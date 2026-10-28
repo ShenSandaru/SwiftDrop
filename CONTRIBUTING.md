@@ -32,17 +32,17 @@ Checks by area (commands verified in this repository):
 
 | Area changed | Run |
 |---|---|
-| Backend | `.\mvnw.cmd clean verify` from `backend/` (passes without Docker) |
+| Backend | `.\mvnw.cmd clean verify` from `backend/` (passes without Docker); run `.\mvnw.cmd verify -Pintegration` when persistence integration tests are added or changed and Docker is available |
 | Frontend | `npm run lint` and `npm run build` from `frontend/` |
 | `compose.yaml` | `docker compose config --quiet`; start the services only if the task needs it (see [development setup](docs/development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq)) |
 | Any change | `git diff --check`; update the owning documentation ([owners](docs/ai-agent-guidelines.md#documentation-owners)) |
 
 ## Continuous integration
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests targeting either
-protected branch (`dev` or `main`) and on pushes to `dev` and `main`, with read-only
-`contents: read` permissions and no secrets. Feature pull requests into `dev` and release pull
-requests from `dev` into `main` therefore run the same checks:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests targeting `dev` or
+`main` and on pushes to `dev` and `main`, with read-only `contents: read` permissions and no
+secrets. Feature pull requests into `dev` and release pull requests from `dev` into `main`
+therefore run the same checks:
 
 | Status check | Runs |
 |---|---|
@@ -81,11 +81,13 @@ The job names `frontend` and `backend` are the check names; on pull requests the
 
 ### Branches
 
-- `dev` is the protected integration branch and `main` the protected stable/release branch. Both
-  are always buildable; nobody pushes to them directly, and changes arrive through reviewed pull
-  requests.
+- `dev` is the integration branch and `main` is the stable/release branch. Both must stay
+  buildable; by convention nobody pushes to them directly, and changes arrive through reviewed pull
+  requests (GitHub branch protection is a manual setting and is not configured from this
+  repository; see [Continuous integration](#continuous-integration)).
 - Create one short-lived branch per task from the latest `dev`:
-  - `feature/<short-description>`, e.g. `feature/parcel-tracking-sse`
+  - `feat/<short-description>` or `feature/<short-description>`, e.g. `feat/foundation`,
+    `feature/parcel-tracking-sse`
   - `fix/<short-description>`
   - `docs/<short-description>`
   - `chore/<short-description>` (build, configuration, dependencies)
@@ -180,7 +182,7 @@ Table ownership and migration ownership follow the accepted
   branches, use a timestamp version with the module first in the description, for example
   `V202610251430__delivery_create_parcels.sql`, in a per-module folder (`db/migration/<module>/`).
   Flyway's discovery of these folders is verified before the first business migration is merged.
-- Never edit a migration that has been merged to `main`; add a new one.
+- Never edit a migration that has been merged to `dev` or `main`; add a new one.
 
 ## Architectural decisions
 

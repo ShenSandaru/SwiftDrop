@@ -38,9 +38,16 @@ precedence. The variables are listed in [`.env.example`](../.env.example).
 - `ModuleBoundaryTest` checks the module dependency graph and the `api`-only rule of
   [ADR 0003](../docs/adr/0003-backend-modules-and-boundaries.md) by scanning `src/main/java`.
 - `MigrationConventionTest` checks that each Flyway migration is in its module's folder
-  (`db/migration/<module>/`), is named `V<yyyyMMddHHmm>__<module>_<description>.sql` and has a
-  unique version. It does not run Flyway.
+  (`db/migration/<module>/`), is named `V<yyyyMMddHHmm>__<module>_<description>.sql`, has a
+  unique version, and is discovered by Flyway from the configured `spring.flyway.locations`
+  without connecting to a database.
 - `identity.domain.UserTest` unit-tests the `User` entity.
+- `DatabaseMigrationIT` runs against an isolated PostgreSQL 18 container via Testcontainers under
+  the `integration` Maven profile (`.\mvnw.cmd verify -Pintegration`), verifying Flyway migrations
+  and Hibernate schema validation (`ddl-auto=validate`).
 
-There are no integration tests against PostgreSQL or RabbitMQ yet
+The default build (`.\mvnw.cmd clean verify` or `.\mvnw.cmd test`) executes only unit and slice tests
+(`*Test.java`) and remains completely Docker-free.
+
+There are no integration tests against RabbitMQ yet
 (see [testing](../docs/architecture.md#12-testing)).

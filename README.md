@@ -182,15 +182,17 @@ More cases are in [development setup](docs/development-setup.md#troubleshooting)
 
 ## Git workflow
 
-1. `git switch main`, `git pull`, then `git switch -c feature/<short-description>`.
+1. `git switch dev`, `git pull`, then `git switch -c feat/<short-description>` (or `feature/`,
+   `fix/`, `docs/`, `chore/`).
 2. Make a small change within the approved task.
 3. Run the checks above and `git diff --check`.
 4. Commit with [Conventional Commits](https://www.conventionalcommits.org/), push the branch and
-   open a pull request to `main`.
+   open a pull request into `dev` (`main` is the stable release branch, updated through pull
+   requests from `dev`).
 5. Wait for the `frontend` and `backend` CI checks and an approving review before merging.
 
 Details are in [CONTRIBUTING.md](CONTRIBUTING.md), including the
-[CI checks and branch protection](CONTRIBUTING.md#continuous-integration). AI agents start at
+[CI checks and branch protection setup](CONTRIBUTING.md#continuous-integration). AI agents start at
 [AGENTS.md](AGENTS.md).
 
 ## Documentation
