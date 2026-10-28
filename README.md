@@ -204,3 +204,16 @@ Details are in [CONTRIBUTING.md](CONTRIBUTING.md), including the
 - [AI agent guidelines and project rules](docs/ai-agent-guidelines.md)
 - [Agent entry point](AGENTS.md) and [Claude Code entry point](CLAUDE.md)
 - [Architecture decision records](docs/adr/README.md)
+
+## Team Issue Management
+
+A one-time automation script is provided in `scripts/create-swiftdrop-issues.mjs` to create the planned GitHub issues across all modules:
+
+- **Dry-run preview (safe, no issues created):**
+  ```bash
+  node scripts/create-swiftdrop-issues.mjs
+  ```
+- **Creation execution (requires authenticated `gh` CLI or `GITHUB_TOKEN`):**
+  ```bash
+  node scripts/create-swiftdrop-issues.mjs --create
+  ```
