@@ -149,11 +149,14 @@ tracking     → delivery
   migrations (`V<n>__<description>.sql`, `snake_case` names). Merged migrations are never edited.
   Hibernate only validates the schema.
 - **Implemented:** the backend connects to PostgreSQL through `SWIFTDROP_POSTGRES_*` settings,
-  `spring.jpa.hibernate.ddl-auto=validate` is set, and Flyway runs at startup. The first migration,
-  `db/migration/identity/V202610251600__identity_create_users_and_roles.sql`, creates `roles`
-  (seeded with `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER_ADMIN`), `users` and `user_roles`.
-  `MigrationConventionTest` checks the folder, naming and unique versions without a database.
-  Applying the migration and Hibernate validation against PostgreSQL have not yet been run.
+  `spring.flyway.locations=classpath:db/migration` and `spring.jpa.hibernate.ddl-auto=validate`
+  are set, and Flyway runs at startup. The identity module migrations in `db/migration/identity/`
+  create `roles` (seeded with `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER_ADMIN`), `users`,
+  `user_roles`, `external_identities` and `google_login_codes`.
+  `MigrationConventionTest` checks the folder, naming, unique versions and Flyway classpath
+  discovery without a database. Applying the migrations and Hibernate validation against
+  PostgreSQL 18 are verified in an isolated Testcontainers environment via `DatabaseMigrationIT`
+  under the `integration` Maven profile (`.\mvnw.cmd verify -Pintegration`).
 - **Decided (ADR 0003):**
   - One shared `public` schema, chosen pragmatically for the team (not a universal best practice).
   - Each table has one owning module (table in section 4). Only the owner writes its migrations and
@@ -338,7 +341,11 @@ whether springdoc and Actuator details are exposed outside local development.
   - One context-load test (`SwiftdropBackendApplicationTests`) that runs without Docker, PostgreSQL
     or RabbitMQ.
   - The Boot-managed JUnit Jupiter, Mockito, AssertJ and Spring test starters are declared.
-  - `.\mvnw.cmd clean verify` must pass without Docker.
+  - `.\mvnw.cmd clean verify` must pass without Docker, running only unit and slice tests (`*Test.java`).
+  - An isolated `integration` Maven profile (`.\mvnw.cmd verify -Pintegration`) executes `*IT.java`
+    tests via Maven Failsafe and Boot-managed Testcontainers (PostgreSQL 18). `DatabaseMigrationIT`
+    verifies that Flyway applies all migrations and Hibernate schema validation passes against an
+    isolated PostgreSQL 18 container without touching development or persistent databases.
   - The frontend has lint and type checking (`npm run lint`, `npm run build`) and no tests.
   - CI (`.github/workflows/ci.yml`) runs the frontend lint/build and the Docker-free backend
     `clean verify` on pull requests targeting `dev` or `main` and on pushes to them
@@ -349,13 +356,10 @@ whether springdoc and Actuator details are exposed outside local development.
   and webhook test requirements (outbox crash windows, ordering and gaps, dead-letter recovery,
   SSRF, signatures, secret encryption, retries and merchant isolation). Unit and component tests
   stay Docker-free.
-- **Proposed:** Testcontainers for persistence and messaging integration tests. It is **not
-  declared in the POM** (its version is Boot-managed, as listed in ADR 0002). It is evaluated when
-  the first integration test needs it, because it makes those tests require Docker.
 - **Open (before the related implementation):** the coverage tool (JaCoCo, for example, is not
-  managed by Spring Boot, so it would need a change to ADR 0002's version policy); how
-  integration tests run while the default `clean verify` stays Docker-free; frontend test tooling,
-  end-to-end tests, and running integration tests in CI.
+  managed by Spring Boot, so it would need a change to ADR 0002's version policy); RabbitMQ
+  integration tests under the integration profile; frontend test tooling, end-to-end tests,
+  and running integration tests in CI.
 
 ## 13. Deployment and observability
 

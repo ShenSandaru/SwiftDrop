@@ -32,7 +32,8 @@ npm start       # serve the production build
 ```
 
 CI (`frontend` job in `../.github/workflows/ci.yml`) runs `npm ci`, `npm run lint` and `npm run build`
-on Node.js 24 for every pull request to `main`; run the same commands before opening one.
+on Node.js 24 for pull requests targeting `dev` or `main` and pushes to them; run the same commands
+before opening a pull request.
 
 ## Structure
 
