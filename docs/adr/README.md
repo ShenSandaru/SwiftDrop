@@ -13,6 +13,7 @@ current state of each decision and lists the open questions that still need one.
 | [0003](0003-backend-modules-and-boundaries.md) | Backend business modules and boundaries | Accepted |
 | [0004](0004-messaging-and-integration-reliability.md) | Messaging and integration reliability | Accepted |
 | [0005](0005-google-oauth-token-handoff.md) | Google OAuth token handoff | Accepted |
+| [0006](0006-delivery-lifecycle-and-transition-rules.md) | Delivery lifecycle and transition rules | Proposed |
 
 ## Process
 
