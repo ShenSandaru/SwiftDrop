@@ -53,3 +53,10 @@ jobs:
           cache-dependency-path: backend/pom.xml
       # Unit tests only; no PostgreSQL or RabbitMQ is started (Docker-free verify).
       - run: ./mvnw --batch-mode --no-transfer-progress clean verify
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        if: always()
+        with:
+          name: jacoco-coverage-report
+          path: backend/target/site/jacoco/
+          retention-days: 14

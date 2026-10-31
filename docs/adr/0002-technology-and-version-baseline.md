@@ -13,7 +13,7 @@ Sources were checked on 2026-10-24.
 
 ### Version policy
 
-- **Backend:** pin only Spring Boot (parent POM) and springdoc-openapi. Every other backend library
+- **Backend:** pin only Spring Boot (parent POM), springdoc-openapi, and jacoco-maven-plugin. Every other backend library
   uses the version managed by the Spring Boot BOM.
 - **Frontend:** use the versions installed by `create-next-app` 16.4.x, except where this ADR
   overrides them (TypeScript and `@types/node`). Commit `package-lock.json`.
@@ -32,6 +32,7 @@ Sources were checked on 2026-10-24.
 | Flyway | 12.x: `spring-boot-starter-flyway` + `org.flywaydb:flyway-database-postgresql` | Boot-managed |
 | RabbitMQ Java client (`amqp-client`) | 5.x | Boot-managed |
 | springdoc-openapi (`springdoc-openapi-starter-webmvc-ui`) | **3.2.0** | Pinned (not Boot-managed) |
+| JaCoCo (`jacoco-maven-plugin`) | **0.8.12** | Pinned (not Boot-managed; SD-004) |
 | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test | 6.0.x, 5.x, 3.x | Boot-managed |
 | Testcontainers | 2.0.x | Boot-managed |
 | Maven | **3.9.16** | Pinned through the Maven Wrapper |
