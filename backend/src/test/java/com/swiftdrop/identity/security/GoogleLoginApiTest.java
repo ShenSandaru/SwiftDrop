@@ -81,7 +81,9 @@ import com.swiftdrop.identity.domain.UserRepository;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id=" + GoogleLoginApiTest.CLIENT_ID,
         "swiftdrop.security.google.client-secret=" + GoogleLoginApiTest.CLIENT_SECRET,
-        "swiftdrop.frontend.base-url=http://localhost:3000"})
+        "swiftdrop.frontend.base-url=http://localhost:3000",
+        "swiftdrop.identity.bootstrap.admin-email=",
+        "swiftdrop.identity.bootstrap.admin-password="})
 @AutoConfigureMockMvc
 class GoogleLoginApiTest {
 
