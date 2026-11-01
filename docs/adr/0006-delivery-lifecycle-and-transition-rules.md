@@ -1,7 +1,7 @@
 # 0006. Delivery lifecycle and transition rules
 
-- Status: Proposed
-- Date: 2026-10-28
+- Status: Accepted
+- Date: 2026-10-28 (Accepted: 2026-11-01)
 
 ## Context
 
