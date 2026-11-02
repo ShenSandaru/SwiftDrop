@@ -2,17 +2,26 @@ package com.swiftdrop.delivery.domain;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
 /**
  * Pickup or drop-off contact and address, embedded twice in {@link Parcel} with {@code pickup_} and
- * {@code dropoff_} column prefixes (D-23). Contains personal data. Request validation (lengths,
- * phone format) happens before an address is built; this class only guards required values.
+ * {@code dropoff_} column prefixes (D-23). Contains personal data. Enforces the column limits and the
+ * phone format itself, because merchant orders reach it without HTTP validation; error messages
+ * name the field, never the value.
  */
 @Embeddable
 public class ParcelAddress {
+
+    /** E.164, for example {@code +94771234567} (contract §3.1). */
+    public static final Pattern PHONE = Pattern.compile("^\\+[1-9][0-9]{7,14}$");
+    public static final int MAX_NAME_LENGTH = 200;
+    public static final int MAX_LINE_LENGTH = 200;
+    public static final int MAX_CITY_LENGTH = 100;
+    public static final int MAX_POSTAL_CODE_LENGTH = 10;
 
     @Column(name = "contact_name", nullable = false, length = 200)
     private String contactName;
@@ -41,29 +50,39 @@ public class ParcelAddress {
 
     public ParcelAddress(String contactName, String phone, String line1, String line2, String city, UUID zoneId,
             String postalCode) {
-        this.contactName = requireText(contactName, "contactName");
-        this.phone = requireText(phone, "phone");
-        this.line1 = requireText(line1, "line1");
-        this.line2 = optionalText(line2);
-        this.city = requireText(city, "city");
+        this.contactName = requireText(contactName, "contactName", MAX_NAME_LENGTH);
+        this.phone = requireText(phone, "phone", 20);
+        if (!PHONE.matcher(this.phone).matches()) {
+            throw new IllegalArgumentException("phone must be in international format, for example +94771234567");
+        }
+        this.line1 = requireText(line1, "line1", MAX_LINE_LENGTH);
+        this.line2 = optionalText(line2, "line2", MAX_LINE_LENGTH);
+        this.city = requireText(city, "city", MAX_CITY_LENGTH);
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
-        this.postalCode = optionalText(postalCode);
+        this.postalCode = optionalText(postalCode, "postalCode", MAX_POSTAL_CODE_LENGTH);
     }
 
-    private static String requireText(String value, String name) {
+    private static String requireText(String value, String name, int maxLength) {
         Objects.requireNonNull(value, name);
         String trimmed = value.trim();
         if (trimmed.isEmpty()) {
             throw new IllegalArgumentException(name + " must not be blank");
         }
-        return trimmed;
+        return checkLength(trimmed, name, maxLength);
     }
 
-    private static String optionalText(String value) {
+    private static String optionalText(String value, String name, int maxLength) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return value.trim();
+        return checkLength(value.trim(), name, maxLength);
+    }
+
+    private static String checkLength(String value, String name, int maxLength) {
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(name + " must be at most " + maxLength + " characters");
+        }
+        return value;
     }
 
     public String getContactName() {
