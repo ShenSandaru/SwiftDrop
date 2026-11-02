@@ -67,6 +67,8 @@ import com.swiftdrop.identity.domain.IdentityProvider;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 
 /**
  * The Google OIDC login through the real filter chain, without Google: the redirect, the callback
@@ -102,6 +104,10 @@ class GoogleLoginApiTest {
     private GoogleLoginCodeRepository codeRepository;
     @MockitoBean
     private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenEndpoint;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
