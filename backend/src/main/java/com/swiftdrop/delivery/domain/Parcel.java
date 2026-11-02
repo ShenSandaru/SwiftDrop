@@ -39,6 +39,7 @@ public class Parcel {
 
     public static final int MIN_WEIGHT_GRAMS = 1;
     public static final int MAX_WEIGHT_GRAMS = 30_000;
+    public static final int MAX_DESCRIPTION_LENGTH = 200;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -152,6 +153,9 @@ public class Parcel {
         }
         this.weightGrams = weightGrams;
         this.description = description == null || description.isBlank() ? null : description.trim();
+        if (this.description != null && this.description.length() > MAX_DESCRIPTION_LENGTH) {
+            throw new IllegalArgumentException("description must be at most 200 characters");
+        }
         Objects.requireNonNull(fee, "fee");
         this.feeAmount = fee.amount();
         this.feeCurrency = fee.currency();
