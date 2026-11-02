@@ -71,6 +71,7 @@ import com.swiftdrop.identity.domain.IdentityProvider;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 /**
  * The Google OIDC login through the real filter chain, without Google: the redirect, the callback
@@ -114,6 +115,8 @@ class GoogleLoginApiTest {
     private DeliveryProofRepository deliveryProofs;
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
