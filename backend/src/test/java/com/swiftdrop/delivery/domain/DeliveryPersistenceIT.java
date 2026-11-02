@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -25,6 +26,7 @@ import jakarta.persistence.EntityManager;
 
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.ParcelSize;
 
 /**
@@ -60,6 +62,10 @@ class DeliveryPersistenceIT {
     private JdbcTemplate jdbc;
     @Autowired
     private EntityManager entityManager;
+
+    // No pricing implementation on this branch; booking needs one to start
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private final TrackingNumberGenerator trackingNumbers = new TrackingNumberGenerator();
     private UUID customerId;
