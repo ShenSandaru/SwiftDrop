@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 
@@ -26,6 +30,14 @@ class SwiftdropBackendApplicationTests {
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
+    @MockitoBean
+    private ParcelRepository parcels;
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     @Test
     void contextLoads() {
