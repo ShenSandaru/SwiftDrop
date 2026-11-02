@@ -47,6 +47,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.jayway.jsonpath.JsonPath;
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
@@ -79,6 +83,14 @@ class AuthenticationApiTest {
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
+    @MockitoBean
+    private ParcelRepository parcels;
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     @BeforeEach
     void setUp() {
