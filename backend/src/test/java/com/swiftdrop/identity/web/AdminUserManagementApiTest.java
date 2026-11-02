@@ -28,6 +28,7 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.test.security.TestPrincipal;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,6 +84,9 @@ class AdminUserManagementApiTest {
 
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private User adminUser;
     private User targetUser;
