@@ -1,6 +1,7 @@
 package com.swiftdrop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.List;
 import java.util.Map;
@@ -45,11 +46,11 @@ class DatabaseMigrationIT {
         // Assert PostgreSQL container is running
         assertThat(postgres.isRunning()).isTrue();
 
-        // Assert Flyway schema history recorded all three identity migrations in chronological order
+        // Assert Flyway schema history recorded the three identity and four delivery migrations in order
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(3);
+        assertThat(rows).hasSize(7);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -71,6 +72,14 @@ class DatabaseMigrationIT {
                 .containsEntry("type", "SQL")
                 .containsEntry("script", "identity/V202610261800__identity_create_google_login_codes.sql")
                 .containsEntry("success", true);
+
+        assertThat(rows.subList(3, 7))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("delivery/V202611031000__delivery_create_parcels.sql", true),
+                        tuple("delivery/V202611031010__delivery_create_parcel_status_history.sql", true),
+                        tuple("delivery/V202611031020__delivery_create_delivery_proofs.sql", true),
+                        tuple("delivery/V202611031030__delivery_create_parcel_outbox_events.sql", true));
 
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
