@@ -59,6 +59,10 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.jayway.jsonpath.JsonPath;
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentity;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCode;
@@ -102,6 +106,14 @@ class GoogleLoginApiTest {
     private GoogleLoginCodeRepository codeRepository;
     @MockitoBean
     private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenEndpoint;
+    @MockitoBean
+    private ParcelRepository parcels;
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
