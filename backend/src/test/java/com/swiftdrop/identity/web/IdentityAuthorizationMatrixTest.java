@@ -38,6 +38,7 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.test.security.AuthorizationMatrixExecutor;
 import com.swiftdrop.test.security.AuthorizationMatrixRow;
 import com.swiftdrop.test.security.TestPrincipal;
@@ -96,6 +97,9 @@ class IdentityAuthorizationMatrixTest {
 
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
     private String validExchangeCode;
