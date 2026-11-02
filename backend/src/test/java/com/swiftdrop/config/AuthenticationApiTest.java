@@ -55,6 +55,7 @@ import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 /**
  * The HTTP behavior of registration, login, bearer-token validation and role checks, through the
@@ -91,6 +92,8 @@ class AuthenticationApiTest {
     private DeliveryProofRepository deliveryProofs;
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     @BeforeEach
     void setUp() {
