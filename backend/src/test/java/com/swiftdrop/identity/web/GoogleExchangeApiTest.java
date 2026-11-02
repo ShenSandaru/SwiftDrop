@@ -40,6 +40,7 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -69,6 +70,8 @@ class GoogleExchangeApiTest {
     private DeliveryProofRepository deliveryProofs;
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
