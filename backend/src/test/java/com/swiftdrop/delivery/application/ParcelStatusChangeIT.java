@@ -25,6 +25,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -41,6 +42,7 @@ import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.TrackingNumberGenerator;
+import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.ParcelSize;
 
 /**
@@ -78,6 +80,10 @@ class ParcelStatusChangeIT {
     private JdbcTemplate jdbc;
     @Autowired
     private CommittedEvents committedEvents;
+
+    // No pricing implementation on this branch; booking needs one to start
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     private UUID customerId;
     private UUID courierId;
