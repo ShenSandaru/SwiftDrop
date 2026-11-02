@@ -41,6 +41,7 @@ import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -81,6 +82,8 @@ class AuthorizationMatrixHarnessTest {
     private DeliveryProofRepository deliveryProofs;
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     @TestFactory
     Stream<DynamicTest> authorizationMatrixDynamicTests() {
