@@ -14,6 +14,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 /**
  * A pricing rule defining delivery fees between an origin zone and a destination zone.
  * Owned by the pricing module (ADR 0003, contract §5.2).
@@ -49,6 +52,8 @@ public class PricingRule {
     @Column(name = "large_size_surcharge", nullable = false, precision = 12, scale = 2)
     private BigDecimal largeSizeSurcharge;
 
+    // The migration declares CHAR(3); without this Hibernate's validate expects VARCHAR(3)
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(nullable = false, length = 3)
     private String currency;
 
