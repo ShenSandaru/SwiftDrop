@@ -51,6 +51,8 @@ import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 
 /**
  * The HTTP behavior of registration, login, bearer-token validation and role checks, through the
@@ -79,6 +81,10 @@ class AuthenticationApiTest {
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     @BeforeEach
     void setUp() {
