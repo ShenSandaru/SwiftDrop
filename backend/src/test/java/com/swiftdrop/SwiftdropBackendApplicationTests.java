@@ -10,6 +10,7 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 /**
  * Checks that the application context starts without Docker, PostgreSQL or RabbitMQ.
@@ -38,6 +39,8 @@ class SwiftdropBackendApplicationTests {
     private DeliveryProofRepository deliveryProofs;
     @MockitoBean
     private OutboxEventRepository outboxEvents;
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     @Test
     void contextLoads() {
