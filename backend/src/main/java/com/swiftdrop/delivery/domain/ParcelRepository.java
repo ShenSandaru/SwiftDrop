@@ -5,10 +5,14 @@ import java.util.UUID;
 
 import jakarta.persistence.LockModeType;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import com.swiftdrop.delivery.api.ParcelStatus;
 
 /** Parcels; used only inside the delivery module (ADR 0003). */
 public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
@@ -19,6 +23,14 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     boolean existsByTrackingNumber(String trackingNumber);
 
     Optional<Parcel> findByMerchantIdAndMerchantOrderReference(UUID merchantId, String merchantOrderReference);
+
+    /** A customer's own parcels (CUS-5); the caller passes the sort. */
+    Page<Parcel> findByCustomerId(UUID customerId, Pageable pageable);
+
+    Page<Parcel> findByCustomerIdAndStatus(UUID customerId, ParcelStatus status, Pageable pageable);
+
+    /** All parcels in one status, for dispatchers/admins. */
+    Page<Parcel> findByStatus(ParcelStatus status, Pageable pageable);
 
     /**
      * Loads a parcel and locks its row ({@code SELECT ... FOR UPDATE}) until the transaction ends, so
