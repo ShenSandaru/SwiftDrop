@@ -21,6 +21,9 @@ import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.pricing.api.ParcelSize;
@@ -179,6 +182,47 @@ public class Parcel {
         }
         return new Parcel(trackingNumber, ParcelSource.MERCHANT, null, merchantId, merchantOrderReference.trim(),
                 pickup, dropoff, size, weightGrams, description, fee, null, now);
+    }
+
+    /**
+     * Moves the parcel to {@code target} on behalf of a courier and takes the next sequence number
+     * (ADR 0006 §1, ADR 0004 §4.1). The caller must hold a lock on the parcel row.
+     *
+     * <p>A courier who is not the assigned one gets {@link ParcelNotFoundException}, also when no
+     * courier is assigned: such a caller is not authorized, and a conflict would reveal that the
+     * parcel exists (ADR 0006 §7).
+     *
+     * @param failureReason required for {@code FAILED}, must be {@code null} otherwise
+     * @param proofCaptured whether proof of delivery exists; required for {@code DELIVERED}
+     * @throws ParcelNotFoundException if the courier is not the assigned courier
+     * @throws ParcelConflictException if the move breaks a lifecycle rule
+     * @throws IllegalArgumentException if a failure reason is given for another status
+     */
+    public void changeStatus(ParcelStatus target, UUID courierUserId, FailureReason failureReason,
+            boolean proofCaptured, Instant now) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(now, "now");
+        if (assignedCourierId == null || !assignedCourierId.equals(courierUserId)) {
+            throw new ParcelNotFoundException();
+        }
+        if (failureReason != null && target != ParcelStatus.FAILED) {
+            throw new IllegalArgumentException("A failure reason is only allowed for FAILED");
+        }
+        if (ParcelLifecycle.isTerminal(status)) {
+            throw new ParcelConflictException("Parcel is already in a final status");
+        }
+        if (!ParcelLifecycle.canMove(status, target)) {
+            throw new ParcelConflictException("Illegal status transition");
+        }
+        if (target == ParcelStatus.FAILED && failureReason == null) {
+            throw new ParcelConflictException("A failure reason is required");
+        }
+        if (target == ParcelStatus.DELIVERED && !proofCaptured) {
+            throw new ParcelConflictException("Proof of delivery is required");
+        }
+        this.status = target;
+        this.lastSequence++;
+        this.updatedAt = now;
     }
 
     /**
