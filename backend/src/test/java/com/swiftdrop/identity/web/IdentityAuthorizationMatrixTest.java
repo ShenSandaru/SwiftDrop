@@ -27,6 +27,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.application.GoogleExchangeService;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCode;
@@ -80,6 +84,18 @@ class IdentityAuthorizationMatrixTest {
 
     @MockitoBean
     private GoogleLoginCodeRepository codeRepository;
+
+    @MockitoBean
+    private ParcelRepository parcels;
+
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
     private String validExchangeCode;
