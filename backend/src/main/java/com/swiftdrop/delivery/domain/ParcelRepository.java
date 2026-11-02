@@ -3,7 +3,12 @@ package com.swiftdrop.delivery.domain;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Parcels; used only inside the delivery module (ADR 0003). */
 public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
@@ -14,4 +19,13 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     boolean existsByTrackingNumber(String trackingNumber);
 
     Optional<Parcel> findByMerchantIdAndMerchantOrderReference(UUID merchantId, String merchantOrderReference);
+
+    /**
+     * Loads a parcel and locks its row ({@code SELECT ... FOR UPDATE}) until the transaction ends, so
+     * concurrent changes of one parcel run one after the other and get consecutive sequence numbers
+     * (ADR 0004 §4.1). Must be called inside a transaction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Parcel p WHERE p.id = :id")
+    Optional<Parcel> findByIdForUpdate(@Param("id") UUID id);
 }
