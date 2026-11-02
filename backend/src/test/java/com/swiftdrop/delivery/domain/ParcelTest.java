@@ -110,6 +110,36 @@ class ParcelTest {
                 UUID.randomUUID(), null)).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"0771234567", "+0771234567", "+94 77 123 4567", "+9411", "+947712345678901234", "abc"})
+    void phoneMustBeInInternationalFormat(String phone) {
+        assertThatThrownBy(() -> new ParcelAddress("Nimal", phone, "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
+                null)).isInstanceOf(IllegalArgumentException.class).hasMessageNotContaining(phone);
+    }
+
+    @Test
+    void addressFieldsRespectColumnLengths() {
+        UUID zone = UUID.randomUUID();
+        assertThat(new ParcelAddress("n".repeat(200), "+94771234567", "l".repeat(200), "l".repeat(200),
+                "c".repeat(100), zone, "1".repeat(10)).getCity()).hasSize(100);
+        assertThatThrownBy(() -> new ParcelAddress("n".repeat(201), "+94771234567", "12 Temple Rd", null, "Colombo",
+                zone, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ParcelAddress("Nimal", "+94771234567", "12 Temple Rd", "l".repeat(201), "Colombo",
+                zone, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ParcelAddress("Nimal", "+94771234567", "12 Temple Rd", null, "c".repeat(101),
+                zone, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ParcelAddress("Nimal", "+94771234567", "12 Temple Rd", null, "Colombo",
+                zone, "1".repeat(11))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void descriptionIsLimitedTo200Characters() {
+        assertThat(Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID, address("Colombo"), address("Kandy"),
+                ParcelSize.SMALL, 1000, "d".repeat(200), FEE, NOW).getDescription()).hasSize(200);
+        assertThatThrownBy(() -> Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID, address("Colombo"), address("Kandy"),
+                ParcelSize.SMALL, 1000, "d".repeat(201), FEE, NOW)).isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void toStringNeverContainsPersonalData() {
         Parcel parcel = Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID, address("Colombo"), address("Kandy"),
