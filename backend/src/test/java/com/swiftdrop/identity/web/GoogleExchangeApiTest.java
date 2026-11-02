@@ -29,6 +29,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.application.GoogleExchangeService;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCode;
@@ -57,6 +61,14 @@ class GoogleExchangeApiTest {
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
+    @MockitoBean
+    private ParcelRepository parcels;
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
 
