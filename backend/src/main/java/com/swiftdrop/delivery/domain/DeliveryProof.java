@@ -21,7 +21,8 @@ import jakarta.persistence.Table;
 public class DeliveryProof {
 
     public static final int MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-    public static final Set<String> PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png");
+    public static final Set<String> PHOTO_CONTENT_TYPES = Set.of(PhotoType.JPEG, PhotoType.PNG);
+    public static final int MAX_RECIPIENT_NAME_LENGTH = 200;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -60,11 +61,30 @@ public class DeliveryProof {
     public DeliveryProof(UUID parcelId, String recipientName, byte[] photo, String photoContentType,
             UUID courierId, Instant capturedAt) {
         this.parcelId = Objects.requireNonNull(parcelId, "parcelId");
+        apply(recipientName, photo, photoContentType, courierId, capturedAt);
+    }
+
+    /**
+     * Replaces the proof with a new upload for the same parcel; a missing photo removes the old one.
+     * Same rules as the constructor.
+     */
+    public void replace(String recipientName, byte[] photo, String photoContentType, UUID courierId,
+            Instant capturedAt) {
+        apply(recipientName, photo, photoContentType, courierId, capturedAt);
+    }
+
+    private void apply(String recipientName, byte[] photo, String photoContentType, UUID courierId,
+            Instant capturedAt) {
         Objects.requireNonNull(recipientName, "recipientName");
-        if (recipientName.isBlank()) {
+        String trimmed = recipientName.trim();
+        if (trimmed.isEmpty()) {
             throw new IllegalArgumentException("recipientName must not be blank");
         }
-        this.recipientName = recipientName.trim();
+        if (trimmed.length() > MAX_RECIPIENT_NAME_LENGTH) {
+            throw new IllegalArgumentException("recipientName must be at most 200 characters");
+        }
+        Objects.requireNonNull(courierId, "courierId");
+        Objects.requireNonNull(capturedAt, "capturedAt");
         if (photo != null) {
             if (photo.length == 0 || photo.length > MAX_PHOTO_BYTES) {
                 throw new IllegalArgumentException("photo must be between 1 byte and 2 MB");
@@ -72,12 +92,13 @@ public class DeliveryProof {
             if (!PHOTO_CONTENT_TYPES.contains(photoContentType)) {
                 throw new IllegalArgumentException("photo must be JPEG or PNG");
             }
-            this.photo = photo.clone();
-            this.photoContentType = photoContentType;
-            this.photoSizeBytes = photo.length;
         }
-        this.courierId = Objects.requireNonNull(courierId, "courierId");
-        this.capturedAt = Objects.requireNonNull(capturedAt, "capturedAt");
+        this.recipientName = trimmed;
+        this.photo = photo == null ? null : photo.clone();
+        this.photoContentType = photo == null ? null : photoContentType;
+        this.photoSizeBytes = photo == null ? null : photo.length;
+        this.courierId = courierId;
+        this.capturedAt = capturedAt;
     }
 
     public UUID getId() {
