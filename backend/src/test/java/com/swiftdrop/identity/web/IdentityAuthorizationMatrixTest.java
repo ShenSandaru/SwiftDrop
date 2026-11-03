@@ -34,6 +34,8 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.AuthorizationMatrixExecutor;
 import com.swiftdrop.test.security.AuthorizationMatrixRow;
 import com.swiftdrop.test.security.TestPrincipal;
@@ -80,6 +82,12 @@ class IdentityAuthorizationMatrixTest {
 
     @MockitoBean
     private GoogleLoginCodeRepository codeRepository;
+
+    @MockitoBean
+    private ZoneRepository zones;
+
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     private final Map<String, GoogleLoginCode> storedCodes = new HashMap<>();
     private String validExchangeCode;

@@ -37,6 +37,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -69,6 +71,10 @@ class AuthorizationMatrixHarnessTest {
     private ExternalIdentityRepository identities;
     @MockitoBean
     private GoogleLoginCodeRepository googleCodes;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     @TestFactory
     Stream<DynamicTest> authorizationMatrixDynamicTests() {

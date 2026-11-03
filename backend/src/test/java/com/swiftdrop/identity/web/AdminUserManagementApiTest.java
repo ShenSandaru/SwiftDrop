@@ -24,6 +24,8 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.TestPrincipal;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +69,12 @@ class AdminUserManagementApiTest {
 
     @MockitoBean
     private GoogleLoginCodeRepository googleCodes;
+
+    @MockitoBean
+    private ZoneRepository zones;
+
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     private User adminUser;
     private User targetUser;

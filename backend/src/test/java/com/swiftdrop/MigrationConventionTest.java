@@ -111,6 +111,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202610261800",
                                 "identity create google login codes",
-                                "identity/V202610261800__identity_create_google_login_codes.sql"));
+                                "identity/V202610261800__identity_create_google_login_codes.sql"),
+                        tuple(
+                                "202611021200",
+                                "pricing create zones and pricing rules",
+                                "pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql"));
     }
 }

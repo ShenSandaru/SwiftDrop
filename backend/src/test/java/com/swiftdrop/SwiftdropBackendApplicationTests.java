@@ -6,6 +6,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 
 /**
  * Checks that the application context starts without Docker, PostgreSQL or RabbitMQ.
@@ -26,6 +28,10 @@ class SwiftdropBackendApplicationTests {
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     @Test
     void contextLoads() {
