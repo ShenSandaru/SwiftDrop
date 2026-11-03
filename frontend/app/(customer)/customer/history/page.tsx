@@ -77,9 +77,9 @@ export default function DeliveryHistoryPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-mono text-xs font-semibold tracking-[0.15em] text-primary">{parcel.trackingNumber}</p>
                   <p className="flex items-center gap-2 text-base font-bold text-foreground">
-                    <span className="truncate">{parcel.pickupCity}</span>
+                    <span className="truncate capitalize">{parcel.pickupCity}</span>
                     <ArrowRight className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="truncate">{parcel.dropoffCity}</span>
+                    <span className="truncate capitalize">{parcel.dropoffCity}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Booked {formatDate(parcel.createdAt)} · {formatWeight(parcel.weightGrams)}
