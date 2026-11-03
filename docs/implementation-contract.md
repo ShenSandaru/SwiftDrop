@@ -504,3 +504,30 @@ team approval recorded in `architecture.md` is enough.
 | D-30 | Containerization | Backend and frontend Dockerfiles; app services in `compose.yaml` under a Compose profile `app` so `docker compose up -d` keeps starting only infrastructure | Approval (infra change) | SD-801–803 |
 | D-31 | Frontend test tooling | None beyond lint/build unless the team wants Playwright for the demo flows (new dependency) | Approval | — |
 | D-32 | Bonuses BON-1 / BON-2 | Not planned; each needs its own ADR | Yes | SD-911 |
+
+## 12. Implementation status: delivery and live tracking
+
+**Implemented** on 2026-11-03: the `delivery` module (WS2, WS3, WS6) and live tracking (the
+`tracking` module and `/track`). Details are in [architecture.md](architecture.md) sections 4 to 8.
+
+| ID | Implemented as | Notes |
+|---|---|---|
+| D-05 | `SD` + 10 Crockford base32 characters (`SecureRandom`), unique, retried on collision | Lookups ignore case; malformed numbers never reach the database |
+| D-06 | [ADR 0006](adr/0006-delivery-lifecycle-and-transition-rules.md) (Accepted) | Courier on a parcel with **no** courier assigned gets **404**, not 409: such a caller is not authorized, and a 409 would reveal that the parcel exists (ADR 0006 §7) |
+| D-09 | Unfinished parcels assigned to the courier, plus those finished today in `SWIFTDROP_BUSINESS_TIME_ZONE` (default `Asia/Colombo`) | — |
+| D-12 | `BYTEA` in `delivery_proofs`, at most 2 MB, JPEG/PNG detected from the file's bytes; re-upload replaces | Spring multipart limits raised to 2 MB and read lazily, so an oversized upload answers 400 |
+| D-13 | JSON receipt plus a printable page ("Save as PDF" in the browser) | Shows the total fee fixed at booking; no breakdown is stored |
+| D-14 | Public stream only, [ADR 0007](adr/0007-public-sse-tracking-stream.md) (**Proposed**, needs team acceptance) | 20 streams per parcel, 1,000 in total, then 503 |
+| D-16 | Status, pickup and drop-off **cities**, status timeline | Cities rather than zone names: zone names would need a new `pricing.api` method |
+| D-19 | The five codes of §7 | Free-text notes stay in history and are **hidden from customers** (visible to the assigned courier and admins) |
+| D-23 | Embedded `pickup_*` / `dropoff_*` columns | Foreign keys to `zones` follow once `pricing` is merged |
+| D-24 | `SMALL` / `MEDIUM` / `LARGE`, `weightGrams` 1 to 30,000 | — |
+| D-25 | Unique (merchant, reference); a repeated order returns the existing parcel with `newlyCreated = false` and no second event, also under concurrent requests | — |
+| PR-01 | `delivery.api.PageRequest` / `PageResult` | REST responses keep `shared.web.PageResponse` |
+| PR-02 | All merchant queries take the merchant ID | — |
+
+Other modules can use `ParcelCreation`, `ParcelAssignment`, `ParcelQueries` and `ParcelEvents` now.
+Not implemented here: the outbox relay (WS9), the required reports (WS8), dispatch and merchant
+endpoints. Known detail: Spring validates a request body before method security runs, so a caller
+without the role who sends an *invalid* body gets 400 instead of 403; nothing about parcels is
+revealed.

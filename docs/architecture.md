@@ -29,9 +29,11 @@ Application Development group project for a courier company operating island-wid
   courier status updates; dispatcher assignment, management and reports; asynchronous status
   events with a notification consumer; containerized deployment
   ([project requirements](project-requirements.md)).
-- **Implemented:** project scaffolding, a frontend placeholder page, local PostgreSQL and RabbitMQ
-  containers, and email/password authentication in `identity` (section 9). **No business feature
-  exists yet.**
+- **Implemented:** project scaffolding, local PostgreSQL and RabbitMQ containers, email/password
+  and Google authentication in `identity` (section 9), and the **delivery and live tracking**
+  features: customer booking, history and receipts, the parcel lifecycle with
+  history and outbox events, courier operations with proof of delivery, public and live tracking,
+  and the customer, courier and tracking pages (sections 4 to 8).
 - **Decided:** one system with one backend and one database
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Open:** production hosting, a real email or SMS provider (notifications use a mock SMS channel
@@ -43,8 +45,8 @@ Application Development group project for a courier company operating island-wid
 |---|---|---|
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
-| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity tables only) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (identity tables only) |
+| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only; delivery writes outbox rows, no relay yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -79,10 +81,21 @@ The frontend and backend share no code. They communicate only over HTTP.
   the `Role` enum and `UserRepository`, with `application` (registration, login), `security` (JWT
   signing and verification), `web` (REST controllers) and `api` (`IdentityClaims`, the token claim
   names). `config` holds the security filter chain.
+- **Implemented:** `pricing` (`api`, `domain`, `application`, `web`): zones and zone-pair pricing
+  rules, and the `FeeCalculator` behind `pricing.api`. Fee = base fee + per-kg fee × every started
+  kilogram + the size surcharge, rounded `HALF_UP` to 2 decimals in LKR. An unknown or inactive
+  zone, or a route without an active rule, answers 409 "No pricing for this route".
+  `POST /api/v1/price-quotes` (fee estimate with breakdown) and `GET /api/v1/zones` (active zones)
+  are open to any logged-in user; anonymous access, as the contract proposes, needs a rule in
+  `SecurityConfiguration`. Managing zones and rules (ADM-3) is not implemented yet.
+- **Implemented:** `delivery` (`api`, `domain`, `application`, `web`) and `tracking`
+  (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
+  `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
+  (sections 7 and 8).
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). Only `identity` has code so
-  far, and the decision is not an authorization to implement one: that needs an
-  approved task.
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
+  `delivery` and `tracking` have code so far; the decision is not an authorization to implement
+  another module: that needs an approved task.
 
 ### Modules (Decided, ADR 0003)
 
@@ -140,6 +153,12 @@ tracking     → delivery
   `PageLimit`) across all modules (SD-002). Module-specific exception handlers (such as
   `IdentityExceptionHandler`) take precedence within their own package. CORS allows the origins
   in `SWIFTDROP_CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) on `/api/**`, without credentials.
+- **Implemented:** the customer pages (overview, booking with fee estimate, history,
+  parcel detail with live timeline, printable receipt), the courier pages (today's run, status
+  steps, proof capture with the phone camera, failure reasons) and the public tracking page
+  `/track` with live updates. They share the "Island Route" components in
+  `frontend/components/delivery`; the app uses the "island teal" theme (`app/globals.css`).
+  `lib/api.ts` also sends file uploads (`FormData`) and downloads files (`api.blob`).
 - **Open:** how the frontend calls the backend (directly from the browser, or through Next.js
   server code acting as a BFF), CORS. The brief mentions "modular monolith with a BFF" only as an example (DES-3).
 
@@ -157,6 +176,16 @@ tracking     → delivery
   discovery without a database. Applying the migrations and Hibernate validation against
   PostgreSQL 18 are verified in an isolated Testcontainers environment via `DatabaseMigrationIT`
   under the `integration` Maven profile (`.\mvnw.cmd verify -Pintegration`).
+- **Implemented:** `db/migration/pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql`
+  creates `zones` (unique code and name) and `pricing_rules` (one rule per origin and destination
+  zone, non-negative amounts, currency `CHAR(3)`).
+- **Implemented:** the delivery migrations in `db/migration/delivery/` create
+  `parcels` (addresses embedded as `pickup_*` / `dropoff_*` columns, D-23; fee snapshot; `version`
+  for optimistic locking), `parcel_status_history`, `delivery_proofs` (photo as `BYTEA`, at most
+  2 MB, D-12) and `parcel_outbox_events`, with database constraints for the lifecycle rules.
+  Tracking numbers are `SD` + 10 random Crockford base32 characters (D-05). `pickup_zone_id` and
+  `dropoff_zone_id` have no foreign key to `zones` yet; now that `pricing` exists, a follow-up
+  migration can add it.
 - **Decided (ADR 0003):**
   - One shared `public` schema, chosen pragmatically for the team (not a universal best practice).
   - Each table has one owning module (table in section 4). Only the owner writes its migrations and
@@ -172,8 +201,6 @@ tracking     → delivery
   couriers, zones and pricing (DES-2).
 - **Decided (team, milestone 2; no ADR yet):** entity IDs are UUIDs (`uuid` columns, generated by
   Hibernate). Reference data may use a natural key, as `roles.name` does.
-- **Open:** the tracking-number format.
-
 ## 7. Messaging (RabbitMQ) and status events
 
 - **Required:** at least one asynchronous integration pattern for status-change events, which
@@ -181,9 +208,14 @@ tracking     → delivery
   events (SYS-5); merchant webhooks with retry on failure (IMP-4).
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
-- **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check
-  only. **No exchanges, queues, producers or consumers exist.** A connection smoke test against
+- **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
+  **No exchanges, queues, producers or consumers exist yet.** A connection smoke test against
   RabbitMQ 4.3 succeeded in Stage 5.
+- **Implemented:** every status change writes its `parcel.status-changed` event
+  (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
+  status and history; the event is also published in-process after commit for `tracking`.
+  `ParcelEvents.eventsBetween` rebuilds past events from history, identical to the outbox payloads.
+  The relay that publishes the outbox to RabbitMQ is not implemented (Member 9).
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
@@ -238,12 +270,23 @@ tracking     → delivery
   `PICKED_UP`; each change records time and actor, `FAILED` requires a reason, notes and proof are
   recorded as applicable. `tracking` sends the current state on connect and never keeps its own
   history.
-- **Implemented:** nothing.
-- **Open:** the stages from which `FAILED` is allowed, reassignment, cancellation, retries after
-  failure, dispatcher/admin overrides, whether proof is mandatory for `DELIVERED`; what the public
-  tracking page may show (proposal: status and timestamps only, no personal data); how the browser
-  authenticates non-public streams (the native `EventSource` API cannot send an `Authorization`
-  header).
+- **Decided ([ADR 0006](adr/0006-delivery-lifecycle-and-transition-rules.md), Accepted):** the
+  transition matrix, `FAILED` from `PICKED_UP` to `OUT_FOR_DELIVERY` with a reason code, proof
+  required for `DELIVERED`, assignment only while `CREATED`, no cancellation, retry or override.
+- **Implemented:**
+  - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
+    `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
+  - Courier API: `GET /api/v1/courier/parcels` (unfinished parcels plus those finished today in
+    `Asia/Colombo`, D-09), `POST /api/v1/parcels/{id}/status-changes`,
+    `PUT /api/v1/parcels/{id}/proof` (JPEG/PNG detected from the bytes, at most 2 MB),
+    `GET /api/v1/parcels/{id}/proof/photo`.
+  - Every status change locks the parcel row, checks ADR 0006 and increments the sequence; parcels
+    the caller may not see answer 404, including for a courier on a parcel with no courier
+    assigned. Courier notes are hidden from customers.
+  - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
+    D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
+    (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+- **Open:** rate limiting of the public tracking endpoints; the required reports (ADM-4).
 
 ## 9. Authentication and authorization
 
@@ -323,6 +366,8 @@ whether springdoc and Actuator details are exposed outside local development.
     (`spring.config.import`). Environment variables take precedence.
   - Passwords have no defaults in `compose.yaml` or `application.properties`.
   - Local service ports are published on `127.0.0.1` only.
+  - `SWIFTDROP_BUSINESS_TIME_ZONE` (default `Asia/Colombo`) sets the courier's day; proof uploads
+    allow 2 MB files (`spring.servlet.multipart.*`, read lazily so oversized uploads answer 400).
 
   Details are in [docs/development-setup.md](development-setup.md#6-local-infrastructure-postgresql-and-rabbitmq).
 - **Required:** configuration via environment variables, no hard-coded secrets (IMP-6).
@@ -346,6 +391,11 @@ whether springdoc and Actuator details are exposed outside local development.
     tests via Maven Failsafe and Boot-managed Testcontainers (PostgreSQL 18). `DatabaseMigrationIT`
     verifies that Flyway applies all migrations and Hibernate schema validation passes against an
     isolated PostgreSQL 18 container without touching development or persistent databases.
+  - Delivery and tracking: unit tests for every transition pair, the event JSON
+    format, booking, visibility and proof rules; integration tests against PostgreSQL for
+    persistence, transactions and concurrency, booking, the courier journey over real HTTP, live
+    tracking over a real connection, and the parcel authorization matrix
+    ([delivery authorization matrix](testing/delivery-authorization-matrix.md), TST-2).
   - The frontend has lint and type checking (`npm run lint`, `npm run build`) and no tests.
   - CI (`.github/workflows/ci.yml`) runs the frontend lint/build and the Docker-free backend
     `clean verify` on pull requests targeting `dev` or `main` and on pushes to them
@@ -383,15 +433,14 @@ whether springdoc and Actuator details are exposed outside local development.
 | Question | Section |
 |---|---|
 | Frontend-to-backend calling pattern (BFF or not), CORS, error format | 5 |
-| Tracking-number format | 6 |
 | Open messaging implementation questions ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)) | 7 |
-| Unresolved lifecycle rules, public tracking content, non-public SSE authentication | 8 |
+| Acceptance of ADR 0007 (public SSE stream); rate limiting of public tracking | 8 |
 | Account linking to existing accounts, merchant API authentication, creation of courier and admin accounts | 9 |
 | Personal-data retention, proof-of-delivery photo storage, receipt format, exposure of springdoc/Actuator | 10 |
 | Spring profiles and non-local secret handling | 11 |
 | Coverage tool, integration-test setup, frontend tests, CI | 12 |
 | Application Dockerfiles and Compose services; production deployment; optional bonuses | 13 |
-| Report definitions, "deliveries for the day", fee formula and zones ([not specified by the brief](project-requirements.md#not-specified-by-the-brief)) | - |
+| Report definitions, fee formula and zones ([not specified by the brief](project-requirements.md#not-specified-by-the-brief)) | - |
 
 ## Related documents
 
@@ -400,6 +449,9 @@ whether springdoc and Actuator details are exposed outside local development.
 - [ADR 0002: Technology and version baseline](adr/0002-technology-and-version-baseline.md)
 - [ADR 0003: Backend business modules and boundaries](adr/0003-backend-modules-and-boundaries.md)
 - [ADR 0004: Messaging and integration reliability](adr/0004-messaging-and-integration-reliability.md)
+- [ADR 0006: Delivery lifecycle and transition rules](adr/0006-delivery-lifecycle-and-transition-rules.md)
+- [ADR 0007: Public SSE tracking stream](adr/0007-public-sse-tracking-stream.md) (Proposed)
+- [Delivery authorization matrix](testing/delivery-authorization-matrix.md)
 - [AI agent guidelines](ai-agent-guidelines.md) and [AGENTS.md](../AGENTS.md)
 - [Contributing and task workflow](../CONTRIBUTING.md)
 - [Development setup](development-setup.md)

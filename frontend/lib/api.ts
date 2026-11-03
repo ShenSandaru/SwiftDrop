@@ -60,6 +60,8 @@ export class ApiError extends Error {
 export interface RequestOptions extends Omit<RequestInit, "body"> {
   token?: string | null;
   body?: unknown;
+  /** "blob" for binary downloads such as images; JSON otherwise. */
+  responseType?: "json" | "blob";
 }
 
 type UnauthorizedHandler = () => void;
@@ -85,7 +87,9 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
   const url = `${baseUrl}${path}`;
 
   const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type") && options.body !== undefined) {
+  // FormData (file uploads) is sent as-is: the browser sets the multipart boundary itself
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (!headers.has("Content-Type") && options.body !== undefined && !isFormData) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -101,7 +105,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
   const response = await fetch(url, {
     ...options,
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: isFormData ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -128,6 +132,10 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     return undefined as unknown as T;
   }
 
+  if (options.responseType === "blob") {
+    return (await response.blob()) as unknown as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -146,6 +154,10 @@ export const api = {
   },
   delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
     return apiFetch<T>(endpoint, { ...options, method: "DELETE" });
+  },
+  /** Downloads a file (for example a proof photo) with the same token and error handling. */
+  blob(endpoint: string, options?: RequestOptions): Promise<Blob> {
+    return apiFetch<Blob>(endpoint, { ...options, method: "GET", responseType: "blob" });
   },
 };
 
