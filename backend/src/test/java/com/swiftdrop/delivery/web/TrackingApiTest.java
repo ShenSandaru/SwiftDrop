@@ -30,6 +30,8 @@ import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.TestPrincipal;
 
 /** Public tracking (CUS-6) through the real security configuration: no login, no personal data. */
@@ -67,6 +69,10 @@ class TrackingApiTest {
     private OutboxEventRepository outboxEvents;
     @MockitoBean
     private FeeCalculator feeCalculator;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     @Test
     void anyoneCanTrackWithoutLoggingIn() throws Exception {
