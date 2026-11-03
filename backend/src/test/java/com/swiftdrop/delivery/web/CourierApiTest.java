@@ -57,6 +57,8 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.ParcelSize;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.TestPrincipal;
 
 /** Courier endpoints over HTTP: roles, request validation, multipart handling and error mapping. */
@@ -103,6 +105,10 @@ class CourierApiTest {
     private OutboxEventRepository outboxEvents;
     @MockitoBean
     private FeeCalculator feeCalculator;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     private Parcel parcel;
 
