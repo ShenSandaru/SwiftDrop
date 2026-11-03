@@ -1,7 +1,7 @@
 import { Check, Package, X } from "lucide-react";
 import { cn } from "cn";
 import type { ParcelStatus } from "@/lib/delivery";
-import { STATUS_LABELS, formatDateTime } from "./format";
+import { STATUS_LABELS, formatShortDateTime } from "./format";
 
 const NORMAL_PATH: ParcelStatus[] = ["CREATED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"];
 
@@ -43,7 +43,7 @@ export function RouteProgress({ status, history, live = false, compact = false, 
   return (
     <div className={cn("w-full", className)}>
       <p className="sr-only">Current status: {STATUS_LABELS[status]}</p>
-      <div className={cn("relative mx-6", compact ? "h-16" : "h-24")} aria-hidden="true">
+      <div className={cn("relative mx-6", compact ? "mt-6 h-16" : "mt-8 h-24")} aria-hidden="true">
         {/* Road ahead, then the travelled part */}
         <div className="absolute inset-x-0 top-5 border-t-2 border-dashed border-border" />
         <div
@@ -84,8 +84,8 @@ export function RouteProgress({ status, history, live = false, compact = false, 
                 {SHORT_LABELS[stop]}
               </span>
               {!compact && timeOf.has(stop) && (
-                <span className="mt-0.5 hidden text-[10px] leading-tight text-muted-foreground sm:block">
-                  {formatDateTime(timeOf.get(stop))}
+                <span className="mt-0.5 hidden whitespace-nowrap text-[10px] leading-tight text-muted-foreground sm:block">
+                  {formatShortDateTime(timeOf.get(stop))}
                 </span>
               )}
             </div>
@@ -95,13 +95,15 @@ export function RouteProgress({ status, history, live = false, compact = false, 
         {/* The parcel itself */}
         {!finished && (
           <div
-            className="absolute top-0 -translate-x-1/2 -translate-y-1/2 transition-[left] duration-700 ease-out"
+            className="absolute -top-7 -translate-x-1/2 transition-[left] duration-700 ease-out"
             style={{ left: `${progress}%` }}
           >
             {live && <span className="absolute inset-0 animate-ping rounded-full bg-primary/40" />}
             <span className="relative inline-flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background">
               <Package className="size-4" />
             </span>
+            {/* Pin tip pointing at the stop */}
+            <span className="absolute left-1/2 top-full -mt-1 size-2.5 -translate-x-1/2 rotate-45 bg-primary" />
           </div>
         )}
       </div>
