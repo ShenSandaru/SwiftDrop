@@ -115,6 +115,22 @@ class MigrationConventionTest {
                         tuple(
                                 "202611021200",
                                 "pricing create zones and pricing rules",
-                                "pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql"));
+                                "pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql"),
+                        tuple(
+                                "202611031000",
+                                "delivery create parcels",
+                                "delivery/V202611031000__delivery_create_parcels.sql"),
+                        tuple(
+                                "202611031010",
+                                "delivery create parcel status history",
+                                "delivery/V202611031010__delivery_create_parcel_status_history.sql"),
+                        tuple(
+                                "202611031020",
+                                "delivery create delivery proofs",
+                                "delivery/V202611031020__delivery_create_delivery_proofs.sql"),
+                        tuple(
+                                "202611031030",
+                                "delivery create parcel outbox events",
+                                "delivery/V202611031030__delivery_create_parcel_outbox_events.sql"));
     }
 }

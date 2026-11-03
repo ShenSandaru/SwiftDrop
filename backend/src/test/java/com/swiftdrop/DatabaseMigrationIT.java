@@ -2,6 +2,7 @@ package com.swiftdrop;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -16,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -26,6 +28,8 @@ import com.swiftdrop.pricing.domain.Zone;
 import com.swiftdrop.pricing.domain.ZoneRepository;
 
 import jakarta.persistence.EntityManager;
+
+import com.swiftdrop.pricing.api.FeeCalculator;
 
 /**
  * Verifies that:
@@ -58,17 +62,21 @@ class DatabaseMigrationIT {
     @Autowired
     private PricingRuleRepository pricingRuleRepository;
 
+    // Delivery's booking needs pricing, which may not be on the classpath yet
+    @MockitoBean
+    private FeeCalculator feeCalculator;
+
     @Test
     @DisplayName("Flyway applies all identity and pricing migrations in order, and Hibernate validates successfully")
     void flywayAppliesAllMigrationsAndHibernateValidationSucceeds() {
         // Assert PostgreSQL container is running
         assertThat(postgres.isRunning()).isTrue();
 
-        // Assert Flyway schema history recorded all migrations in chronological order
+        // Assert Flyway schema history recorded identity, pricing and delivery migrations in order
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(4);
+        assertThat(rows).hasSize(8);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -97,6 +105,14 @@ class DatabaseMigrationIT {
                 .containsEntry("type", "SQL")
                 .containsEntry("script", "pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql")
                 .containsEntry("success", true);
+
+        assertThat(rows.subList(4, 8))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("delivery/V202611031000__delivery_create_parcels.sql", true),
+                        tuple("delivery/V202611031010__delivery_create_parcel_status_history.sql", true),
+                        tuple("delivery/V202611031020__delivery_create_delivery_proofs.sql", true),
+                        tuple("delivery/V202611031030__delivery_create_parcel_outbox_events.sql", true));
 
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);

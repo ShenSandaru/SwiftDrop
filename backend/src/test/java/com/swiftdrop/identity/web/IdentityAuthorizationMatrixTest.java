@@ -27,6 +27,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.application.GoogleExchangeService;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCode;
@@ -34,6 +38,7 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.Role;
 import com.swiftdrop.identity.domain.User;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.AuthorizationMatrixExecutor;
@@ -82,6 +87,21 @@ class IdentityAuthorizationMatrixTest {
 
     @MockitoBean
     private GoogleLoginCodeRepository codeRepository;
+
+    @MockitoBean
+    private ParcelRepository parcels;
+
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
+
+    @MockitoBean
+    private FeeCalculator feeCalculator;
 
     @MockitoBean
     private ZoneRepository zones;

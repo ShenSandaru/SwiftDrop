@@ -1,10 +1,8 @@
 import React from "react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/portal-shell";
 
-const COURIER_NAV: PortalNavItem[] = [
-  { href: "/courier", label: "Courier Runs", exact: true },
-  { href: "/courier/proof", label: "Proof of Delivery", exact: true },
-];
+// Proof of delivery is captured on each parcel's page, so it has no tab of its own
+const COURIER_NAV: PortalNavItem[] = [{ href: "/courier", label: "Today's run" }];
 
 export default function CourierPortalLayout({ children }: { children: React.ReactNode }) {
   return (
