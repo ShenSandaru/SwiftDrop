@@ -6,6 +6,9 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,8 +20,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.application.DeliveryProofService;
 import com.swiftdrop.delivery.application.ParcelBookingService;
 import com.swiftdrop.delivery.application.ParcelReadService;
 import com.swiftdrop.delivery.domain.Parcel;
@@ -36,10 +41,12 @@ class ParcelController {
 
     private final ParcelBookingService booking;
     private final ParcelReadService reads;
+    private final DeliveryProofService proofs;
 
-    ParcelController(ParcelBookingService booking, ParcelReadService reads) {
+    ParcelController(ParcelBookingService booking, ParcelReadService reads, DeliveryProofService proofs) {
         this.booking = booking;
         this.reads = reads;
+        this.proofs = proofs;
     }
 
     @PostMapping
@@ -75,5 +82,17 @@ class ParcelController {
     @PreAuthorize("hasAnyRole('CUSTOMER', 'DISPATCHER_ADMIN')")
     ReceiptResponse receipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return ReceiptResponse.from(reads.receipt(id, Callers.viewer(jwt)));
+    }
+
+    /** Proof photo for the owner, the assigned courier or an admin; never cached. */
+    @GetMapping("/{id}/proof/photo")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'DISPATCHER_ADMIN')")
+    ResponseEntity<byte[]> proofPhoto(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        DeliveryProofService.Photo photo = proofs.photo(id, Callers.viewer(jwt))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo not found"));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(photo.contentType()))
+                .cacheControl(CacheControl.noStore())
+                .body(photo.bytes());
     }
 }
