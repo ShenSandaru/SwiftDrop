@@ -189,6 +189,24 @@ public class Parcel {
     }
 
     /**
+     * Assigns or reassigns a courier (ADR 0006 §3). Allowed only while {@link ParcelStatus#CREATED};
+     * after pickup the courier is fixed. Not a status change: the sequence stays the same. The
+     * caller must hold a lock on the parcel row.
+     *
+     * @throws ParcelConflictException if the parcel is past {@code CREATED}
+     */
+    public void assignCourier(UUID courierUserId, Instant now) {
+        Objects.requireNonNull(courierUserId, "courierUserId");
+        Objects.requireNonNull(now, "now");
+        if (status != ParcelStatus.CREATED) {
+            throw new ParcelConflictException("A courier can only be assigned before pickup");
+        }
+        this.assignedCourierId = courierUserId;
+        this.assignedAt = now;
+        this.updatedAt = now;
+    }
+
+    /**
      * Moves the parcel to {@code target} on behalf of a courier and takes the next sequence number
      * (ADR 0006 §1, ADR 0004 §4.1). The caller must hold a lock on the parcel row.
      *
