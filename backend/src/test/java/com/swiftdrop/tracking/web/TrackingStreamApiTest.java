@@ -33,6 +33,8 @@ import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
+import com.swiftdrop.pricing.domain.ZoneRepository;
 
 /** The live tracking stream through the real security configuration and Spring MVC async handling. */
 @SpringBootTest(properties = {
@@ -69,6 +71,10 @@ class TrackingStreamApiTest {
     private OutboxEventRepository outboxEvents;
     @MockitoBean
     private FeeCalculator feeCalculator;
+    @MockitoBean
+    private ZoneRepository zones;
+    @MockitoBean
+    private PricingRuleRepository pricingRules;
 
     @Test
     void anyoneCanOpenAStreamAndGetsTheSnapshotFirst() throws Exception {
