@@ -1,5 +1,7 @@
 package com.swiftdrop.delivery.domain;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +33,22 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
     /** All parcels in one status, for dispatchers/admins. */
     Page<Parcel> findByStatus(ParcelStatus status, Pageable pageable);
+
+    /** Parcels waiting for a courier (ADM-1); uses the partial index {@code ix_parcels_unassigned}. */
+    Page<Parcel> findByStatusAndAssignedCourierIdIsNull(ParcelStatus status, Pageable pageable);
+
+    /** A merchant's parcels (MER-4); always scoped by merchant, never across merchants. */
+    Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);
+
+    Page<Parcel> findByMerchantIdAndStatus(UUID merchantId, ParcelStatus status, Pageable pageable);
+
+    /** Non-terminal parcels per assigned courier (ADM-2), as rows of {@code [courierId, count]}. */
+    @Query("""
+            SELECT p.assignedCourierId, COUNT(p) FROM Parcel p
+            WHERE p.assignedCourierId IS NOT NULL AND p.status NOT IN :terminal
+            GROUP BY p.assignedCourierId
+            """)
+    List<Object[]> countActiveByCourier(@Param("terminal") Collection<ParcelStatus> terminal);
 
     /**
      * Loads a parcel and locks its row ({@code SELECT ... FOR UPDATE}) until the transaction ends, so
