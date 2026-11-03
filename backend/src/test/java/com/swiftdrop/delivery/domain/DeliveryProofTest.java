@@ -59,4 +59,41 @@ class DeliveryProofTest {
         assertThat(new DeliveryProof(PARCEL_ID, "Kumari Silva", null, null, COURIER_ID, NOW).toString())
                 .doesNotContain("Kumari");
     }
+
+    @Test
+    void recipientNameIsLimitedTo200Characters() {
+        assertThat(new DeliveryProof(PARCEL_ID, "k".repeat(200), null, null, COURIER_ID, NOW).getRecipientName())
+                .hasSize(200);
+        assertThatThrownBy(() -> new DeliveryProof(PARCEL_ID, "k".repeat(201), null, null, COURIER_ID, NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void replaceSwapsNameAndPhotoAndCanRemoveThePhoto() {
+        DeliveryProof proof = new DeliveryProof(PARCEL_ID, "Kumari", new byte[] {1, 2}, "image/png", COURIER_ID, NOW);
+        Instant later = NOW.plusSeconds(30);
+
+        proof.replace("Kumari Silva", new byte[] {7, 8, 9}, "image/jpeg", COURIER_ID, later);
+        assertThat(proof.getRecipientName()).isEqualTo("Kumari Silva");
+        assertThat(proof.getPhoto()).containsExactly(7, 8, 9);
+        assertThat(proof.getPhotoContentType()).isEqualTo("image/jpeg");
+        assertThat(proof.getPhotoSizeBytes()).isEqualTo(3);
+        assertThat(proof.getCapturedAt()).isEqualTo(later);
+
+        proof.replace("Kumari Silva", null, null, COURIER_ID, later);
+        assertThat(proof.hasPhoto()).isFalse();
+        assertThat(proof.getPhotoContentType()).isNull();
+        assertThat(proof.getPhotoSizeBytes()).isNull();
+    }
+
+    @Test
+    void failedReplaceLeavesTheProofUnchanged() {
+        DeliveryProof proof = new DeliveryProof(PARCEL_ID, "Kumari", new byte[] {1}, "image/png", COURIER_ID, NOW);
+
+        assertThatThrownBy(() -> proof.replace("Other", new byte[] {2}, "image/gif", COURIER_ID, NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(proof.getRecipientName()).isEqualTo("Kumari");
+        assertThat(proof.getPhoto()).containsExactly(1);
+    }
 }
