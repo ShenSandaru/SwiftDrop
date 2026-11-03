@@ -45,7 +45,7 @@ Application Development group project for a courier company operating island-wid
 |---|---|---|
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
-| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity and delivery tables) |
+| Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
 | Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only; delivery writes outbox rows, no relay yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
@@ -81,14 +81,21 @@ The frontend and backend share no code. They communicate only over HTTP.
   the `Role` enum and `UserRepository`, with `application` (registration, login), `security` (JWT
   signing and verification), `web` (REST controllers) and `api` (`IdentityClaims`, the token claim
   names). `config` holds the security filter chain.
+- **Implemented:** `pricing` (`api`, `domain`, `application`, `web`): zones and zone-pair pricing
+  rules, and the `FeeCalculator` behind `pricing.api`. Fee = base fee + per-kg fee × every started
+  kilogram + the size surcharge, rounded `HALF_UP` to 2 decimals in LKR. An unknown or inactive
+  zone, or a route without an active rule, answers 409 "No pricing for this route".
+  `POST /api/v1/price-quotes` (fee estimate with breakdown) and `GET /api/v1/zones` (active zones)
+  are open to any logged-in user; anonymous access, as the contract proposes, needs a rule in
+  `SecurityConfiguration`. Managing zones and rules (ADM-3) is not implemented yet.
 - **Implemented:** `delivery` (`api`, `domain`, `application`, `web`) and `tracking`
   (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
   `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
   (sections 7 and 8).
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `delivery` and
-  `tracking` have code so far; the decision is not an authorization to implement another module:
-  that needs an approved task.
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
+  `delivery` and `tracking` have code so far; the decision is not an authorization to implement
+  another module: that needs an approved task.
 
 ### Modules (Decided, ADR 0003)
 
@@ -169,12 +176,16 @@ tracking     → delivery
   discovery without a database. Applying the migrations and Hibernate validation against
   PostgreSQL 18 are verified in an isolated Testcontainers environment via `DatabaseMigrationIT`
   under the `integration` Maven profile (`.\mvnw.cmd verify -Pintegration`).
+- **Implemented:** `db/migration/pricing/V202611021200__pricing_create_zones_and_pricing_rules.sql`
+  creates `zones` (unique code and name) and `pricing_rules` (one rule per origin and destination
+  zone, non-negative amounts, currency `CHAR(3)`).
 - **Implemented:** the delivery migrations in `db/migration/delivery/` create
   `parcels` (addresses embedded as `pickup_*` / `dropoff_*` columns, D-23; fee snapshot; `version`
   for optimistic locking), `parcel_status_history`, `delivery_proofs` (photo as `BYTEA`, at most
   2 MB, D-12) and `parcel_outbox_events`, with database constraints for the lifecycle rules.
   Tracking numbers are `SD` + 10 random Crockford base32 characters (D-05). `pickup_zone_id` and
-  `dropoff_zone_id` have no foreign key to `zones` yet; it is added once `pricing` is merged.
+  `dropoff_zone_id` have no foreign key to `zones` yet; now that `pricing` exists, a follow-up
+  migration can add it.
 - **Decided (ADR 0003):**
   - One shared `public` schema, chosen pragmatically for the team (not a universal best practice).
   - Each table has one owning module (table in section 4). Only the owner writes its migrations and
