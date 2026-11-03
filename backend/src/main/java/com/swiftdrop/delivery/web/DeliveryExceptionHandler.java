@@ -6,9 +6,13 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
@@ -36,6 +40,28 @@ class DeliveryExceptionHandler {
     /** Domain validation that passed the request annotations; the message is not echoed. */
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalid(IllegalArgumentException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid request");
+    }
+
+    /** A required form field or file part is missing, for example {@code recipientName}. */
+    @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
+    ProblemDetail missingPart(Exception e) {
+        String name = e instanceof MissingServletRequestParameterException missing
+                ? missing.getParameterName()
+                : ((MissingServletRequestPartException) e).getRequestPartName();
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid request");
+        problem.setProperty("invalidFields", List.of(name));
+        return problem;
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ProblemDetail tooLarge(MaxUploadSizeExceededException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Photo must be at most 2 MB");
+    }
+
+    /** Any other unreadable multipart request. */
+    @ExceptionHandler(MultipartException.class)
+    ProblemDetail badMultipart(MultipartException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid request");
     }
 
