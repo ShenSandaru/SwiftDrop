@@ -35,12 +35,24 @@ const DATE_TIME = new Intl.DateTimeFormat("en-GB", {
 
 const DATE = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Asia/Colombo" });
 
+const SHORT_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Colombo" });
+const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" });
+
 export function formatDateTime(iso: string | null | undefined): string {
   return iso ? DATE_TIME.format(new Date(iso)) : "—";
 }
 
 export function formatDate(iso: string | null | undefined): string {
   return iso ? DATE.format(new Date(iso)) : "—";
+}
+
+/** "3 Nov · 12:15", short enough to sit under a route stop on one line. */
+export function formatShortDateTime(iso: string | null | undefined): string {
+  if (!iso) {
+    return "—";
+  }
+  const date = new Date(iso);
+  return `${SHORT_DATE.format(date)} · ${TIME.format(date)}`;
 }
 
 export function formatMoney(money: Money | null | undefined): string {
