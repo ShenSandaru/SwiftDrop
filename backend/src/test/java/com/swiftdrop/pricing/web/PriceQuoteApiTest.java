@@ -21,6 +21,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.OutboxEventRepository;
+import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
@@ -58,6 +62,14 @@ class PriceQuoteApiTest {
     private ZoneRepository zones;
     @MockitoBean
     private PricingRuleRepository pricingRules;
+    @MockitoBean
+    private ParcelRepository parcels;
+    @MockitoBean
+    private ParcelStatusHistoryRepository parcelHistory;
+    @MockitoBean
+    private DeliveryProofRepository deliveryProofs;
+    @MockitoBean
+    private OutboxEventRepository outboxEvents;
 
     @BeforeEach
     void setUp() {
