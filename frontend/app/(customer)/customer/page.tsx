@@ -145,9 +145,9 @@ function ParcelStrip({ parcel }: { parcel: ParcelListItem }) {
         <StatusBadge status={parcel.status} />
       </div>
       <p className="flex items-center gap-2 text-sm font-bold text-foreground">
-        <span className="truncate">{parcel.pickupCity}</span>
+        <span className="truncate capitalize">{parcel.pickupCity}</span>
         <ArrowRight className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        <span className="truncate">{parcel.dropoffCity}</span>
+        <span className="truncate capitalize">{parcel.dropoffCity}</span>
       </p>
       <div className="flex items-center justify-between gap-2">
         <MiniRoute status={parcel.status} />
