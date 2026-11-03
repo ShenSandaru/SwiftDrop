@@ -10,7 +10,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelConflictException;
@@ -240,11 +239,36 @@ class ParcelTest {
         return parcel;
     }
 
-    // Assignment arrives with ParcelAssignment (Phase 5); set the fields directly until then
+    @Test
+    void courierCanBeAssignedAndReassignedWhileCreatedWithoutChangingTheSequence() {
+        Parcel parcel = customerParcel(1000);
+        UUID otherCourier = UUID.randomUUID();
+        Instant later = NOW.plusSeconds(60);
+
+        parcel.assignCourier(COURIER_ID, NOW);
+        parcel.assignCourier(otherCourier, later);
+
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(otherCourier);
+        assertThat(parcel.getAssignedAt()).isEqualTo(later);
+        assertThat(parcel.getUpdatedAt()).isEqualTo(later);
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.CREATED);
+        assertThat(parcel.getLastSequence()).isEqualTo(1);
+    }
+
+    @Test
+    void courierIsFixedOnceThePickupHappened() {
+        Parcel parcel = assignedParcel();
+        parcel.changeStatus(ParcelStatus.PICKED_UP, COURIER_ID, null, false, NOW);
+
+        assertThatThrownBy(() -> parcel.assignCourier(UUID.randomUUID(), NOW))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessage("A courier can only be assigned before pickup");
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+    }
+
     private static Parcel assignedParcel() {
         Parcel parcel = customerParcel(1000);
-        ReflectionTestUtils.setField(parcel, "assignedCourierId", COURIER_ID);
-        ReflectionTestUtils.setField(parcel, "assignedAt", NOW);
+        parcel.assignCourier(COURIER_ID, NOW);
         return parcel;
     }
 
