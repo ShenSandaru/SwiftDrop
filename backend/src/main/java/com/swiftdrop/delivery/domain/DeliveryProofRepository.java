@@ -1,6 +1,8 @@
 package com.swiftdrop.delivery.domain;
 
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,4 +19,8 @@ public interface DeliveryProofRepository extends JpaRepository<DeliveryProof, UU
     /** The recipient name only, without loading the photo bytes. */
     @Query("SELECT p.recipientName FROM DeliveryProof p WHERE p.parcelId = :parcelId")
     Optional<String> findRecipientNameByParcelId(@Param("parcelId") UUID parcelId);
+
+    /** Which of the given parcels have proof, in one query (courier day list). */
+    @Query("SELECT p.parcelId FROM DeliveryProof p WHERE p.parcelId IN :parcelIds")
+    Set<UUID> findParcelIdsWithProof(@Param("parcelIds") Collection<UUID> parcelIds);
 }
