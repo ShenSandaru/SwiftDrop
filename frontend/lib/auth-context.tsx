@@ -10,7 +10,7 @@ export interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (token: string) => Promise<void>;
+  login: (token: string) => Promise<UserResponse | null>;
   logout: () => void;
   hasRole: (role: string) => boolean;
 }
@@ -30,14 +30,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const loadCurrentUser = useCallback(async (authToken: string) => {
+  const loadCurrentUser = useCallback(async (authToken: string): Promise<UserResponse | null> => {
     try {
       const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: authToken });
       setUser(currentUser);
       setToken(authToken);
+      return currentUser;
     } catch {
       // Token is invalid, expired, or user not found
       clearAuth();
+      return null;
     }
   }, [clearAuth]);
 
@@ -45,9 +47,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onUnauthorized(() => {
       clearAuth();
       if (typeof window !== "undefined") {
-        const publicPaths = ["/login", "/signup", "/track", "/"];
+        const publicPaths = ["/login", "/signup", "/track", "/", "/auth/google/callback", "/portals"];
         const currentPath = window.location.pathname;
-        const isPublic = publicPaths.includes(currentPath) || currentPath.startsWith("/track");
+        const isPublic =
+          publicPaths.includes(currentPath) ||
+          currentPath.startsWith("/track") ||
+          currentPath.startsWith("/auth/google/callback");
         if (!isPublic) {
           const targetUrl = new URL(`/login?expired=true&redirect=${encodeURIComponent(currentPath)}`, window.location.origin).href;
           window.location.assign(targetUrl);
@@ -92,14 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   const login = useCallback(
-    async (accessToken: string) => {
+    async (accessToken: string): Promise<UserResponse | null> => {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
       }
       setToken(accessToken);
       setIsLoading(true);
       try {
-        await loadCurrentUser(accessToken);
+        return await loadCurrentUser(accessToken);
       } finally {
         setIsLoading(false);
       }

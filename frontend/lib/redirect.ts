@@ -11,7 +11,7 @@ export function sanitizeInternalRedirect(target: string | null | undefined, fall
 
   const trimmed = target.trim();
   if (trimmed === "" || trimmed === "/") {
-    return "/";
+    return fallback;
   }
 
   // Must begin with a single '/' and not start with '//' or '/\'
@@ -39,3 +39,28 @@ export function sanitizeInternalRedirect(target: string | null | undefined, fall
     return fallback;
   }
 }
+
+/**
+ * Maps user roles to the corresponding primary dashboard path.
+ * Priority: DISPATCHER_ADMIN -> /dispatch, COURIER -> /courier, MERCHANT -> /merchant, CUSTOMER -> /customer.
+ * Default fallback is /customer.
+ */
+export function getDefaultDashboardForRoles(roles?: string[] | null): string {
+  if (!roles || roles.length === 0) {
+    return "/customer";
+  }
+  if (roles.includes("DISPATCHER_ADMIN")) {
+    return "/dispatch";
+  }
+  if (roles.includes("COURIER")) {
+    return "/courier";
+  }
+  if (roles.includes("MERCHANT")) {
+    return "/merchant";
+  }
+  if (roles.includes("CUSTOMER")) {
+    return "/customer";
+  }
+  return "/customer";
+}
+

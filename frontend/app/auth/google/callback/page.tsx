@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "cn";
 import { api, ApiError, formatApiError, type AccessTokenResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getDefaultDashboardForRoles, sanitizeInternalRedirect } from "@/lib/redirect";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,50 +26,6 @@ const ALLOWED_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed:
     "Google sign-in failed. Please try again.",
 };
-
-const DEFAULT_POST_LOGIN_PATH = "/customer";
-
-/**
- * Validates and sanitizes the post-login destination retrieved from sessionStorage (ADR 0005).
- * Rejects external origins, protocol-relative URLs ('//'), backslash tricks ('/\'),
- * control characters, and navigation back to '/login', falling back safely to '/customer'.
- */
-function sanitizeRedirectTarget(target: string | null | undefined): string {
-  if (!target || typeof target !== "string") {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  const trimmed = target.trim();
-
-  if (trimmed === "" || trimmed === "/" || trimmed === "/login") {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  // Must begin with a single '/' and not be followed by '/' or '\'
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  // Reject CRLF or control characters
-  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  try {
-    const parsed = new URL(trimmed, "http://localhost");
-    // Ensure the host authority was not parsed, origin remains unchanged, and destination is not a login loop
-    if (
-      parsed.origin !== "http://localhost" ||
-      !parsed.pathname.startsWith("/") ||
-      parsed.pathname === "/login"
-    ) {
-      return DEFAULT_POST_LOGIN_PATH;
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-}
 
 function GoogleCallbackContent() {
   const router = useRouter();
@@ -112,7 +69,7 @@ function GoogleCallbackContent() {
         });
 
         // Use standard AuthContext session management (saves token and loads user profile)
-        await login(response.accessToken);
+        const currentUser = await login(response.accessToken);
 
         // Verify that authentication state was successfully established
         const hasSession =
@@ -125,15 +82,19 @@ function GoogleCallbackContent() {
           return;
         }
 
-        // Retrieve and double-sanitize post-login destination from sessionStorage (ADR 0005)
-        let destination = DEFAULT_POST_LOGIN_PATH;
+        // Determine destination: stored redirect takes precedence (if valid), otherwise role dashboard
+        const roleDashboard = getDefaultDashboardForRoles(currentUser?.roles);
+        let destination = roleDashboard;
+
         if (typeof window !== "undefined") {
           const storedDestination = window.sessionStorage.getItem("swiftdrop_auth_redirect");
           window.sessionStorage.removeItem("swiftdrop_auth_redirect");
-          destination = sanitizeRedirectTarget(storedDestination);
+          if (storedDestination) {
+            destination = sanitizeInternalRedirect(storedDestination, roleDashboard);
+          }
         }
 
-        router.push(destination);
+        router.replace(destination);
       } catch (err: unknown) {
         setIsProcessing(false);
         if (err instanceof ApiError && err.status === 401) {
