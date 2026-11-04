@@ -134,7 +134,7 @@ export function NavHeader() {
 
   const linkClass = (href: string) =>
     cn(
-      "whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors",
+      "whitespace-nowrap rounded-full px-4 py-2 text-base transition-colors",
       isActive(href) ? "bg-background/15 font-semibold text-background" : "text-background/70 hover:bg-background/10 hover:text-background",
     );
 
@@ -142,9 +142,9 @@ export function NavHeader() {
     <span className="mx-2 h-6 w-16 animate-pulse rounded-full bg-background/15" />
   ) : isAuthenticated && user ? (
     <>
-      <span className="max-w-40 truncate px-2 text-xs text-background/60">{user.fullName || user.email}</span>
+      <span className="max-w-40 truncate px-2 text-sm text-background/60">{user.fullName || user.email}</span>
       <button type="button" onClick={() => { close(); logout(); }}
-        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-3 py-1.5 text-sm text-background hover:bg-background/20">
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-4 py-2 text-base text-background hover:bg-background/20">
         <LogOut className="size-3.5" aria-hidden="true" /> Sign Out
       </button>
     </>
@@ -152,15 +152,16 @@ export function NavHeader() {
     <>
       <Link href="/login" onClick={close} className={linkClass("/login")}>Sign In</Link>
       <Link href="/signup" onClick={close}
-        className="whitespace-nowrap rounded-full bg-primary px-3.5 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+        className="whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
         Register
       </Link>
     </>
   );
 
   return (
-    // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit
-    <header className="pointer-events-none sticky top-0 z-40 flex h-14 justify-center px-3 pt-1.5">
+    // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit. The 3.5rem pill
+    // sits 0.5rem from the top and overhangs the slot slightly; pages start with more padding than that
+    <header className="pointer-events-none sticky top-0 z-40 flex h-14 justify-center px-3 pt-2">
       <nav
         ref={navRef}
         aria-label="Main"
@@ -170,16 +171,16 @@ export function NavHeader() {
         onBlur={onBlur}
         className="pointer-events-auto relative"
       >
-        <div ref={pillRef} className="flex h-11 items-center gap-1 rounded-full bg-foreground pl-1.5 pr-1.5 text-background shadow-[0_10px_30px_-10px_rgb(15_31_29/0.6)] ring-1 ring-background/10">
-          <Link href="/" onClick={close} className="flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 font-bold tracking-tight">
-            <PinMark className="size-6" />
+        <div ref={pillRef} className="flex h-14 items-center gap-1.5 rounded-full bg-foreground pl-2 pr-2 text-background shadow-[0_10px_30px_-10px_rgb(15_31_29/0.6)] ring-1 ring-background/10">
+          <Link href="/" onClick={close} className="flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-xl font-bold tracking-tight">
+            <PinMark className="size-8" />
             <span>Swift<span className="text-sidebar-primary">Drop</span></span>
           </Link>
 
           {/* Where you are and who is signed in; kept while the card is open, so the pill does
               not shrink out from under the pointer */}
           {!(open && sideways) && current && (
-            <span className="max-w-28 truncate whitespace-nowrap rounded-full bg-primary/25 px-2.5 py-0.5 text-xs font-semibold text-background sm:max-w-none">
+            <span className="max-w-28 truncate whitespace-nowrap rounded-full bg-primary/25 px-3 py-1 text-xs font-semibold sm:text-sm text-background sm:max-w-none">
               {current.label}
             </span>
           )}
@@ -206,7 +207,7 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            <span aria-hidden="true" className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+            <span aria-hidden="true" className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
               {initial}
             </span>
           )}
@@ -222,9 +223,9 @@ export function NavHeader() {
                 setPinned(true);
               }
             }}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-background/20"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-background/20"
           >
-            {open ? <X className="size-4" aria-hidden="true" /> : <Menu className="size-4" aria-hidden="true" />}
+            {open ? <X className="size-5" aria-hidden="true" /> : <Menu className="size-5" aria-hidden="true" />}
           </button>
         </div>
 
