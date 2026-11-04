@@ -38,7 +38,7 @@ export function NavHeader() {
   const [pinned, setPinned] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
-  const pillRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLAnchorElement>(null);
   const linksRef = useRef<HTMLDivElement>(null);
   // Whether the links fit when the island stretches sideways; if not, it opens as a card below
   const [sideways, setSideways] = useState(false);
@@ -69,12 +69,13 @@ export function NavHeader() {
     const measure = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const pill = pillRef.current;
+        const logo = logoRef.current;
         const inner = linksRef.current;
-        if (!pill || !inner) {
+        if (!logo || !inner) {
           return;
         }
-        const needed = pill.offsetWidth - inner.offsetWidth + inner.scrollWidth;
+        // Logo + expanded links + 40px menu button + 28px pill padding and gaps
+        const needed = logo.offsetWidth + inner.scrollWidth + 68;
         setSideways(needed + 24 <= window.innerWidth);
       });
     };
@@ -134,17 +135,17 @@ export function NavHeader() {
 
   const linkClass = (href: string) =>
     cn(
-      "whitespace-nowrap rounded-full px-4 py-2 text-base transition-colors",
+      "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-base transition-colors",
       isActive(href) ? "bg-background/15 font-semibold text-background" : "text-background/70 hover:bg-background/10 hover:text-background",
     );
 
   const account = isLoading ? (
-    <span className="mx-2 h-6 w-16 animate-pulse rounded-full bg-background/15" />
+    <span className="mx-2 h-6 w-16 shrink-0 animate-pulse rounded-full bg-background/15" />
   ) : isAuthenticated && user ? (
     <>
-      <span className="max-w-40 truncate px-2 text-sm text-background/60">{user.fullName || user.email}</span>
+      <span className="max-w-40 shrink-0 truncate px-2 text-sm text-background/60">{user.fullName || user.email}</span>
       <button type="button" onClick={() => { close(); logout(); }}
-        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-4 py-2 text-base text-background hover:bg-background/20">
+        className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-4 py-2 text-base text-background hover:bg-background/20">
         <LogOut className="size-3.5" aria-hidden="true" /> Sign Out
       </button>
     </>
@@ -152,7 +153,7 @@ export function NavHeader() {
     <>
       <Link href="/login" onClick={close} className={linkClass("/login")}>Sign In</Link>
       <Link href="/signup" onClick={close}
-        className="whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
+        className="shrink-0 whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
         Register
       </Link>
     </>
@@ -161,18 +162,22 @@ export function NavHeader() {
   return (
     // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit. The 3.5rem pill
     // sits 0.5rem from the top and overhangs the slot slightly; pages start with more padding than that
-    <header className="pointer-events-none sticky top-0 z-40 flex h-14 justify-center px-3 pt-2">
+    <header className="pointer-events-none sticky top-0 z-40 flex h-14 justify-center px-3 pt-2 before:pointer-events-none before:fixed before:inset-x-0 before:top-0 before:h-6 before:bg-gradient-to-b before:from-background before:to-transparent print:hidden">
       <nav
         ref={navRef}
         aria-label="Main"
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
-        onFocus={() => setOpen(true)}
+        onFocus={(event) => {
+          if ((event.target as HTMLElement).matches?.(":focus-visible")) {
+            setOpen(true);
+          }
+        }}
         onBlur={onBlur}
         className="pointer-events-auto relative"
       >
-        <div ref={pillRef} className="flex h-14 items-center gap-1.5 rounded-full bg-foreground pl-2 pr-2 text-background shadow-[0_10px_30px_-10px_rgb(15_31_29/0.6)] ring-1 ring-background/10">
-          <Link href="/" onClick={close} className="flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-xl font-bold tracking-tight">
+        <div className="flex h-14 max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-full bg-foreground pl-2 pr-2 text-background shadow-[0_10px_30px_-10px_rgb(15_31_29/0.6)] ring-1 ring-background/10">
+          <Link ref={logoRef} href="/" onClick={close} className="flex shrink-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-xl font-bold tracking-tight">
             <PinMark className="size-8" />
             <span>Swift<span className="text-sidebar-primary">Drop</span></span>
           </Link>
@@ -180,7 +185,7 @@ export function NavHeader() {
           {/* Where you are and who is signed in; kept while the card is open, so the pill does
               not shrink out from under the pointer */}
           {!(open && sideways) && current && (
-            <span className="max-w-28 truncate whitespace-nowrap rounded-full bg-primary/25 px-3 py-1 text-xs font-semibold sm:text-sm text-background sm:max-w-none">
+            <span className="min-w-0 max-w-28 truncate whitespace-nowrap rounded-full bg-primary/25 px-3 py-1 text-xs font-semibold text-background sm:max-w-none sm:text-sm">
               {current.label}
             </span>
           )}
@@ -207,7 +212,7 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            <span aria-hidden="true" className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+            <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
               {initial}
             </span>
           )}

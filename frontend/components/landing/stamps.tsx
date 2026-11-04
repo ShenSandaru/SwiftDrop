@@ -65,14 +65,14 @@ export function Stamps() {
           <p className="text-muted-foreground">Three things every parcel gets, whatever its size and wherever it goes.</p>
         </Reveal>
 
-        <ul className="mt-14 grid gap-8 md:grid-cols-3">
+        <ul className="mt-14 grid gap-6 md:grid-cols-3 lg:gap-8">
           {PROMISES.map((promise, index) => {
             const Icon = promise.icon;
             return (
               <Reveal as="li" key={promise.title} delay={index * 0.15} className="landing-stamp-host h-full">
                 {/* Perforated edge: page-coloured dots show only in the padding around the face */}
                 <div className={cn("landing-stamp", "h-full p-3", index === 1 ? "md:rotate-1" : "md:-rotate-1")}>
-                  <article className="relative h-full overflow-hidden border border-primary/15 bg-card p-6">
+                  <article className="relative h-full overflow-hidden border border-primary/15 bg-card p-5 lg:p-6">
                     <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-primary">
                       <Icon className="size-6" aria-hidden="true" />
                     </span>
@@ -84,7 +84,7 @@ export function Stamps() {
                     </p>
                     {/* Top corner, clear of the text */}
                     <div
-                      className={cn("landing-stamp-mark", "absolute -right-5 -top-5 size-28 text-primary")}
+                      className={cn("landing-stamp-mark", "pointer-events-none absolute -right-4 -top-4 size-24 select-none text-primary lg:-right-5 lg:-top-5 lg:size-28")}
                       style={{ animationDelay: `${0.35 + index * 0.15}s` }}
                     >
                       <RubberMark word={promise.mark} id={`stamp-ring-${index}`} />

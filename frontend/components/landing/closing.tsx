@@ -1,12 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import { Reveal } from "./reveal";
 import "./landing.css";
 
 /** The call to action band and the page footer. */
 export function Closing() {
+  const { hasRole } = useAuth();
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+
   return (
     <>
       <section className="px-4 py-20 sm:px-6 md:py-24">
@@ -24,7 +30,7 @@ export function Closing() {
               Create a free account, book a pickup and share the tracking number. We take it from there.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base font-semibold")}>
+              <Link href={bookingHref} className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base font-semibold")}>
                 Send a parcel <ArrowRight aria-hidden="true" />
               </Link>
               <Link href="/track"

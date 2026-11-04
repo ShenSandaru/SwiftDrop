@@ -6,6 +6,7 @@ import { ArrowLeftRight, ArrowRight, Package } from "lucide-react";
 import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { SIZE_LABELS } from "@/components/delivery/format";
+import { useAuth } from "@/lib/auth-context";
 import { PARCEL_SIZES, type ParcelSize } from "@/lib/delivery";
 import { CITIES, CityWheel, type CityCode } from "./city-wheel";
 import { Reveal } from "./reveal";
@@ -34,6 +35,7 @@ function barcode(seed: string) {
  * a slot. Purely illustrative; the real fare is calculated when the parcel is booked.
  */
 export function BoardingPass() {
+  const { hasRole } = useAuth();
   const [from, setFrom] = useState<CityCode>("CMB");
   const [to, setTo] = useState<CityCode>("JAF");
   const [size, setSize] = useState<ParcelSize>("SMALL");
@@ -41,6 +43,23 @@ export function BoardingPass() {
   const origin = CITIES.find((city) => city.code === from)!;
   const destination = CITIES.find((city) => city.code === to)!;
   const printKey = `${from}-${to}-${size}`;
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+
+  const handleFromChange = (nextFrom: CityCode) => {
+    if (nextFrom === to) {
+      setTo(from);
+      setSwaps((count) => count + 1);
+    }
+    setFrom(nextFrom);
+  };
+
+  const handleToChange = (nextTo: CityCode) => {
+    if (nextTo === from) {
+      setFrom(to);
+      setSwaps((count) => count + 1);
+    }
+    setTo(nextTo);
+  };
 
   return (
     <section className="border-b border-border py-20 md:py-28">
@@ -55,7 +74,7 @@ export function BoardingPass() {
           </div>
 
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-3">
-            <CityWheel label="From" value={from} onChange={setFrom} />
+            <CityWheel label="From" value={from} onChange={handleFromChange} />
             <button
               type="button"
               aria-label="Swap from and to"
@@ -64,17 +83,17 @@ export function BoardingPass() {
                 setTo(from);
                 setSwaps((count) => count + 1);
               }}
-              className="mb-[91px] inline-flex size-10 items-center justify-center rounded-full border border-dashed border-primary/40 bg-card text-primary transition-colors hover:bg-accent"
+              className="mb-[90px] inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-primary/40 bg-card text-primary transition-colors hover:bg-accent"
             >
               <ArrowLeftRight className="size-4 transition-transform duration-500" style={{ transform: `rotate(${swaps * 180}deg)` }}
                 aria-hidden="true" />
             </button>
-            <CityWheel label="To" value={to} onChange={setTo} />
+            <CityWheel label="To" value={to} onChange={handleToChange} />
           </div>
 
           <fieldset className="space-y-2">
             <legend className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Size</legend>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-3">
               {PARCEL_SIZES.map((option) => (
                 <button
                   key={option}
@@ -82,16 +101,18 @@ export function BoardingPass() {
                   aria-pressed={size === option}
                   onClick={() => setSize(option)}
                   className={cn(
-                    "rounded-xl border p-3 text-left transition-colors",
+                    "flex items-center gap-3 rounded-xl border p-3 text-left transition-colors min-[400px]:block",
                     size === option ? "border-primary bg-accent" : "border-border bg-card hover:border-primary/50",
                   )}
                 >
                   <Package
-                    className={cn("text-primary", option === "SMALL" ? "size-4" : option === "MEDIUM" ? "size-5" : "size-6")}
+                    className={cn("shrink-0 text-primary", option === "SMALL" ? "size-4" : option === "MEDIUM" ? "size-5" : "size-6")}
                     aria-hidden="true"
                   />
-                  <span className="mt-1 block text-sm font-bold text-foreground">{SIZE_LABELS[option]}</span>
-                  <span className="block text-[11px] leading-tight text-muted-foreground">{SIZE_HINTS[option]}</span>
+                  <div>
+                    <span className="block text-sm font-bold text-foreground min-[400px]:mt-1">{SIZE_LABELS[option]}</span>
+                    <span className="block text-[11px] leading-tight text-muted-foreground">{SIZE_HINTS[option]}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -104,13 +125,13 @@ export function BoardingPass() {
             <span className="absolute inset-x-6 top-1/2 h-1 -translate-y-1/2 rounded-full bg-black/60" />
             <span className={cn("landing-slot-light", "absolute right-3 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary")} />
           </div>
-          <div className="-mt-2.5 px-4">
+          <div className="-mt-2.5 px-2 sm:px-4">
             <p className="sr-only" aria-live="polite">
               Ticket: {origin.name} to {destination.name}, {SIZE_LABELS[size]}.
             </p>
             {/* Remounted by key, so every new choice prints a fresh ticket */}
             <article key={printKey} className={cn("landing-print", "relative rounded-b-2xl border border-t-0 border-border bg-card shadow-xl")}>
-              <div className="space-y-5 p-6 pt-8">
+              <div className="space-y-5 p-5 pt-7 sm:p-6 sm:pt-8">
                 <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                   <span>SwiftDrop · Parcel pass</span>
                   <span className="text-primary">LK</span>
@@ -153,16 +174,16 @@ export function BoardingPass() {
               <div className="relative" aria-hidden="true">
                 <span className="absolute -left-3 top-1/2 size-6 -translate-y-1/2 rounded-full border border-border bg-background [clip-path:inset(0_0_0_50%)]" />
                 <span className="absolute -right-3 top-1/2 size-6 -translate-y-1/2 rounded-full border border-border bg-background [clip-path:inset(0_50%_0_0)]" />
-                <div className="mx-6 border-t-2 border-dashed border-border" />
+                <div className="mx-5 border-t-2 border-dashed border-border sm:mx-6" />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-6">
-                <div aria-hidden="true" className="flex h-10 items-stretch">
+              <div className="flex items-center justify-between gap-3 p-5 sm:gap-4 sm:p-6">
+                <div aria-hidden="true" className="flex h-10 min-w-0 shrink items-stretch overflow-hidden">
                   {barcode(printKey).map((bar) => (
-                    <span key={bar.key} className="bg-foreground/80" style={{ width: bar.width, marginRight: bar.gap }} />
+                    <span key={bar.key} className="shrink-0 bg-foreground/80" style={{ width: bar.width, marginRight: bar.gap }} />
                   ))}
                 </div>
-                <Link href="/signup" className={cn(buttonVariants({ size: "sm" }), "font-semibold")}>
+                <Link href={bookingHref} className={cn(buttonVariants({ size: "sm" }), "shrink-0 font-semibold")}>
                   Book this route <ArrowRight aria-hidden="true" />
                 </Link>
               </div>

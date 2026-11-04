@@ -38,6 +38,7 @@ export function CityWheel({ label, value, onChange }: {
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  const targetRowRef = useRef<number | null>(null);
   const settleTimer = useRef<number | undefined>(undefined);
   const frame = useRef(0);
   const mounted = useRef(false);
@@ -71,8 +72,9 @@ export function CityWheel({ label, value, onChange }: {
 
   const scrollToRow = useCallback(
     (rowIndex: number, instant = false) => {
-      const target = Math.max(0, Math.min(CITIES.length - 1, rowIndex)) * ITEM_HEIGHT;
-      listRef.current?.scrollTo({ top: target, behavior: instant || reducedMotion ? "auto" : "smooth" });
+      const clamped = Math.max(0, Math.min(CITIES.length - 1, rowIndex));
+      targetRowRef.current = clamped;
+      listRef.current?.scrollTo({ top: clamped * ITEM_HEIGHT, behavior: instant || reducedMotion ? "auto" : "smooth" });
     },
     [reducedMotion],
   );
@@ -106,7 +108,11 @@ export function CityWheel({ label, value, onChange }: {
       if (!list) {
         return;
       }
-      const rowIndex = Math.max(0, Math.min(CITIES.length - 1, Math.round(list.scrollTop / ITEM_HEIGHT)));
+      const rowIndex =
+        targetRowRef.current !== null
+          ? targetRowRef.current
+          : Math.max(0, Math.min(CITIES.length - 1, Math.round(list.scrollTop / ITEM_HEIGHT)));
+      targetRowRef.current = null;
       const code = CITIES[rowIndex].code;
       if (code !== valueRef.current) {
         onChangeRef.current(code);
@@ -138,6 +144,8 @@ export function CityWheel({ label, value, onChange }: {
           tabIndex={0}
           aria-labelledby={`${id}-label`}
           aria-activedescendant={`${id}-${value}`}
+          onWheel={() => { targetRowRef.current = null; }}
+          onTouchMove={() => { targetRowRef.current = null; }}
           onScroll={handleScroll}
           onKeyDown={handleKeyDown}
           className="relative snap-y snap-mandatory overflow-y-auto outline-none [scrollbar-width:none] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(transparent,black_32%,black_68%,transparent)]"

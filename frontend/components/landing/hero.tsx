@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ArrowRight, Camera, Radio, Search, Ticket as TicketIcon } from "lucide-react";
@@ -5,6 +7,7 @@ import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Ticket } from "@/components/delivery/ticket";
+import { useAuth } from "@/lib/auth-context";
 import { IslandMap } from "./island-map";
 import "./landing.css";
 
@@ -17,6 +20,9 @@ const PROMISES = [
 ];
 
 export function Hero() {
+  const { hasRole } = useAuth();
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+
   return (
     <section className="relative overflow-hidden border-b border-border">
       {/* Dotted chart paper with a teal glow behind the map */}
@@ -53,7 +59,7 @@ export function Hero() {
           </p>
 
           <div className={cn("landing-rise", "flex flex-wrap gap-3")} style={delay(0.3)}>
-            <Link href="/signup" className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base font-semibold")}>
+            <Link href={bookingHref} className={cn(buttonVariants({ size: "lg" }), "h-12 px-6 text-base font-semibold")}>
               Send a parcel <ArrowRight aria-hidden="true" />
             </Link>
             <Link href="#how-it-moves" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-12 px-6 text-base")}>
@@ -81,8 +87,8 @@ export function Hero() {
                 <div className="flex gap-2">
                   <Input id="hero-track-code" name="code" placeholder="SD7K3M9Q2XWB" autoComplete="off"
                     autoCapitalize="characters" spellCheck={false} required
-                    className="h-11 font-mono tracking-[0.15em] uppercase" />
-                  <Button type="submit" size="lg" className="h-11 px-4">
+                    className="h-11 min-w-0 font-mono tracking-[0.15em] uppercase" />
+                  <Button type="submit" size="lg" className="h-11 shrink-0 px-4">
                     <Search aria-hidden="true" /> Track
                   </Button>
                 </div>

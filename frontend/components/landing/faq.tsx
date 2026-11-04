@@ -47,17 +47,11 @@ export function Faq() {
           <p className="text-muted-foreground">Pull a tag to read the answer.</p>
         </Reveal>
 
-        {/* The line the tags hang from */}
-        <div aria-hidden="true" className="relative mx-auto mt-14 hidden h-3 md:block">
-          <svg viewBox="0 0 1000 12" preserveAspectRatio="none" className="absolute inset-0 size-full">
-            <path d="M0 2Q500 14 1000 2" className="fill-none stroke-foreground/30" strokeWidth="2" />
-          </svg>
-        </div>
-
-        <ul className="mt-6 grid items-start gap-x-6 gap-y-10 sm:grid-cols-2 md:mt-0 lg:grid-cols-3">
+        <ul className="mt-14 grid items-start gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {QUESTIONS.map((item, index) => (
             <Reveal as="li" key={item.question} delay={(index % 3) * 0.08} className="landing-tag-host flex flex-col items-center">
-              {/* String from the line down into the tag's hole (12px inset + 7px radius) */}
+              {/* Mounting pin and string down into the tag's hole (32px swing pivot + 19px into the hole) */}
+              <span aria-hidden="true" className="relative z-10 size-2.5 rounded-full border-2 border-foreground/40 bg-background" />
               <span aria-hidden="true" className="relative z-10 -mb-[19px] h-[51px] w-px bg-foreground/30" />
               <details className={cn("landing-tag", "group w-full")}>
                 <summary className="relative flex cursor-pointer list-none flex-col items-center gap-3 px-6 pb-6 pt-9 text-center outline-none [&::-webkit-details-marker]:hidden">
