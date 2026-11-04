@@ -106,6 +106,12 @@ class AuthenticationApiTest {
         when(users.findByEmailIgnoringCase(any())).thenCallRealMethod();
         when(users.findByEmail(any())).thenReturn(Optional.empty());
         when(users.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
+        when(users.findById(any())).thenAnswer(call -> {
+            UUID id = call.getArgument(0);
+            User u = user("mock-password-hash", Role.CUSTOMER);
+            ReflectionTestUtils.setField(u, "id", id);
+            return Optional.of(u);
+        });
     }
 
     // Registration
@@ -220,6 +226,51 @@ class AuthenticationApiTest {
             mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + bad))
                     .andExpect(status().isUnauthorized());
         }
+    }
+
+    @Test
+    void disabledUserWithValidTokenCannotAccessProtectedEndpoints() throws Exception {
+        User bob = withId(user(passwordEncoder.encode("correct horse"), Role.CUSTOMER));
+        bob.setEnabled(false);
+        when(users.findById(bob.getId())).thenReturn(Optional.of(bob));
+
+        Instant now = Instant.now();
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.CUSTOMER, bob.getId()));
+
+        mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void nonexistentUserWithValidTokenCannotAccessProtectedEndpoints() throws Exception {
+        UUID nonexistentId = UUID.randomUUID();
+        when(users.findById(nonexistentId)).thenReturn(Optional.empty());
+
+        Instant now = Instant.now();
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.CUSTOMER, nonexistentId));
+
+        mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void reenabledUserWithValidTokenCanAccessProtectedEndpoints() throws Exception {
+        User bob = withId(user(passwordEncoder.encode("correct horse"), Role.CUSTOMER));
+        bob.setEnabled(false);
+        when(users.findById(bob.getId())).thenReturn(Optional.of(bob));
+
+        Instant now = Instant.now();
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.CUSTOMER, bob.getId()));
+
+        // Disabled account -> 401 Unauthorized
+        mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        // Re-enabled account -> 200 OK
+        bob.setEnabled(true);
+        mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(bob.getId().toString()));
     }
 
     // Roles
@@ -415,9 +466,13 @@ class AuthenticationApiTest {
     }
 
     private static JwtClaimsSet claims(Instant issuedAt, Instant expiresAt, String issuer, Role role) {
+        return claimsWithSubject(issuedAt, expiresAt, issuer, role, UUID.randomUUID());
+    }
+
+    private static JwtClaimsSet claimsWithSubject(Instant issuedAt, Instant expiresAt, String issuer, Role role, UUID subject) {
         return JwtClaimsSet.builder()
                 .issuer(issuer)
-                .subject(UUID.randomUUID().toString())
+                .subject(subject.toString())
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .claim("roles", List.of(role.name()))
