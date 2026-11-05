@@ -16,6 +16,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.ParcelSource;
 
 /** Parcels; used only inside the delivery module (ADR 0003). */
 public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
@@ -37,6 +38,36 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
     /** Parcels waiting for a courier (ADM-1); uses the partial index {@code ix_parcels_unassigned}. */
     Page<Parcel> findByStatusAndAssignedCourierIdIsNull(ParcelStatus status, Pageable pageable);
+
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE (:status IS NULL OR p.status = :status)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+            """)
+    Page<Parcel> findForDispatch(@Param("status") ParcelStatus status,
+            @Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            Pageable pageable);
+
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE (:status IS NULL OR p.status = :status)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (LOWER(p.trackingNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                   OR (:parcelId IS NOT NULL AND p.id = :parcelId))
+            """)
+    Page<Parcel> findForDispatchBySearch(@Param("status") ParcelStatus status,
+            @Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            @Param("search") String search,
+            @Param("parcelId") UUID parcelId,
+            Pageable pageable);
 
     /** A merchant's parcels (MER-4); always scoped by merchant, never across merchants. */
     Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);

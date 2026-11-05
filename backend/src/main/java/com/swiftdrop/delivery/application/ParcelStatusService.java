@@ -10,11 +10,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
+import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.delivery.domain.ActorRole;
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
 import com.swiftdrop.delivery.domain.Parcel;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 
 /**
@@ -25,18 +30,21 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 public class ParcelStatusService {
 
     private final ParcelRepository parcels;
+    private final ParcelAssignmentRepository assignments;
     private final DeliveryProofRepository proofs;
     private final ParcelEventRecorder recorder;
     private final Clock clock;
 
     @Autowired
-    public ParcelStatusService(ParcelRepository parcels, DeliveryProofRepository proofs, ParcelEventRecorder recorder) {
-        this(parcels, proofs, recorder, Clock.systemUTC());
+    public ParcelStatusService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
+            DeliveryProofRepository proofs, ParcelEventRecorder recorder) {
+        this(parcels, assignments, proofs, recorder, Clock.systemUTC());
     }
 
-    ParcelStatusService(ParcelRepository parcels, DeliveryProofRepository proofs, ParcelEventRecorder recorder,
-            Clock clock) {
+    ParcelStatusService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryProofRepository proofs,
+            ParcelEventRecorder recorder, Clock clock) {
         this.parcels = parcels;
+        this.assignments = assignments;
         this.proofs = proofs;
         this.recorder = recorder;
         this.clock = clock;
@@ -63,7 +71,32 @@ public class ParcelStatusService {
         boolean proofCaptured = change.toStatus() == ParcelStatus.DELIVERED && proofs.existsByParcelId(parcelId);
         Instant now = clock.instant();
 
+        ParcelAssignmentRecord activeAssignment = assignments
+                .findFirstByParcelIdAndStatus(parcelId, ParcelAssignmentStatus.ACTIVE)
+                .orElse(null);
+        if (activeAssignment == null) {
+            if (!courier.userId().equals(parcel.getAssignedCourierId())) {
+                throw new ParcelNotFoundException();
+            }
+            throw new ParcelConflictException("The parcel has no active courier task");
+        }
+        if (!activeAssignment.getCourierId().equals(courier.userId())) {
+            throw new ParcelNotFoundException();
+        }
+        ParcelAssignmentType expectedType = previous == ParcelStatus.CREATED
+                ? ParcelAssignmentType.PICKUP
+                : ParcelAssignmentType.DELIVERY;
+        if (activeAssignment.getType() != expectedType) {
+            throw new ParcelConflictException("The current courier task does not match the parcel status");
+        }
+
         parcel.changeStatus(change.toStatus(), courier.userId(), change.failureReason(), proofCaptured, now);
+        if (change.toStatus() == ParcelStatus.PICKED_UP
+                || change.toStatus() == ParcelStatus.DELIVERED
+                || change.toStatus() == ParcelStatus.FAILED) {
+            activeAssignment.complete(now);
+            parcel.releaseCurrentCourier(now);
+        }
         return recorder.record(parcel, previous, courier, change.note(), change.failureReason(), now);
     }
 }

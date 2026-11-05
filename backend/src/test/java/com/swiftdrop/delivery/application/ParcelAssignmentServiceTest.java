@@ -17,11 +17,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
+import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.pricing.api.ParcelSize;
 
@@ -33,13 +38,16 @@ class ParcelAssignmentServiceTest {
     private static final Instant NOW = Instant.parse("2026-11-03T10:15:30Z");
 
     private ParcelRepository parcels;
+    private ParcelAssignmentRepository assignments;
     private ParcelAssignmentService service;
     private Parcel parcel;
 
     @BeforeEach
     void setUp() {
         parcels = mock(ParcelRepository.class);
-        service = new ParcelAssignmentService(parcels, Clock.fixed(NOW, ZoneOffset.UTC));
+        assignments = mock(ParcelAssignmentRepository.class);
+        service = new ParcelAssignmentService(parcels, assignments, Clock.fixed(NOW, ZoneOffset.UTC));
+        when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", UUID.randomUUID(), address, address, ParcelSize.SMALL, 1000, null,
@@ -55,6 +63,9 @@ class ParcelAssignmentServiceTest {
         assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
         assertThat(parcel.getAssignedAt()).isEqualTo(NOW);
         assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.CREATED);
+        verify(assignments).saveAndFlush(org.mockito.ArgumentMatchers.argThat(
+                row -> row.toSummary().type() == ParcelAssignmentType.PICKUP
+                        && row.toSummary().status() == ParcelAssignmentStatus.ACTIVE));
     }
 
     @Test
@@ -72,6 +83,39 @@ class ParcelAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, UUID.randomUUID(), DISPATCHER_ID))
                 .isInstanceOf(ParcelConflictException.class);
+    }
+
+    @Test
+    void assignsDeliveryCourierOnlyAfterPickupTaskWasReleased() {
+        parcel.assignCourier(COURIER_ID, NOW);
+        parcel.changeStatus(ParcelStatus.PICKED_UP, COURIER_ID, null, false, NOW);
+        parcel.releaseCurrentCourier(NOW);
+
+        ParcelAssignmentSummary assignment = service.assignCourier(
+                PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.DELIVERY);
+
+        assertThat(assignment.type()).isEqualTo(ParcelAssignmentType.DELIVERY);
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.PICKED_UP);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(parcel.getAssignedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void pickupReassignmentClosesPreviousAssignmentHistory() {
+        parcel.assignCourier(COURIER_ID, NOW.minusSeconds(30));
+        ParcelAssignmentRecord previous = new ParcelAssignmentRecord(
+                PARCEL_ID, COURIER_ID, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
+        when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
+                .thenReturn(Optional.of(previous));
+        UUID replacementCourierId = UUID.randomUUID();
+
+        ParcelAssignmentSummary reassigned = service.assignCourier(
+                PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+
+        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.REASSIGNED);
+        assertThat(previous.toSummary().completedAt()).isEqualTo(NOW);
+        assertThat(reassigned.courierId()).isEqualTo(replacementCourierId);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(replacementCourierId);
     }
 
     @Test

@@ -25,8 +25,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.swiftdrop.delivery.api.DispatchParcelSummary;
+import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
+import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelSummary;
 import com.swiftdrop.delivery.api.PublicTrackingView;
@@ -45,6 +51,7 @@ class ParcelQueryServiceTest {
     private static final Instant NOW = Instant.parse("2026-11-03T10:15:30Z");
 
     private ParcelRepository parcels;
+    private ParcelAssignmentRepository assignments;
     private ParcelStatusHistoryRepository history;
     private ParcelQueryService service;
     private Parcel parcel;
@@ -52,8 +59,9 @@ class ParcelQueryServiceTest {
     @BeforeEach
     void setUp() {
         parcels = mock(ParcelRepository.class);
+        assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
-        service = new ParcelQueryService(parcels, history);
+        service = new ParcelQueryService(parcels, assignments, history);
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
                         "00500"),
@@ -93,6 +101,71 @@ class ParcelQueryServiceTest {
         ArgumentCaptor<Collection<ParcelStatus>> terminal = ArgumentCaptor.forClass(Collection.class);
         verify(parcels).countActiveByCourier(terminal.capture());
         assertThat(terminal.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.FAILED);
+    }
+
+    @Test
+    void dispatchQueryWithoutSearchReturnsValidEmptyPage() {
+        when(parcels.findForDispatch(any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
+                null, null, null, null, new PageRequest(0, 10));
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isZero();
+        assertThat(result.totalPages()).isZero();
+        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void activeAssignmentsFilterByTypeAndPaginateByAssignedTime() {
+        for (ParcelAssignmentType type : ParcelAssignmentType.values()) {
+            UUID assignmentId = UUID.randomUUID();
+            UUID courierId = UUID.randomUUID();
+            ParcelAssignmentSummary summary = new ParcelAssignmentSummary(
+                    assignmentId, PARCEL_ID, courierId, type, ParcelAssignmentStatus.ACTIVE, NOW, null, null);
+            ParcelAssignmentRecord record = mock(ParcelAssignmentRecord.class);
+            when(record.toSummary()).thenReturn(summary);
+            when(assignments.findByTypeAndStatus(eq(type), eq(ParcelAssignmentStatus.ACTIVE), any()))
+                    .thenReturn(new PageImpl<>(List.of(record),
+                            org.springframework.data.domain.PageRequest.of(1, 1), 2));
+
+            PageResult<ParcelAssignmentSummary> result = service.findActiveAssignments(type, new PageRequest(1, 1));
+
+            assertThat(result.items()).containsExactly(summary);
+            assertThat(result.page()).isEqualTo(1);
+            assertThat(result.totalItems()).isEqualTo(2);
+            assertThat(result.totalPages()).isEqualTo(2);
+
+            ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+            verify(assignments).findByTypeAndStatus(eq(type), eq(ParcelAssignmentStatus.ACTIVE), pageable.capture());
+            assertThat(pageable.getValue().getSort().getOrderFor("assignedAt"))
+                    .isEqualTo(Sort.Order.asc("assignedAt"));
+        }
+    }
+
+    @Test
+    void emptyDispatchSearchUsesQueryWithoutSearch() {
+        when(parcels.findForDispatch(any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
+                null, null, null, "", new PageRequest(0, 10));
+
+        assertThat(result.items()).isEmpty();
+        verify(parcels).findForDispatch(any(), any(), any(), any());
+        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void nonBlankDispatchSearchUsesTypedSearchQuery() {
+        when(parcels.findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
+                null, null, null, " SD7K3M9Q2XWB ", new PageRequest(0, 10));
+
+        assertThat(result.items()).isEmpty();
+        verify(parcels).findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any());
+        verify(parcels, never()).findForDispatch(any(), any(), any(), any());
     }
 
     @Test

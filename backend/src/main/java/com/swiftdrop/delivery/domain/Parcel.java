@@ -188,22 +188,43 @@ public class Parcel {
                 pickup, dropoff, size, weightGrams, description, fee, null, now);
     }
 
-    /**
-     * Assigns or reassigns a courier (ADR 0006 §3). Allowed only while {@link ParcelStatus#CREATED};
-     * after pickup the courier is fixed. Not a status change: the sequence stays the same. The
-     * caller must hold a lock on the parcel row.
-     *
-     * @throws ParcelConflictException if the parcel is past {@code CREATED}
-     */
+    /** Assigns or reassigns the pickup courier before pickup. The caller must lock this parcel row. */
     public void assignCourier(UUID courierUserId, Instant now) {
+        assignPickupCourier(courierUserId, now);
+    }
+
+    public void assignPickupCourier(UUID courierUserId, Instant now) {
         Objects.requireNonNull(courierUserId, "courierUserId");
         Objects.requireNonNull(now, "now");
         if (status != ParcelStatus.CREATED) {
-            throw new ParcelConflictException("A courier can only be assigned before pickup");
+            throw new ParcelConflictException("A pickup courier can only be assigned before pickup");
         }
+        setCurrentCourier(courierUserId, now);
+    }
+
+    public void assignDeliveryCourier(UUID courierUserId, Instant now) {
+        Objects.requireNonNull(courierUserId, "courierUserId");
+        Objects.requireNonNull(now, "now");
+        if (status != ParcelStatus.PICKED_UP || assignedCourierId != null) {
+            throw new ParcelConflictException("A delivery courier can only be assigned after pickup completion");
+        }
+        setCurrentCourier(courierUserId, now);
+    }
+
+    private void setCurrentCourier(UUID courierUserId, Instant now) {
         this.assignedCourierId = courierUserId;
         this.assignedAt = now;
         this.updatedAt = now;
+    }
+
+    public void releaseCurrentCourier(Instant now) {
+        Objects.requireNonNull(now, "now");
+        if (status != ParcelStatus.PICKED_UP && !ParcelLifecycle.isTerminal(status)) {
+            throw new ParcelConflictException("The courier can only be released after task completion");
+        }
+        assignedCourierId = null;
+        assignedAt = null;
+        updatedAt = now;
     }
 
     /**

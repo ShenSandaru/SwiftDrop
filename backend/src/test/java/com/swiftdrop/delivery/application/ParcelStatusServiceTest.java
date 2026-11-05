@@ -25,6 +25,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
@@ -35,6 +37,8 @@ import com.swiftdrop.delivery.domain.OutboxEvent;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
@@ -49,16 +53,19 @@ class ParcelStatusServiceTest {
     private static final Instant NOW = Instant.parse("2026-11-03T12:01:02Z");
 
     private ParcelRepository parcels;
+    private ParcelAssignmentRepository assignments;
     private DeliveryProofRepository proofs;
     private ParcelStatusHistoryRepository history;
     private OutboxEventRepository outbox;
     private ApplicationEventPublisher publisher;
     private ParcelStatusService service;
     private Parcel parcel;
+    private ParcelAssignmentRecord activeAssignment;
 
     @BeforeEach
     void setUp() {
         parcels = mock(ParcelRepository.class);
+        assignments = mock(ParcelAssignmentRepository.class);
         proofs = mock(DeliveryProofRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
         outbox = mock(OutboxEventRepository.class);
@@ -66,7 +73,7 @@ class ParcelStatusServiceTest {
         when(history.save(any())).thenAnswer(call -> call.getArgument(0));
         when(outbox.save(any())).thenAnswer(call -> call.getArgument(0));
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(), publisher);
-        service = new ParcelStatusService(parcels, proofs, recorder, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ParcelStatusService(parcels, assignments, proofs, recorder, Clock.fixed(NOW, ZoneOffset.UTC));
 
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID,
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(), null),
@@ -77,6 +84,13 @@ class ParcelStatusServiceTest {
         ReflectionTestUtils.setField(parcel, "assignedCourierId", COURIER_ID);
         ReflectionTestUtils.setField(parcel, "assignedAt", NOW.minusSeconds(1800));
         when(parcels.findByIdForUpdate(PARCEL_ID)).thenReturn(Optional.of(parcel));
+        activeAssignment = new ParcelAssignmentRecord(PARCEL_ID, COURIER_ID, ParcelAssignmentType.PICKUP,
+                UUID.randomUUID(), NOW.minusSeconds(1800));
+        when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
+                .thenAnswer(call -> activeAssignment != null
+                        && activeAssignment.getStatus() == ParcelAssignmentStatus.ACTIVE
+                                ? Optional.of(activeAssignment)
+                                : Optional.empty());
     }
 
     @Test
@@ -121,6 +135,9 @@ class ParcelStatusServiceTest {
     @Test
     void failureReasonReachesHistoryAndEvent() {
         service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(COURIER_ID));
+        parcel.assignDeliveryCourier(COURIER_ID, NOW.plusSeconds(1));
+        activeAssignment = new ParcelAssignmentRecord(PARCEL_ID, COURIER_ID, ParcelAssignmentType.DELIVERY,
+                UUID.randomUUID(), NOW.plusSeconds(1));
 
         ParcelStatusChanged event = service.changeStatus(PARCEL_ID,
                 new StatusChange(ParcelStatus.FAILED, FailureReason.DAMAGED, null), Actor.courier(COURIER_ID));
@@ -133,6 +150,8 @@ class ParcelStatusServiceTest {
     void deliveredChecksProofOnlyForDeliveredAndRejectsWithoutIt() {
         ReflectionTestUtils.setField(parcel, "status", ParcelStatus.OUT_FOR_DELIVERY);
         ReflectionTestUtils.setField(parcel, "lastSequence", 4);
+        activeAssignment = new ParcelAssignmentRecord(PARCEL_ID, COURIER_ID, ParcelAssignmentType.DELIVERY,
+                UUID.randomUUID(), NOW.minusSeconds(10));
         when(proofs.existsByParcelId(PARCEL_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.DELIVERED, null, null),
