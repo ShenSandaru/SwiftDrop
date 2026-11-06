@@ -423,7 +423,7 @@ The table below summarizes the lifecycle and status of all review findings acros
 │ H-02      │ Assignment concurrency control & 409 collision  │ RESOLVED (Phase 2)       │
 │ H-03      │ Broad exception catching in exception handler   │ DOCUMENTED RISK          │
 │ H-04      │ Missing OptimisticLockingFailure 409 mapping    │ RESOLVED (Phase 2)       │
-│ H-05      │ Missing multi-threaded concurrency tests        │ RESOLVED (Phase 2)       │
+│ H-05      │ Missing multi-threaded concurrency tests        │ RESOLVED & VERIFIED      │
 │ M-01      │ Full-dataset client query fan-out               │ FUTURE IMPROVEMENT       │
 │ M-02      │ ESLint dead code warnings in dispatch/page.tsx  │ RESOLVED (Phase 4)       │
 │ ARC-01    │ ADR 0008 handoff lifecycle vs ADR 0006          │ OUTSTANDING (PROPOSED)   │
@@ -454,10 +454,10 @@ The table below summarizes the lifecycle and status of all review findings acros
   3. Configured `ParcelAssignmentService` to fail fast with `ParcelConflictException` on competing assignments for already-assigned parcels, and flush updates to trigger `OptimisticLockingFailureException` on version collision.
   4. Added explicit `@ExceptionHandler` mappings for `OptimisticLockingFailureException` and `ParcelConflictException` in both `DispatchExceptionHandler` and `DeliveryExceptionHandler` returning `HTTP 409 Conflict` with RFC 7807 problem details.
 
-#### Finding H-05 [RESOLVED]: Missing Multi-Threaded Concurrency Test Suite
+#### Finding H-05 [RESOLVED & VERIFIED]: Multi-Threaded Concurrency Test Suite
 - **Files:** `backend/src/test/java/com/swiftdrop/delivery/application/DispatchAssignmentConcurrencyTest.java`, `backend/src/test/java/com/swiftdrop/dispatch/web/DispatchAssignmentConcurrencyIT.java`
 - **Initial Defect:** Zero concurrency or race condition tests existed in PR #105.
-- **Resolution (Phase 2):** Authored unit-level multi-threaded simulation `DispatchAssignmentConcurrencyTest` verifying that concurrent threads competing for the same parcel yield exactly one success and one `409 Conflict` (PASS: 100% reliable). Authored container-backed PostgreSQL test `DispatchAssignmentConcurrencyIT` verifying row-level versioning under real database connections.
+- **Resolution (Phase 2 & 5):** Authored unit-level multi-threaded simulation `DispatchAssignmentConcurrencyTest` verifying that concurrent threads competing for the same parcel yield exactly one success and one `409 Conflict` (PASS). Executed container-backed PostgreSQL test `DispatchAssignmentConcurrencyIT` alongside `DeliveryPersistenceIT` and `DispatchQueriesIT` against PostgreSQL 18.6 with Testcontainers; all 19 integration tests passed successfully.
 
 #### Finding M-02 [RESOLVED]: ESLint Dead Code Warnings
 - **File:** `frontend/app/(dispatch)/dispatch/page.tsx`
@@ -472,11 +472,7 @@ The table below summarizes the lifecycle and status of all review findings acros
 - **File:** GitHub Pull Request #105 Settings
 - **Requirement:** Change PR #105 base branch on GitHub from `main` to `dev`. `CONTRIBUTING.md` specifies that feature branches merge into `dev`. Integration simulation (`git merge-tree`) confirmed **0 merge conflicts** against `origin/dev`.
 
-#### Condition 2: PostgreSQL / Testcontainers Concurrency Test Execution
-- **File:** `backend/src/test/java/com/swiftdrop/dispatch/web/DispatchAssignmentConcurrencyIT.java`
-- **Requirement:** Integration tests are authored and ready, but were blocked during local verification because the host Docker Desktop engine was unavailable. Execute `.\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyIT` once Docker is started before merging.
-
-#### Condition 3: ADR 0008 Architecture Governance
+#### Condition 2: ADR 0008 Architecture Governance
 - **File:** `docs/adr/0008-dispatch-assignment-history-and-handoff.md`
 - **Requirement:** ADR 0008 must remain in **`Proposed`** status until the team convenes to review the handoff model. Single-courier delivery remains authoritative per ADR 0006.
 
