@@ -1,20 +1,4 @@
--- Owner: delivery module. Assignment records are parcel lifecycle state (ADR 0008).
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT assigned_courier_id
-        FROM parcels
-        WHERE assigned_courier_id IS NOT NULL
-          AND status NOT IN ('DELIVERED', 'FAILED')
-        GROUP BY assigned_courier_id
-        HAVING COUNT(*) > 1
-    ) THEN
-        RAISE EXCEPTION
-            'Cannot enable single-active-task courier assignments: resolve existing duplicate active courier assignments first';
-    END IF;
-END
-$$;
+-- Owner: delivery module. Assignment records are parcel lifecycle state (ADR 0006).
 
 CREATE TABLE parcel_assignments (
     id              UUID         PRIMARY KEY,
@@ -54,24 +38,5 @@ CREATE UNIQUE INDEX uq_parcel_assignments_active_parcel
     ON parcel_assignments (parcel_id)
     WHERE status = 'ACTIVE';
 
-CREATE UNIQUE INDEX uq_parcel_assignments_active_courier
-    ON parcel_assignments (courier_id)
-    WHERE status = 'ACTIVE';
-
 CREATE INDEX ix_parcel_assignments_history
     ON parcel_assignments (parcel_id, assigned_at);
-
-ALTER TABLE parcels
-    DROP CONSTRAINT ck_parcels_courier_after_created;
-
-ALTER TABLE parcels
-    ADD CONSTRAINT ck_parcels_courier_after_created CHECK (
-        status IN ('CREATED', 'PICKED_UP', 'DELIVERED', 'FAILED')
-        OR assigned_courier_id IS NOT NULL
-    );
-
-UPDATE parcels
-SET assigned_courier_id = NULL,
-    assigned_at = NULL
-WHERE status IN ('DELIVERED', 'FAILED')
-  AND assigned_courier_id IS NOT NULL;

@@ -17,6 +17,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
+import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
@@ -63,32 +64,28 @@ class ParcelAssignmentService implements ParcelAssignment {
         Objects.requireNonNull(type, "type");
         Parcel parcel = parcels.findByIdForUpdate(parcelId).orElseThrow(ParcelNotFoundException::new);
         Instant now = clock.instant();
+
+        if (parcel.getStatus() != ParcelStatus.CREATED) {
+            throw new ParcelConflictException("A courier can only be assigned before pickup");
+        }
+
         ParcelAssignmentRecord current = assignments
                 .findFirstByParcelIdAndStatus(parcelId, ParcelAssignmentStatus.ACTIVE)
                 .orElse(null);
 
-        if (type == ParcelAssignmentType.PICKUP) {
-            if (current != null) {
-                if (current.getType() != ParcelAssignmentType.PICKUP) {
-                    throw new ParcelConflictException("The parcel already has a different active task");
-                }
-                if (current.getCourierId().equals(courierUserId)) {
-                    return current.toSummary();
-                }
-                if (!current.getCourierId().equals(parcel.getAssignedCourierId())) {
-                    throw new ParcelConflictException("The current parcel assignment does not match its history");
-                }
-                current.reassign(now);
-            } else if (parcel.getAssignedCourierId() != null) {
-                throw new ParcelConflictException("The current parcel assignment has no active history record");
+        if (current != null) {
+            if (current.getCourierId().equals(courierUserId)) {
+                return current.toSummary();
             }
-            parcel.assignPickupCourier(courierUserId, now);
-        } else {
-            if (current != null || parcel.getAssignedCourierId() != null) {
-                throw new ParcelConflictException("The parcel already has an active courier task");
+            if (!current.getCourierId().equals(parcel.getAssignedCourierId())) {
+                throw new ParcelConflictException("The current parcel assignment does not match its history");
             }
-            parcel.assignDeliveryCourier(courierUserId, now);
+            current.reassign(now);
+        } else if (parcel.getAssignedCourierId() != null) {
+            throw new ParcelConflictException("The current parcel assignment has no active history record");
         }
+
+        parcel.assignPickupCourier(courierUserId, now);
 
         ParcelAssignmentRecord assignment = assignments.saveAndFlush(
                 new ParcelAssignmentRecord(parcelId, courierUserId, type, dispatcherUserId, now));

@@ -86,18 +86,49 @@ class ParcelAssignmentServiceTest {
     }
 
     @Test
-    void assignsDeliveryCourierOnlyAfterPickupTaskWasReleased() {
+    void assigningParcelPastCreatedIsAConflictRegardlessOfType() {
         parcel.assignCourier(COURIER_ID, NOW);
         parcel.changeStatus(ParcelStatus.PICKED_UP, COURIER_ID, null, false, NOW);
-        parcel.releaseCurrentCourier(NOW);
 
-        ParcelAssignmentSummary assignment = service.assignCourier(
-                PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.DELIVERY);
+        assertThatThrownBy(() -> service.assignCourier(
+                PARCEL_ID, UUID.randomUUID(), DISPATCHER_ID, ParcelAssignmentType.DELIVERY))
+                .isInstanceOf(ParcelConflictException.class);
+    }
 
-        assertThat(assignment.type()).isEqualTo(ParcelAssignmentType.DELIVERY);
-        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.PICKED_UP);
-        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
-        assertThat(parcel.getAssignedAt()).isEqualTo(NOW);
+    @Test
+    void assigningSameCourierReturnsExistingAssignmentIdempotently() {
+        parcel.assignCourier(COURIER_ID, NOW.minusSeconds(30));
+        ParcelAssignmentRecord previous = new ParcelAssignmentRecord(
+                PARCEL_ID, COURIER_ID, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
+        when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
+                .thenReturn(Optional.of(previous));
+
+        ParcelAssignmentSummary summary = service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.PICKUP);
+
+        assertThat(summary.id()).isEqualTo(previous.toSummary().id());
+        assertThat(summary.courierId()).isEqualTo(COURIER_ID);
+        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+    }
+
+    @Test
+    void courierCanHaveMultipleActiveParcelAssignments() {
+        UUID parcel2Id = UUID.fromString("5a0e0000-0000-0000-0000-000000000002");
+        ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
+                UUID.randomUUID(), null);
+        Parcel parcel2 = Parcel.forCustomer("SD7K3M9Q2XWC", UUID.randomUUID(), address, address, ParcelSize.SMALL, 1000, null,
+                new Parcel.Fee(new BigDecimal("650.00"), "LKR", UUID.randomUUID()), NOW.minusSeconds(60));
+        when(parcels.findByIdForUpdate(parcel2Id)).thenReturn(Optional.of(parcel2));
+
+        ParcelAssignmentSummary first = service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.PICKUP);
+        ParcelAssignmentSummary second = service.assignCourier(parcel2Id, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.PICKUP);
+
+        assertThat(first.courierId()).isEqualTo(COURIER_ID);
+        assertThat(second.courierId()).isEqualTo(COURIER_ID);
+        assertThat(first.parcelId()).isEqualTo(PARCEL_ID);
+        assertThat(second.parcelId()).isEqualTo(parcel2Id);
     }
 
     @Test

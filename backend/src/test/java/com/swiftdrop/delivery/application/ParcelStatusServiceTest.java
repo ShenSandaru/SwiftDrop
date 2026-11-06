@@ -135,15 +135,68 @@ class ParcelStatusServiceTest {
     @Test
     void failureReasonReachesHistoryAndEvent() {
         service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(COURIER_ID));
-        parcel.assignDeliveryCourier(COURIER_ID, NOW.plusSeconds(1));
-        activeAssignment = new ParcelAssignmentRecord(PARCEL_ID, COURIER_ID, ParcelAssignmentType.DELIVERY,
-                UUID.randomUUID(), NOW.plusSeconds(1));
 
         ParcelStatusChanged event = service.changeStatus(PARCEL_ID,
                 new StatusChange(ParcelStatus.FAILED, FailureReason.DAMAGED, null), Actor.courier(COURIER_ID));
 
         assertThat(event.data().failureReasonCode()).isEqualTo(FailureReason.DAMAGED);
         assertThat(event.data().sequence()).isEqualTo(3);
+    }
+
+    @Test
+    void pickedUpPreservesCourierAssignmentAndDoesNotCompleteTask() {
+        service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(COURIER_ID));
+
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.PICKED_UP);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(activeAssignment.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+        assertThat(activeAssignment.toSummary().completedAt()).isNull();
+    }
+
+    @Test
+    void courierCanTransitionToInTransitAndOutForDelivery() {
+        service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(COURIER_ID));
+
+        ParcelStatusChanged inTransit = service.changeStatus(PARCEL_ID,
+                new StatusChange(ParcelStatus.IN_TRANSIT, null, null), Actor.courier(COURIER_ID));
+        assertThat(inTransit.data().newStatus()).isEqualTo(ParcelStatus.IN_TRANSIT);
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.IN_TRANSIT);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(activeAssignment.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+
+        ParcelStatusChanged outForDelivery = service.changeStatus(PARCEL_ID,
+                new StatusChange(ParcelStatus.OUT_FOR_DELIVERY, null, null), Actor.courier(COURIER_ID));
+        assertThat(outForDelivery.data().newStatus()).isEqualTo(ParcelStatus.OUT_FOR_DELIVERY);
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.OUT_FOR_DELIVERY);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(activeAssignment.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+    }
+
+    @Test
+    void deliveredCompletesTheAssignment() {
+        ReflectionTestUtils.setField(parcel, "status", ParcelStatus.OUT_FOR_DELIVERY);
+        ReflectionTestUtils.setField(parcel, "lastSequence", 4);
+        when(proofs.existsByParcelId(PARCEL_ID)).thenReturn(true);
+
+        service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.DELIVERED, null, null), Actor.courier(COURIER_ID));
+
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.DELIVERED);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(activeAssignment.getStatus()).isEqualTo(ParcelAssignmentStatus.COMPLETED);
+        assertThat(activeAssignment.toSummary().completedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void failedCompletesTheAssignment() {
+        service.changeStatus(PARCEL_ID, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(COURIER_ID));
+
+        service.changeStatus(PARCEL_ID,
+                new StatusChange(ParcelStatus.FAILED, FailureReason.RECIPIENT_UNAVAILABLE, null), Actor.courier(COURIER_ID));
+
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.FAILED);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(activeAssignment.getStatus()).isEqualTo(ParcelAssignmentStatus.COMPLETED);
+        assertThat(activeAssignment.toSummary().completedAt()).isEqualTo(NOW);
     }
 
     @Test

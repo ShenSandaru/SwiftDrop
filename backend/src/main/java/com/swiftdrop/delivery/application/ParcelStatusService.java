@@ -83,19 +83,13 @@ public class ParcelStatusService {
         if (!activeAssignment.getCourierId().equals(courier.userId())) {
             throw new ParcelNotFoundException();
         }
-        ParcelAssignmentType expectedType = previous == ParcelStatus.CREATED
-                ? ParcelAssignmentType.PICKUP
-                : ParcelAssignmentType.DELIVERY;
-        if (activeAssignment.getType() != expectedType) {
+        if (previous == ParcelStatus.CREATED && activeAssignment.getType() != ParcelAssignmentType.PICKUP) {
             throw new ParcelConflictException("The current courier task does not match the parcel status");
         }
 
         parcel.changeStatus(change.toStatus(), courier.userId(), change.failureReason(), proofCaptured, now);
-        if (change.toStatus() == ParcelStatus.PICKED_UP
-                || change.toStatus() == ParcelStatus.DELIVERED
-                || change.toStatus() == ParcelStatus.FAILED) {
+        if (change.toStatus() == ParcelStatus.DELIVERED || change.toStatus() == ParcelStatus.FAILED) {
             activeAssignment.complete(now);
-            parcel.releaseCurrentCourier(now);
         }
         return recorder.record(parcel, previous, courier, change.note(), change.failureReason(), now);
     }
