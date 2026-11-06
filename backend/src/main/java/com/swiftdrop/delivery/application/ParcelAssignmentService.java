@@ -25,8 +25,8 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 
 /**
  * {@link ParcelAssignment} for {@code dispatch} (ADM-1). {@code dispatch} has already checked that
- * the courier is eligible; this records the assignment under the parcel lock so it cannot race a
- * pickup.
+ * the courier is eligible; this records the assignment under optimistic locking so competing
+ * requests cannot silently overwrite assignments or race pickups (SD-317).
  */
 @Service
 class ParcelAssignmentService implements ParcelAssignment {
@@ -62,7 +62,7 @@ class ParcelAssignmentService implements ParcelAssignment {
         Objects.requireNonNull(courierUserId, "courierUserId");
         Objects.requireNonNull(dispatcherUserId, "dispatcherUserId");
         Objects.requireNonNull(type, "type");
-        Parcel parcel = parcels.findByIdForUpdate(parcelId).orElseThrow(ParcelNotFoundException::new);
+        Parcel parcel = parcels.findById(parcelId).orElseThrow(ParcelNotFoundException::new);
         Instant now = clock.instant();
 
         if (parcel.getStatus() != ParcelStatus.CREATED) {
@@ -77,15 +77,17 @@ class ParcelAssignmentService implements ParcelAssignment {
             if (current.getCourierId().equals(courierUserId)) {
                 return current.toSummary();
             }
-            if (!current.getCourierId().equals(parcel.getAssignedCourierId())) {
-                throw new ParcelConflictException("The current parcel assignment does not match its history");
+            throw new ParcelConflictException("The parcel is already assigned to another courier");
+        }
+        if (parcel.getAssignedCourierId() != null) {
+            if (parcel.getAssignedCourierId().equals(courierUserId)) {
+                throw new ParcelConflictException("The parcel assignment history is missing for current courier");
             }
-            current.reassign(now);
-        } else if (parcel.getAssignedCourierId() != null) {
-            throw new ParcelConflictException("The current parcel assignment has no active history record");
+            throw new ParcelConflictException("The parcel is already assigned to another courier");
         }
 
         parcel.assignPickupCourier(courierUserId, now);
+        parcels.saveAndFlush(parcel);
 
         ParcelAssignmentRecord assignment = assignments.saveAndFlush(
                 new ParcelAssignmentRecord(parcelId, courierUserId, type, dispatcherUserId, now));

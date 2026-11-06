@@ -48,18 +48,20 @@ class ParcelAssignmentServiceTest {
         assignments = mock(ParcelAssignmentRepository.class);
         service = new ParcelAssignmentService(parcels, assignments, Clock.fixed(NOW, ZoneOffset.UTC));
         when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        when(parcels.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", UUID.randomUUID(), address, address, ParcelSize.SMALL, 1000, null,
                 new Parcel.Fee(new BigDecimal("650.00"), "LKR", UUID.randomUUID()), NOW.minusSeconds(60));
-        when(parcels.findByIdForUpdate(PARCEL_ID)).thenReturn(Optional.of(parcel));
+        when(parcels.findById(PARCEL_ID)).thenReturn(Optional.of(parcel));
     }
 
     @Test
-    void assignsUnderTheParcelLock() {
+    void assignsUnderOptimisticLocking() {
         service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID);
 
-        verify(parcels).findByIdForUpdate(PARCEL_ID);
+        verify(parcels).findById(PARCEL_ID);
+        verify(parcels).saveAndFlush(parcel);
         assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
         assertThat(parcel.getAssignedAt()).isEqualTo(NOW);
         assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.CREATED);
@@ -118,7 +120,7 @@ class ParcelAssignmentServiceTest {
                 UUID.randomUUID(), null);
         Parcel parcel2 = Parcel.forCustomer("SD7K3M9Q2XWC", UUID.randomUUID(), address, address, ParcelSize.SMALL, 1000, null,
                 new Parcel.Fee(new BigDecimal("650.00"), "LKR", UUID.randomUUID()), NOW.minusSeconds(60));
-        when(parcels.findByIdForUpdate(parcel2Id)).thenReturn(Optional.of(parcel2));
+        when(parcels.findById(parcel2Id)).thenReturn(Optional.of(parcel2));
 
         ParcelAssignmentSummary first = service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID,
                 ParcelAssignmentType.PICKUP);
@@ -132,7 +134,7 @@ class ParcelAssignmentServiceTest {
     }
 
     @Test
-    void pickupReassignmentClosesPreviousAssignmentHistory() {
+    void assigningAlreadyAssignedParcelToDifferentCourierThrowsConflict() {
         parcel.assignCourier(COURIER_ID, NOW.minusSeconds(30));
         ParcelAssignmentRecord previous = new ParcelAssignmentRecord(
                 PARCEL_ID, COURIER_ID, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
@@ -140,13 +142,13 @@ class ParcelAssignmentServiceTest {
                 .thenReturn(Optional.of(previous));
         UUID replacementCourierId = UUID.randomUUID();
 
-        ParcelAssignmentSummary reassigned = service.assignCourier(
-                PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+        assertThatThrownBy(() -> service.assignCourier(
+                PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessage("The parcel is already assigned to another courier");
 
-        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.REASSIGNED);
-        assertThat(previous.toSummary().completedAt()).isEqualTo(NOW);
-        assertThat(reassigned.courierId()).isEqualTo(replacementCourierId);
-        assertThat(parcel.getAssignedCourierId()).isEqualTo(replacementCourierId);
+        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
     }
 
     @Test

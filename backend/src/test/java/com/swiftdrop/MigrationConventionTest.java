@@ -135,6 +135,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611041200",
                                 "delivery add dispatch assignment history",
-                                "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"));
+                                "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"),
+                        tuple(
+                                "202611051210",
+                                "delivery add parcel assignment version",
+                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));
     }
 }

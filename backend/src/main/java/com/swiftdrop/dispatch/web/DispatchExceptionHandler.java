@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,11 +32,16 @@ class DispatchExceptionHandler {
     }
 
     @ExceptionHandler({ParcelConflictException.class, DispatchCourierUnavailableException.class,
-            DataIntegrityViolationException.class})
+            DataIntegrityViolationException.class, OptimisticLockingFailureException.class})
     ProblemDetail conflict(RuntimeException exception) {
-        String detail = exception instanceof DataIntegrityViolationException
-                ? "The parcel or courier already has an active assignment"
-                : exception.getMessage();
+        String detail;
+        if (exception instanceof OptimisticLockingFailureException) {
+            detail = "The parcel was modified by another request; please refresh and try again";
+        } else if (exception instanceof DataIntegrityViolationException) {
+            detail = "The parcel or courier already has an active assignment";
+        } else {
+            detail = exception.getMessage();
+        }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
     }
 

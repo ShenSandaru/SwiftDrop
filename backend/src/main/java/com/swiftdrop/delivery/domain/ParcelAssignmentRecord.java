@@ -10,6 +10,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
@@ -44,6 +45,10 @@ public class ParcelAssignmentRecord {
 
     @Column(name = "dispatcher_id")
     private UUID dispatcherId;
+
+    @Version
+    @Column(nullable = false)
+    private long version;
 
     protected ParcelAssignmentRecord() {
     }
@@ -94,5 +99,9 @@ public class ParcelAssignmentRecord {
 
     public ParcelAssignmentStatus getStatus() {
         return status;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

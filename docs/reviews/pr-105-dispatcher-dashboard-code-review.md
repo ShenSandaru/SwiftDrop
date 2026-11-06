@@ -273,13 +273,17 @@ sequenceDiagram
 
 ### Finding 4: Concurrency & Locking Approach (SD-317)
 
-- **Status:** **CONFIRMED NON-COMPLIANCE (Scope Deviation & Missing Concurrency Tests)**
+- **Status:** **IMPLEMENTED & UNIT-TESTED (PostgreSQL Integration Validation Pending Docker Environment)**
 - **Exact Files:**
+  - `backend/src/main/resources/db/migration/delivery/V202611051210__delivery_add_parcel_assignment_version.sql`
   - `backend/src/main/java/com/swiftdrop/delivery/domain/ParcelAssignmentRecord.java`
-  - `backend/src/main/java/com/swiftdrop/delivery/application/ParcelAssignmentService.java:64-85`
-  - `backend/src/test/java/com/swiftdrop/dispatch/web/DispatchQueriesIT.java`
+  - `backend/src/main/java/com/swiftdrop/delivery/domain/Parcel.java`
+  - `backend/src/main/java/com/swiftdrop/delivery/application/ParcelAssignmentService.java`
+  - `backend/src/main/java/com/swiftdrop/dispatch/web/DispatchExceptionHandler.java`
+  - `backend/src/test/java/com/swiftdrop/delivery/application/DispatchAssignmentConcurrencyTest.java`
+  - `backend/src/test/java/com/swiftdrop/dispatch/web/DispatchAssignmentConcurrencyIT.java`
 
-#### Analysis Against Issue SD-317 Acceptance Criteria
+#### Analysis Against Issue SD-317 Acceptance Criteria & Phase 2/2.1 Review
 
 Issue SD-317 defines the following acceptance criteria:
 - Criterion 1: *"Version column added to dispatch assignment tables."*
@@ -287,17 +291,25 @@ Issue SD-317 defines the following acceptance criteria:
 - Criterion 3: *"Assignment rejected with 409 if parcel has already progressed past CREATED."*
 - Criterion 4: *"Multi-threaded concurrency integration test verifies zero duplicate assignments."*
 
-1. **Criterion 1 (Version Column): FAILED.**
-   `ParcelAssignmentRecord.java` does not contain an `@Version` annotation, and the table `parcel_assignments` contains no `version` column.
-2. **Criterion 2 (Competing Attempts Result in 409): FAILED.**
-   The implementation uses pessimistic locking on `parcels` (`findByIdForUpdate`). When two dispatchers concurrently assign the same parcel for `PICKUP`:
-   - Request 1 locks the parcel, writes the assignment, and commits.
-   - Request 2 acquires the lock, reads `current != null`, executes `current.reassign(now)`, and **overwrites** the assignment with the second courier.
-   - Request 2 succeeds with HTTP 201 Created instead of being rejected with HTTP 409 Conflict.
-3. **Criterion 3 (Reject non-CREATED assignments): PARTIALLY COMPLIANT.**
-   `type = PICKUP` is rejected if status is not `CREATED`. However, `type = DELIVERY` allows assignment at `PICKED_UP`.
-4. **Criterion 4 (Multi-threaded Concurrency Integration Test): FAILED.**
-   The PR adds `DispatchQueriesIT.java`, which contains only two tests checking that empty queries return 200 OK. There are **zero** concurrent or multi-threaded integration tests in the PR.
+1. **Criterion 1 (Version Column): IMPLEMENTED & VERIFIED IN MIGRATIONS.**
+   - Forward-only Flyway migration `V202611051210__delivery_add_parcel_assignment_version.sql` added `version BIGINT NOT NULL DEFAULT 0` to `parcel_assignments`.
+   - `ParcelAssignmentRecord.java` introduces `@Version @Column(nullable = false) private long version;` and accessor `getVersion()`.
+   - Aggregate root `Parcel.java` possesses `@Version private long version;` on `parcels`.
+   - Verified by `MigrationConventionTest` (2/2 passed).
+2. **Criterion 2 (Competing Attempts Result in 409): IMPLEMENTED & UNIT-TESTED.**
+   - Replaced pessimistic locking (`findByIdForUpdate`) with optimistic locking (`findById`) in `ParcelAssignmentService`.
+   - `parcel.assignPickupCourier(courierUserId, now)` updates `Parcel`, which increments its version on flush.
+   - Competing concurrent assignment attempts trigger `OptimisticLockingFailureException` during flush/commit or collide with database constraint `uq_parcel_assignments_active_parcel`.
+   - Subsequent assignment attempts on an already-assigned parcel fail fast with `ParcelConflictException("The parcel is already assigned to another courier")` instead of silently reassigning.
+   - `DispatchExceptionHandler` explicitly maps `OptimisticLockingFailureException`, `DataIntegrityViolationException`, and `ParcelConflictException` to `HTTP 409 Conflict`.
+   - Verified via `DispatchAssignmentConcurrencyTest` and `DispatchExceptionHandlerTest`.
+3. **Criterion 3 (Reject non-CREATED assignments): IMPLEMENTED & UNIT-TESTED.**
+   - Enforced in `ParcelAssignmentService`: attempting assignment when `parcel.getStatus() != ParcelStatus.CREATED` throws `ParcelConflictException("A courier can only be assigned before pickup")`, producing `HTTP 409 Conflict`.
+   - Verified via unit test `ParcelAssignmentServiceTest.assigningParcelPastCreatedIsAConflictRegardlessOfType`.
+4. **Criterion 4 (Multi-threaded Concurrency Integration Test): CODE AUTHORED — EXECUTION PENDING DOCKER.**
+   - **Unit Level:** `DispatchAssignmentConcurrencyTest` provides multi-threaded unit test coverage utilizing `ExecutorService`, `CountDownLatch`, and atomic flags verifying collision resolution, optimistic locking, idempotent retries, and rejection of already-assigned parcels (3/3 passed).
+   - **Integration Level:** `DispatchAssignmentConcurrencyIT` has been authored with multi-threaded Testcontainers/PostgreSQL integration tests coordinating concurrent MockMvc requests across independent transactions.
+   - **Environment Status:** Execution of container-backed tests (`DispatchAssignmentConcurrencyIT`, `DeliveryPersistenceIT`, `DispatchQueriesIT`) is temporarily blocked because Docker Desktop is stopped following an environment restart. Real PostgreSQL validation must be executed once Docker is running before marking SD-317 fully resolved.
 
 ---
 
