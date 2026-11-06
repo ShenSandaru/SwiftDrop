@@ -40,6 +40,18 @@ function addressLines(address: ParcelDetail["pickup"]): string[] {
   ].filter(Boolean);
 }
 
+type ParcelDetailResult = {
+  parcelId: string;
+  detail: ParcelDetail | null;
+  error: string | null;
+};
+
+type AssignmentHistoryResult = {
+  parcelId: string;
+  assignments: DispatchAssignment[];
+  error: string | null;
+};
+
 export function ParcelDialog({
   parcel,
   mode,
@@ -50,12 +62,8 @@ export function ParcelDialog({
   onAssigned,
   onClose,
 }: ParcelDialogProps) {
-  const [detail, setDetail] = useState<ParcelDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [history, setHistory] = useState<DispatchAssignment[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [detailResult, setDetailResult] = useState<ParcelDetailResult | null>(null);
+  const [historyResult, setHistoryResult] = useState<AssignmentHistoryResult | null>(null);
   const [selectedCourierId, setSelectedCourierId] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,23 +78,19 @@ export function ParcelDialog({
 
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
-    setError(null);
     getDispatchParcelDetails(parcel.id)
       .then((loaded) => {
         if (active) {
-          setDetail(loaded);
-          setError(null);
+          setDetailResult({ parcelId: parcel.id, detail: loaded, error: null });
         }
       })
       .catch((failure: unknown) => {
         if (active) {
-          setError(formatApiError(failure));
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false);
+          setDetailResult({
+            parcelId: parcel.id,
+            detail: null,
+            error: formatApiError(failure),
+          });
         }
       });
 
@@ -97,22 +101,23 @@ export function ParcelDialog({
 
   useEffect(() => {
     let active = true;
-    setHistoryLoading(true);
     getDispatchAssignmentHistory(parcel.id)
       .then((loaded) => {
         if (active) {
-          setHistory(loaded.assignments);
-          setHistoryError(null);
+          setHistoryResult({
+            parcelId: parcel.id,
+            assignments: loaded.assignments,
+            error: null,
+          });
         }
       })
       .catch((failure: unknown) => {
         if (active) {
-          setHistoryError(formatApiError(failure));
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setHistoryLoading(false);
+          setHistoryResult({
+            parcelId: parcel.id,
+            assignments: [],
+            error: formatApiError(failure),
+          });
         }
       });
 
@@ -136,6 +141,15 @@ export function ParcelDialog({
       previousFocus?.focus();
     };
   }, []);
+
+  const currentDetailResult = detailResult?.parcelId === parcel.id ? detailResult : null;
+  const detail = currentDetailResult?.detail ?? null;
+  const error = currentDetailResult?.error ?? null;
+  const isLoading = currentDetailResult === null;
+  const currentHistoryResult = historyResult?.parcelId === parcel.id ? historyResult : null;
+  const history = currentHistoryResult?.assignments ?? [];
+  const historyError = currentHistoryResult?.error ?? null;
+  const historyLoading = currentHistoryResult === null;
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
