@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   ClipboardList,
   Info,
   MapPin,
@@ -22,7 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
@@ -1094,12 +1093,6 @@ function CourierAccountCard({
   assignment: DispatchAssignment | null;
   onAssign: () => void;
 }) {
-  const availabilityClass = {
-    AVAILABLE: "border-primary/20 bg-accent text-primary",
-    BUSY: "border-border bg-muted text-muted-foreground",
-    INACTIVE: "border-destructive/20 bg-destructive/5 text-destructive",
-    UNKNOWN: "border-border bg-muted text-muted-foreground",
-  }[availability];
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -1233,32 +1226,5 @@ function EmptyState({
       <h3 className="mt-3 text-sm font-semibold text-foreground">{title}</h3>
       <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">{description}</p>
     </div>
-  );
-}
-
-function UnavailablePanel({
-  title,
-  description,
-  endpoint,
-}: {
-  title: string;
-  description: string;
-  endpoint: string;
-}) {
-  return (
-    <Card className="rounded-xl border-dashed border-border bg-muted/30 shadow-none">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <CircleHelp className="size-4 text-muted-foreground" aria-hidden="true" />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">{description}</p>
-        <p className="rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] text-muted-foreground">
-          {endpoint}
-        </p>
-      </CardContent>
-    </Card>
   );
 }
