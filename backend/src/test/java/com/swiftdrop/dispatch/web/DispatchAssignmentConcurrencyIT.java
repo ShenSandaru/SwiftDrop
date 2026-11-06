@@ -335,20 +335,22 @@ class DispatchAssignmentConcurrencyIT {
         String trackingNumber = trackingNumbers.next();
         UUID zoneId = UUID.randomUUID();
         UUID pricingRuleId = UUID.randomUUID();
+        UUID assignedCourier = "CREATED".equals(status) ? null : insertUser("initial-courier", "COURIER");
+        Timestamp assignedAt = assignedCourier == null ? null : Timestamp.from(NOW);
         jdbc.update("""
                 INSERT INTO parcels (
-                    id, tracking_number, source, customer_id, pickup_contact_name, pickup_phone,
+                    id, tracking_number, source, customer_id, assigned_courier_id, assigned_at, pickup_contact_name, pickup_phone,
                     pickup_line1, pickup_city, pickup_zone_id, dropoff_contact_name, dropoff_phone, dropoff_line1,
                     dropoff_city, dropoff_zone_id, size, weight_grams, fee_amount, fee_currency, pricing_rule_id, status,
                     last_sequence, created_at, created_by, updated_at, version
                 ) VALUES (
-                    ?, ?, 'CUSTOMER', ?, 'Nimal Perera', '+94771234567',
+                    ?, ?, 'CUSTOMER', ?, ?, ?, 'Nimal Perera', '+94771234567',
                     '12 Temple Rd', 'Colombo', ?, 'Sunil Fernando', '+94777654321', '45 Galle Rd',
                     'Colombo', ?, 'SMALL', 1000, 650.00, 'LKR', ?, ?,
                     1, ?, ?, ?, 0
                 )
                 """,
-                id, trackingNumber, customerId, zoneId, zoneId, pricingRuleId, status,
+                id, trackingNumber, customerId, assignedCourier, assignedAt, zoneId, zoneId, pricingRuleId, status,
                 Timestamp.from(NOW), customerId, Timestamp.from(NOW));
         return id;
     }

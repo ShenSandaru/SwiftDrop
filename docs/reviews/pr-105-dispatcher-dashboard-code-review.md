@@ -394,11 +394,11 @@ The frontend changes introduce `frontend/app/(dispatch)/dispatch/page.tsx`, `fro
 ## 8. Testing & Verification Results
 
 ### 8.1 Backend Tests
-- **Unit & Slice Tests:** `.\mvnw.cmd verify -DskipITs` — **BUILD SUCCESS** (455 tests run, 0 failures, 0 errors, 0 skipped).
-- **Module Boundary Verification:** `.\mvnw.cmd test -Dtest=ModuleBoundaryTest` passed (9 tests, 0 violations).
-- **Flyway Migrations:** `.\mvnw.cmd test -Dtest=MigrationConventionTest` passed (2 tests).
-- **Multi-Threaded Concurrency (Unit):** `.\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyTest` passed (competing threads verified).
-- **Container-Backed Integration Tests:** `DispatchAssignmentConcurrencyIT` authored and verified structurally; execution against PostgreSQL pending Docker engine availability.
+- **Unit & Slice Tests:** `.\backend\mvnw.cmd verify -DskipITs` — **BUILD SUCCESS** (455 tests run, 0 failures, 0 errors, 0 skipped).
+- **Module Boundary Verification:** `.\backend\mvnw.cmd test -Dtest=ModuleBoundaryTest` passed (9 tests, 0 violations).
+- **Flyway Migrations:** `.\backend\mvnw.cmd test -Dtest=MigrationConventionTest` passed (2 tests).
+- **Multi-Threaded Concurrency (Unit):** `.\backend\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyTest` passed (competing threads verified).
+- **Container-Backed PostgreSQL Integration Tests:** `.\backend\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyIT,DeliveryPersistenceIT,DispatchQueriesIT` — **BUILD SUCCESS** (19 tests run, 0 failures, 0 errors across Testcontainers PostgreSQL 18.6).
 
 ### 8.2 Frontend Tests
 - **Lint Check:** `npm --prefix frontend run lint` passed with **0 errors and 0 warnings** (dead code removed in Phase 4).
@@ -596,26 +596,21 @@ Following the initial audit, the implementation defects identified in Findings C
 
 | Test Suite / Check | Command | Status | Result / Notes |
 |---|---|---|---|
-| **Backend Unit & Slice Tests** | `.\mvnw.cmd test` | **PASS** | 455 tests run, 0 failures, 0 errors |
-| **Spring Modulith Boundaries** | `.\mvnw.cmd test -Dtest=ModuleBoundaryTest` | **PASS** | 9 boundary tests passed, 0 violations |
-| **Flyway Migration Conventions** | `.\mvnw.cmd test -Dtest=MigrationConventionTest` | **PASS** | 2 migration naming/order tests passed |
-| **Optimistic Lock Unit Race** | `.\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyTest` | **PASS** | Multi-threaded race condition test passed |
-| **PostgreSQL Integration Tests** | `.\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyIT` | **BLOCKED** | Blocked pending host Docker Desktop daemon |
-| **Frontend Lint** | `npm run lint` | **PASS (2 warnings)** | 0 errors, 2 unused variable warnings |
-| **Frontend Build** | `npm run build` | **PASS** | Next.js 16.4.3 compiled all 22 pages |
+| **Backend Unit & Slice Tests** | `.\backend\mvnw.cmd test` | **PASS** | 455 tests run, 0 failures, 0 errors |
+| **Spring Modulith Boundaries** | `.\backend\mvnw.cmd test -Dtest=ModuleBoundaryTest` | **PASS** | 9 boundary tests passed, 0 violations |
+| **Flyway Migration Conventions** | `.\backend\mvnw.cmd test -Dtest=MigrationConventionTest` | **PASS** | 2 migration naming/order tests passed |
+| **Optimistic Lock Unit Race** | `.\backend\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyTest` | **PASS** | Multi-threaded race condition test passed |
+| **PostgreSQL Integration Tests** | `.\backend\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyIT,DeliveryPersistenceIT,DispatchQueriesIT` | **PASS** | 19 container-backed tests passed on PostgreSQL 18.6 |
+| **Frontend Lint** | `npm --prefix frontend run lint` | **PASS** | 0 errors, 0 warnings (clean) |
+| **Frontend Build** | `npm --prefix frontend run build` | **PASS** | Next.js 16.4.3 compiled all 22 pages |
 
 ---
 
 ## 12. Prioritized Action Plan & Merge Checklist
 
-### Phase 4 Recommendations (Before Merge):
+### Pre-Merge Requirements:
 1. **GitHub PR Retargeting (Mandatory):** Change PR #105 base branch on GitHub from `main` to `dev`.
-2. **Docker IT Execution (Mandatory for Full Verification):** Start Docker Desktop and run:
-   ```powershell
-   .\mvnw.cmd test -Dtest=DispatchAssignmentConcurrencyIT,DeliveryPersistenceIT,DispatchQueriesIT
-   ```
-3. **ESLint Dead Code Cleanup (Low effort):** Delete unused variable `availabilityClass` and unused component `UnavailablePanel` in `frontend/app/(dispatch)/dispatch/page.tsx`.
-4. **ADR 0008 Status:** Keep ADR 0008 marked as `Proposed` in `docs/adr/0008-dispatch-assignment-history-and-handoff.md`.
+2. **ADR 0008 Status:** Keep ADR 0008 marked as `Proposed` in `docs/adr/0008-dispatch-assignment-history-and-handoff.md`.
 
 ---
 
@@ -623,9 +618,13 @@ Following the initial audit, the implementation defects identified in Findings C
 
 ### **READY WITH CONDITIONS**
 
-PR #105 implementation on branch `pr/105` is functionally and architecturally sound following Phase 1 and Phase 2 remediation. All core business rules, modular boundaries, optimistic locking mechanisms, and frontend builds have been verified.
+PR #105 implementation on branch `pr/105` is verified, fully functional, and architecturally compliant:
+- [x] Delivery lifecycle and courier assignment aligned with ADR 0006.
+- [x] Optimistic concurrency locking engine implemented and verified on PostgreSQL Testcontainers.
+- [x] Frontend lint dead code removed (0 errors, 0 warnings).
+- [x] Clean 3-way merge against `dev` verified (0 conflicts).
+- [x] 19 container-backed integration tests passed on PostgreSQL.
 
-The pull request can be merged into `dev` once the following conditions are met:
+The pull request can be merged into `dev` once the following repository actions are completed:
 - [ ] Retarget PR base branch from `main` to `dev` on GitHub.
-- [ ] Execute container-backed integration tests once Docker engine is active.
-- [ ] Clean up 2 ESLint warnings in `dispatch/page.tsx`.
+- [ ] Maintain ADR 0008 in `Proposed` status.
