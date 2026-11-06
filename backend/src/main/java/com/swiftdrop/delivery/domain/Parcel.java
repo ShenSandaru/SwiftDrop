@@ -197,7 +197,7 @@ public class Parcel {
         Objects.requireNonNull(courierUserId, "courierUserId");
         Objects.requireNonNull(now, "now");
         if (status != ParcelStatus.CREATED) {
-            throw new ParcelConflictException("A pickup courier can only be assigned before pickup");
+            throw new ParcelConflictException("A courier can only be assigned before pickup");
         }
         setCurrentCourier(courierUserId, now);
     }
