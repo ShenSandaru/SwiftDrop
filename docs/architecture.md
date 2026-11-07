@@ -332,8 +332,11 @@ tracking     → delivery
   security filter chain.
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
-  - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
-    (needs an authorization server); key format and rotation. Webhook signing is decided in
+  - Merchant API authentication. **Proposed** in
+    [ADR 0008](adr/0008-merchant-api-key-authentication.md): API keys `sdk_<prefix>_<secret>` in
+    `X-Api-Key`, stored as SHA-256, checked in constant time with the merchant `APPROVED` on every
+    request, in a separate filter chain for `/api/v1/merchant-orders/**`; no OAuth client
+    credentials. Webhook signing is decided in
     [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
   - How courier and dispatcher/admin accounts are created.
 

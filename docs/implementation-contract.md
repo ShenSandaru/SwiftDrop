@@ -474,7 +474,7 @@ team approval recorded in `architecture.md` is enough.
 |---|---|---|---|---|
 | D-01 | Frontend → backend calling pattern | Browser calls the REST API directly with the bearer token (CORS already in place); token kept in memory + `sessionStorage`; no BFF | Yes (architecture §5 open) | SD-008 and all UI |
 | D-02 | Google sign-in token handoff | Callback stores a one-time code (SHA-256 hashed, ≥ 256-bit entropy, 60 s, atomic single use) and redirects to `SWIFTDROP_FRONTEND_BASE_URL/auth/google/callback?code=…` (or `?error=…` on failure); frontend POSTs code to `/api/v1/auth/google/exchanges`. Tokens never in URLs | Resolved ([ADR 0005](adr/0005-google-oauth-token-handoff.md)) | — |
-| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes (architecture §9 open) | SD-403–405 |
+| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes: [ADR 0008](adr/0008-merchant-api-key-authentication.md) (Proposed) | SD-403–405 |
 | D-04 | Staff account creation | Env-bootstrapped first admin; admin creates couriers/admins | No | SD-101, SD-102 |
 | D-05 | Tracking-number format | `SD` + 10 random Crockford base32 chars (no I, L, O, U), unique, retry on collision | No | SD-205 |
 | D-06 | Open lifecycle rules | Table in §7: `FAILED` from `PICKED_UP`..`OUT_FOR_DELIVERY`; proof required for `DELIVERED`; reassignment only in `CREATED`; no cancel/retry/override | Yes (extends ADR 0003 §4) | SD-301, SD-306 |
