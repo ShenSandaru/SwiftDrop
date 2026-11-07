@@ -57,6 +57,8 @@ class SwiftdropBackendApplicationTests {
     private MerchantStatusHistoryRepository merchantStatusHistory;
     @MockitoBean
     private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantApiKeyRepository merchantApiKeys;
 
     @Test
     void contextLoads() {

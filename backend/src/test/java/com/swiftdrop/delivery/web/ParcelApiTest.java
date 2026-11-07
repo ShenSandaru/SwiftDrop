@@ -71,7 +71,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class
 })
 class ParcelApiTest {
 

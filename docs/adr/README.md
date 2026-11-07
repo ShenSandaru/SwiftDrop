@@ -15,7 +15,7 @@ current state of each decision and lists the open questions that still need one.
 | [0005](0005-google-oauth-token-handoff.md) | Google OAuth token handoff | Accepted |
 | [0006](0006-delivery-lifecycle-and-transition-rules.md) | Delivery lifecycle and transition rules | Proposed |
 | [0007](0007-public-sse-tracking-stream.md) | Public SSE tracking stream | Proposed |
-| [0008](0008-merchant-api-key-authentication.md) | Merchant API key authentication | Proposed |
+| [0008](0008-merchant-api-key-authentication.md) | Merchant API key authentication | Accepted |
 
 ## Process
 

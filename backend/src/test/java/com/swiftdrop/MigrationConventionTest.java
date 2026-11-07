@@ -153,6 +153,10 @@ class MigrationConventionTest {
                                 "delivery add dispatch assignment history",
                                 "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"),
                         tuple(
+                                "202611042000",
+                                "merchant create merchant api keys",
+                                "merchant/V202611042000__merchant_create_merchant_api_keys.sql"),
+                        tuple(
                                 "202611051210",
                                 "delivery add parcel assignment version",
                                 "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));

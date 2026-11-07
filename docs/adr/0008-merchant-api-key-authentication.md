@@ -1,7 +1,7 @@
 # 0008. Merchant API key authentication
 
-- Status: Proposed
-- Date: 2026-11-08
+- Status: Accepted
+- Date: 2026-11-08 (accepted by the merchant module team on 2026-11-08)
 
 ## Context
 
