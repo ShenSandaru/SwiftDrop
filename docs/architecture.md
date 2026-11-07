@@ -92,9 +92,11 @@ The frontend and backend share no code. They communicate only over HTTP.
   (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
   `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
   (sections 7 and 8).
+- **Implemented:** `merchant.infrastructure.webhook`, the SSRF-safe webhook HTTP client (SD-409,
+  section 7). It also provides the module's `WebhookUrlValidator` for endpoint registration.
 - **Decided:** the module layout, dependencies and package rules below
   ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
-  `delivery` and `tracking` have code so far; the decision is not an authorization to implement
+  `delivery`, `tracking` and `merchant` have code so far; the decision is not an authorization to implement
   another module: that needs an approved task.
 
 ### Modules (Decided, ADR 0003)
@@ -240,8 +242,16 @@ tracking     → delivery
   - **Webhooks:** database-driven delivery records per event and endpoint with bounded exponential
     backoff; HMAC-SHA256 signatures with timestamp; secrets encrypted with AES-256-GCM and
     environment-supplied keys; SSRF protection with checks before every attempt and Apache
-    HttpClient 5 with a validating DNS resolver (approved dependency, not yet added); merchants see
-    only their own records; audited, bounded manual redelivery.
+    HttpClient 5 with a validating DNS resolver; merchants see only their own records; audited,
+    bounded manual redelivery.
+  - **Implemented (SD-409):** the SSRF-safe client in `merchant.infrastructure.webhook`: URL rules
+    and the full prohibited-range list of ADR 0004 §7.3, a validating `DnsResolver` as the only
+    address source, a check before every request, no redirects, no proxy, no connection reuse, no
+    automatic retries, standard TLS verification, and the local-only flag
+    `SWIFTDROP_WEBHOOK_ALLOW_LOCAL`. Hosts written only as numeric or hex labels other than a
+    dotted quad (for example `2130706433`, `0177.0.0.1`) are refused, because resolvers read them
+    differently. Tests cover the five mandatory checks against loopback servers; the SOCKS part of
+    "no proxy" is defense in depth that a loopback test cannot show. No sender uses the client yet.
   - **Notifications:** a mock SMS channel stored by `notification`; the owning customer of a
     customer-created parcel is notified on `PICKED_UP`, `OUT_FOR_DELIVERY`, `DELIVERED` and
     `FAILED`; merchant-created parcels are reported to the merchant by webhook only.
@@ -353,7 +363,7 @@ passwords, no sensitive data in error messages or logs (SYS-7); no hard-coded se
 **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):**
 events and webhook payloads carry no personal data; webhook secrets are encrypted with AES-256-GCM
 (keys from the environment, rotation by key ID); outbound webhook requests are restricted to
-validated public destinations (not yet implemented).
+validated public destinations (the client is implemented in SD-409; the sender is not yet).
 
 **Open:** retention and deletion of personal data, storage for proof-of-delivery photos, and
 whether springdoc and Actuator details are exposed outside local development.

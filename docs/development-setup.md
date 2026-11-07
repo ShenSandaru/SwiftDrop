@@ -159,6 +159,12 @@ create a Google OAuth client of type "Web application" with the authorized redir
 `http://localhost:8080/oauth2/authorization/google` in a browser. The callback responds with the
 same JSON token body as `POST /api/v1/auth/tokens`.
 
+Merchant webhooks only go to public `https` URLs on port 443. To send them to a demo receiver on
+your own machine, set `SWIFTDROP_WEBHOOK_ALLOW_LOCAL=true` in your `.env` and restart the backend:
+this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
+`http://localhost:9000/hook`), and the backend logs a warning at startup. Private addresses stay
+refused. Never enable it outside local development.
+
 ### Reset data (deletes everything)
 
 Only when you intend to wipe your local database and broker, for example after changing the
