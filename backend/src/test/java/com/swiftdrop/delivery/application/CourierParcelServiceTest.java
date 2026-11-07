@@ -81,6 +81,23 @@ class CourierParcelServiceTest {
         verifyNoInteractions(proofs);
     }
 
+    @Test
+    void todayListIncludesUnfinishedParcelsAcrossAllInFlightStatuses() {
+        CourierParcelService service = at("2026-11-03T10:00:00Z");
+        Parcel pickedUp = parcel(ParcelStatus.PICKED_UP);
+        Parcel inTransit = parcel(ParcelStatus.IN_TRANSIT);
+        Parcel outForDelivery = parcel(ParcelStatus.OUT_FOR_DELIVERY);
+        when(parcels.findCourierDay(eq(COURIER_ID), any(), any()))
+                .thenReturn(List.of(pickedUp, inTransit, outForDelivery));
+
+        List<CourierParcel> today = service.today(COURIER_ID);
+
+        assertThat(today).hasSize(3);
+        assertThat(today.get(0).parcel().getStatus()).isEqualTo(ParcelStatus.PICKED_UP);
+        assertThat(today.get(1).parcel().getStatus()).isEqualTo(ParcelStatus.IN_TRANSIT);
+        assertThat(today.get(2).parcel().getStatus()).isEqualTo(ParcelStatus.OUT_FOR_DELIVERY);
+    }
+
     private CourierParcelService at(String instant) {
         return new CourierParcelService(parcels, proofs, COLOMBO, Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
     }

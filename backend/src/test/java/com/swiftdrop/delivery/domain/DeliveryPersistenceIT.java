@@ -201,6 +201,38 @@ class DeliveryPersistenceIT {
                 courierId, NOW))).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void parcelCannotHaveMultipleActiveCourierAssignments() {
+        Parcel parcel = parcels.saveAndFlush(customerParcel(trackingNumbers.next()));
+        UUID dispatcherId = insertUser("dispatcher");
+        UUID courier2Id = insertUser("courier-2");
+
+        jdbc.update("INSERT INTO parcel_assignments (id, parcel_id, courier_id, assignment_type, status, assigned_at, dispatcher_id) "
+                + "VALUES (?, ?, ?, 'PICKUP', 'ACTIVE', ?, ?)",
+                UUID.randomUUID(), parcel.getId(), courierId, Timestamp.from(NOW), dispatcherId);
+
+        assertViolation("INSERT INTO parcel_assignments (id, parcel_id, courier_id, assignment_type, status, assigned_at, dispatcher_id) "
+                + "VALUES (?, ?, ?, 'PICKUP', 'ACTIVE', ?, ?)",
+                UUID.randomUUID(), parcel.getId(), courier2Id, Timestamp.from(NOW), dispatcherId);
+    }
+
+    @Test
+    void courierCanHaveMultipleActiveParcelAssignments() {
+        Parcel parcel1 = parcels.saveAndFlush(customerParcel(trackingNumbers.next()));
+        Parcel parcel2 = parcels.saveAndFlush(customerParcel(trackingNumbers.next()));
+        UUID dispatcherId = insertUser("dispatcher");
+
+        jdbc.update("INSERT INTO parcel_assignments (id, parcel_id, courier_id, assignment_type, status, assigned_at, dispatcher_id) "
+                + "VALUES (?, ?, ?, 'PICKUP', 'ACTIVE', ?, ?)",
+                UUID.randomUUID(), parcel1.getId(), courierId, Timestamp.from(NOW), dispatcherId);
+
+        int inserted = jdbc.update("INSERT INTO parcel_assignments (id, parcel_id, courier_id, assignment_type, status, assigned_at, dispatcher_id) "
+                + "VALUES (?, ?, ?, 'PICKUP', 'ACTIVE', ?, ?)",
+                UUID.randomUUID(), parcel2.getId(), courierId, Timestamp.from(NOW), dispatcherId);
+
+        assertThat(inserted).isEqualTo(1);
+    }
+
     private void assertViolation(String sql, Object... args) {
         // A savepoint keeps the test transaction usable after the expected error
         jdbc.execute("SAVEPOINT expected_violation");

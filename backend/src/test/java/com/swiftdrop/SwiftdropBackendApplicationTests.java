@@ -10,6 +10,9 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.merchant.domain.MerchantRepository;
+import com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository;
+import com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.ZoneRepository;
@@ -27,6 +30,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
+@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
 class SwiftdropBackendApplicationTests {
 
     @MockitoBean
@@ -47,6 +51,12 @@ class SwiftdropBackendApplicationTests {
     private ZoneRepository zones;
     @MockitoBean
     private PricingRuleRepository pricingRules;
+    @MockitoBean
+    private MerchantRepository merchants;
+    @MockitoBean
+    private MerchantStatusHistoryRepository merchantStatusHistory;
+    @MockitoBean
+    private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
 
     @Test
     void contextLoads() {

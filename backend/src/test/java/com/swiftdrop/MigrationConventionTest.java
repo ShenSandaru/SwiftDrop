@@ -131,6 +131,30 @@ class MigrationConventionTest {
                         tuple(
                                 "202611031030",
                                 "delivery create parcel outbox events",
-                                "delivery/V202611031030__delivery_create_parcel_outbox_events.sql"));
+                                "delivery/V202611031030__delivery_create_parcel_outbox_events.sql"),
+                        tuple(
+                                "202611041000",
+                                "merchant create merchants",
+                                "merchant/V202611041000__merchant_create_merchants.sql"),
+                        tuple(
+                                "202611041010",
+                                "merchant create merchant status history",
+                                "merchant/V202611041010__merchant_create_merchant_status_history.sql"),
+                        tuple(
+                                "202611041020",
+                                "merchant create merchant webhook endpoints",
+                                "merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql"),
+                        tuple(
+                                "202611041030",
+                                "merchant create merchant webhook endpoint events",
+                                "merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql"),
+                        tuple(
+                                "202611041200",
+                                "delivery add dispatch assignment history",
+                                "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"),
+                        tuple(
+                                "202611051210",
+                                "delivery add parcel assignment version",
+                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));
     }
 }

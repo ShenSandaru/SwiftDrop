@@ -43,6 +43,12 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
+@MockitoBean(types = {
+        com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.merchant.domain.MerchantRepository.class,
+        com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+})
 class PriceQuoteApiTest {
 
     private static final UUID COLOMBO = UUID.fromString("11111111-1111-1111-1111-111111111111");
