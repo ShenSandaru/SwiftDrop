@@ -96,7 +96,35 @@ function LoginForm() {
       });
 
       await login(response.accessToken);
-      router.push(redirectTarget);
+
+      try {
+        const currentUser = await api.get<{ roles?: string[] }>("/api/v1/users/me", { token: response.accessToken });
+        if (currentUser.roles?.includes("MERCHANT")) {
+          try {
+            const statusRes = await api.get<{ status: string }>("/api/v1/merchants/me", { token: response.accessToken });
+            if (statusRes.status === "APPROVED") {
+              router.push(redirectTarget === "/" ? "/merchant" : redirectTarget);
+            } else {
+              router.push("/merchant/status");
+            }
+            return;
+          } catch {
+            router.push("/merchant/status");
+            return;
+          }
+        } else if (currentUser.roles?.includes("DISPATCHER_ADMIN")) {
+          router.push(redirectTarget === "/" ? "/admin" : redirectTarget);
+          return;
+        } else if (currentUser.roles?.includes("COURIER")) {
+          router.push(redirectTarget === "/" ? "/courier" : redirectTarget);
+          return;
+        } else {
+          router.push(redirectTarget === "/" ? "/customer" : redirectTarget);
+          return;
+        }
+      } catch {
+        router.push(redirectTarget);
+      }
     } catch (err: unknown) {
       setErrorMessage(formatApiError(err));
     } finally {

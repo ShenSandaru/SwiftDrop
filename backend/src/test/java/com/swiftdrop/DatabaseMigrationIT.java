@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +23,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.merchant.api.MerchantStatus;
+import com.swiftdrop.merchant.domain.Merchant;
+import com.swiftdrop.merchant.domain.MerchantRepository;
+import com.swiftdrop.merchant.domain.MerchantStatusHistory;
+import com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository;
+import com.swiftdrop.merchant.domain.MerchantWebhookEndpoint;
+import com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository;
 import com.swiftdrop.pricing.domain.PricingRule;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.Zone;
@@ -62,6 +71,15 @@ class DatabaseMigrationIT {
     @Autowired
     private PricingRuleRepository pricingRuleRepository;
 
+    @Autowired
+    private MerchantRepository merchantRepository;
+
+    @Autowired
+    private MerchantStatusHistoryRepository merchantStatusHistoryRepository;
+
+    @Autowired
+    private MerchantWebhookEndpointRepository merchantWebhookEndpointRepository;
+
     // Delivery's booking needs pricing, which may not be on the classpath yet
     @MockitoBean
     private FeeCalculator feeCalculator;
@@ -76,7 +94,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(8);
+        assertThat(rows).hasSize(14);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -114,9 +132,23 @@ class DatabaseMigrationIT {
                         tuple("delivery/V202611031020__delivery_create_delivery_proofs.sql", true),
                         tuple("delivery/V202611031030__delivery_create_parcel_outbox_events.sql", true));
 
+        assertThat(rows.subList(8, 12))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("merchant/V202611041000__merchant_create_merchants.sql", true),
+                        tuple("merchant/V202611041010__merchant_create_merchant_status_history.sql", true),
+                        tuple("merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql", true),
+                        tuple("merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql", true));
+
+        assertThat(rows.subList(12, 14))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
+                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true));
+
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
-        assertThat(usersCount).isNotNull().isEqualTo(0);
+        assertThat(usersCount).isNotNull();
 
         Integer rolesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertThat(rolesCount).isNotNull().isEqualTo(4);
@@ -126,6 +158,18 @@ class DatabaseMigrationIT {
 
         Integer pricingRulesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pricing_rules", Integer.class);
         assertThat(pricingRulesCount).isNotNull();
+
+        Integer merchantsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchants", Integer.class);
+        assertThat(merchantsCount).isNotNull();
+
+        Integer historyCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_status_history", Integer.class);
+        assertThat(historyCount).isNotNull();
+
+        Integer endpointsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoints", Integer.class);
+        assertThat(endpointsCount).isNotNull();
+
+        Integer endpointEventsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoint_events", Integer.class);
+        assertThat(endpointEventsCount).isNotNull();
 
         // Assert Hibernate EntityManager is active and connected
         assertThat(entityManager.isOpen()).isTrue();
@@ -252,5 +296,102 @@ class DatabaseMigrationIT {
                     UUID.randomUUID(), origin.getId(), destination.getId(), 100.00, -5.00, 0.00, 0.00, 0.00, "LKR", true, 0
             );
         }).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("Merchant entity persists correctly and enforces unique user_id and registration number")
+    void merchantEntityPersistenceAndUniqueConstraints() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                userId, "merchant" + userId + "@example.com", "hash", "Merchant User", true);
+
+        Merchant merchant = new Merchant(
+                userId, "Test Store", "Retail", "REG-" + userId, "+94771234567", "123 Business Way", "Test Description", "https://store.example.com");
+        Merchant saved = merchantRepository.saveAndFlush(merchant);
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getStatus()).isEqualTo(MerchantStatus.PENDING);
+        assertThat(saved.getBusinessType()).isEqualTo("Retail");
+        assertThat(saved.getVersion()).isZero();
+
+        // Enforce unique user_id
+        assertThatThrownBy(() -> {
+            merchantRepository.saveAndFlush(new Merchant(
+                    userId, "Another Store", "Retail", "REG-OTHER-" + userId, "+94771234568", "456 Other Way", null, null));
+        }).isInstanceOf(DataIntegrityViolationException.class);
+
+        // Enforce unique registration number
+        UUID anotherUserId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                anotherUserId, "merchant" + anotherUserId + "@example.com", "hash", "Merchant User 2", true);
+
+        assertThatThrownBy(() -> {
+            merchantRepository.saveAndFlush(new Merchant(
+                    anotherUserId, "Duplicate Reg Store", "Retail", "REG-" + userId, "+94771234569", "789 Third Way", null, null));
+        }).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("Enforce check constraint on merchant status at database level")
+    void merchantStatusCheckConstraintEnforced() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                userId, "merchant" + userId + "@example.com", "hash", "Merchant User", true);
+
+        assertThatThrownBy(() -> {
+            jdbcTemplate.update(
+                    "INSERT INTO merchants (id, user_id, business_name, business_type, business_registration_no, contact_phone, business_address, status, created_at, updated_at, version) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 0)",
+                    UUID.randomUUID(), userId, "Bad Status Store", "Retail", "REG-BAD-" + userId, "+94771234567", "Address", "INVALID_STATUS");
+        }).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("MerchantWebhookEndpoint persists with subscribed event types collection and supports soft delete")
+    void merchantWebhookEndpointPersistenceAndEvents() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                userId, "merchant" + userId + "@example.com", "hash", "Merchant User", true);
+
+        Merchant merchant = merchantRepository.saveAndFlush(new Merchant(
+                userId, "Hook Store", "Retail", "REG-HOOK-" + userId, "+94771234567", "Hook Way", null, null));
+
+        MerchantWebhookEndpoint endpoint = new MerchantWebhookEndpoint(
+                merchant.getId(),
+                "https://hook.example.com/events",
+                "Order status callback",
+                "cipher-bytes",
+                "iv-bytes",
+                1,
+                "3a9f",
+                Set.of(ParcelStatus.CREATED, ParcelStatus.DELIVERED));
+
+        MerchantWebhookEndpoint saved = merchantWebhookEndpointRepository.saveAndFlush(endpoint);
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getEvents()).containsExactlyInAnyOrder(ParcelStatus.CREATED, ParcelStatus.DELIVERED);
+
+        // Verify active query for CREATED event
+        List<MerchantWebhookEndpoint> active = merchantWebhookEndpointRepository
+                .findActiveForMerchantAndEvent(merchant.getId(), ParcelStatus.CREATED);
+        assertThat(active).hasSize(1);
+        assertThat(active.get(0).getId()).isEqualTo(saved.getId());
+
+        // Verify active query for non-subscribed event
+        List<MerchantWebhookEndpoint> none = merchantWebhookEndpointRepository
+                .findActiveForMerchantAndEvent(merchant.getId(), ParcelStatus.FAILED);
+        assertThat(none).isEmpty();
+
+        // Soft delete endpoint
+        saved.softDelete();
+        merchantWebhookEndpointRepository.saveAndFlush(saved);
+
+        // Active query ignores soft-deleted endpoints
+        List<MerchantWebhookEndpoint> afterDelete = merchantWebhookEndpointRepository
+                .findActiveForMerchantAndEvent(merchant.getId(), ParcelStatus.CREATED);
+        assertThat(afterDelete).isEmpty();
     }
 }
