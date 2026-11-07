@@ -16,4 +16,13 @@ public interface ParcelAssignment {
      * @throws ParcelConflictException if the parcel is past {@code CREATED}
      */
     void assignCourier(UUID parcelId, UUID courierUserId, UUID dispatcherUserId);
+
+    /**
+     * Assigns a courier to a pickup or delivery task. Pickup assignment is limited to {@code CREATED};
+     * delivery assignment is limited to {@code PICKED_UP} parcels with no active courier.
+     *
+     * @return the persisted assignment record
+     */
+    ParcelAssignmentSummary assignCourier(UUID parcelId, UUID courierUserId, UUID dispatcherUserId,
+            ParcelAssignmentType type);
 }

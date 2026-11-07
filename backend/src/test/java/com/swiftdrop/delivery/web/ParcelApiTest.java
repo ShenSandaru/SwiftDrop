@@ -67,6 +67,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
+@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
 class ParcelApiTest {
 
     private static final UUID CUSTOMER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000c1");

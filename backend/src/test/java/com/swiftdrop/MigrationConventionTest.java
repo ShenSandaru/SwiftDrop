@@ -147,6 +147,14 @@ class MigrationConventionTest {
                         tuple(
                                 "202611041030",
                                 "merchant create merchant webhook endpoint events",
-                                "merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql"));
+                                "merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql"),
+                        tuple(
+                                "202611041200",
+                                "delivery add dispatch assignment history",
+                                "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"),
+                        tuple(
+                                "202611051210",
+                                "delivery add parcel assignment version",
+                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));
     }
 }

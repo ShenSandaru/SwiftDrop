@@ -72,6 +72,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @Import(AuthenticationApiTest.RoleFixtureController.class)
+@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
 class AuthenticationApiTest {
 
     private static final String DISPATCHER_ONLY = "/test-fixture/dispatcher-only";

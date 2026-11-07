@@ -15,12 +15,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
+import com.swiftdrop.delivery.api.DispatchParcelSummary;
+import com.swiftdrop.delivery.api.ParcelAssignmentHistory;
+import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
+import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelQueries;
+import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelSummary;
 import com.swiftdrop.delivery.api.PublicStatusEvent;
 import com.swiftdrop.delivery.api.PublicTrackingView;
 import com.swiftdrop.delivery.domain.Parcel;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.delivery.domain.TrackingNumberGenerator;
@@ -36,13 +43,17 @@ class ParcelQueryService implements ParcelQueries {
 
     private static final Sort OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "createdAt");
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
+    private static final Sort ASSIGNED_OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "assignedAt");
     private static final EnumSet<ParcelStatus> TERMINAL = EnumSet.of(ParcelStatus.DELIVERED, ParcelStatus.FAILED);
 
     private final ParcelRepository parcels;
+    private final ParcelAssignmentRepository assignments;
     private final ParcelStatusHistoryRepository history;
 
-    ParcelQueryService(ParcelRepository parcels, ParcelStatusHistoryRepository history) {
+    ParcelQueryService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
+            ParcelStatusHistoryRepository history) {
         this.parcels = parcels;
+        this.assignments = assignments;
         this.history = history;
     }
 
@@ -60,6 +71,51 @@ class ParcelQueryService implements ParcelQueries {
             counts.put((UUID) row[0], (Long) row[1]);
         }
         return Map.copyOf(counts);
+    }
+
+    @Override
+    public PageResult<DispatchParcelSummary> findDispatchParcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
+        Objects.requireNonNull(page, "page");
+        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
+        UUID parcelId = parseParcelId(normalizedSearch);
+        Pageable pageable = pageable(page, NEWEST_FIRST);
+        Page<Parcel> found = normalizedSearch == null
+                ? parcels.findForDispatch(status, source, assigned, pageable)
+                : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, pageable);
+        return PageResult.of(found.getContent().stream().map(ParcelQueryService::toDispatchSummary).toList(),
+                page, found.getTotalElements());
+    }
+
+    @Override
+    public PageResult<DispatchParcelSummary> findAwaitingDeliveryAssignment(PageRequest page) {
+        Objects.requireNonNull(page, "page");
+        Page<Parcel> found = parcels.findByStatusAndAssignedCourierIdIsNull(
+                ParcelStatus.PICKED_UP, pageable(page, OLDEST_FIRST));
+        return PageResult.of(found.getContent().stream().map(ParcelQueryService::toDispatchSummary).toList(),
+                page, found.getTotalElements());
+    }
+
+    @Override
+    public PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
+        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(page, "page");
+        Page<ParcelAssignmentSummary> found = assignments
+                .findByTypeAndStatus(type, ParcelAssignmentStatus.ACTIVE, pageable(page, ASSIGNED_OLDEST_FIRST))
+                .map(assignment -> assignment.toSummary());
+        return PageResult.of(found.getContent(), page, found.getTotalElements());
+    }
+
+    @Override
+    public Optional<ParcelAssignmentHistory> findAssignmentHistory(UUID parcelId) {
+        Objects.requireNonNull(parcelId, "parcelId");
+        if (!parcels.existsById(parcelId)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ParcelAssignmentHistory(parcelId,
+                assignments.findByParcelIdOrderByAssignedAtAsc(parcelId).stream()
+                        .map(assignment -> assignment.toSummary())
+                        .toList()));
     }
 
     @Override
@@ -105,6 +161,24 @@ class ParcelQueryService implements ParcelQueries {
         return new ParcelSummary(parcel.getId(), parcel.getTrackingNumber(), parcel.getStatus(), parcel.getSize(),
                 parcel.getWeightGrams(), parcel.getSource(), parcel.getCustomerId(), parcel.getMerchantId(),
                 parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(), parcel.getCreatedAt());
+    }
+
+    private static DispatchParcelSummary toDispatchSummary(Parcel parcel) {
+        return new DispatchParcelSummary(parcel.getId(), parcel.getTrackingNumber(), parcel.getStatus(),
+                parcel.getSource(), parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(),
+                parcel.getSize(), parcel.getWeightGrams(), parcel.getPickup().getCity(),
+                parcel.getDropoff().getCity(), parcel.getCreatedAt(), parcel.getUpdatedAt());
+    }
+
+    private static UUID parseParcelId(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static PageResult<ParcelSummary> toResult(Page<Parcel> found, PageRequest page) {

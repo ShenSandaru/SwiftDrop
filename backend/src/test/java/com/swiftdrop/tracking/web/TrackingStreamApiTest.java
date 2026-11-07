@@ -45,6 +45,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
+@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
 class TrackingStreamApiTest {
 
     private static final String EVENTS = "/api/v1/tracked-parcels/%s/events";
