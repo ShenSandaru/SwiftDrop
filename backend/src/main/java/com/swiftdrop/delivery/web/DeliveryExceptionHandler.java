@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -32,9 +33,12 @@ class DeliveryExceptionHandler {
     }
 
     /** The message names the broken rule only, never parcel data. */
-    @ExceptionHandler(ParcelConflictException.class)
-    ProblemDetail conflict(ParcelConflictException e) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    @ExceptionHandler({ParcelConflictException.class, OptimisticLockingFailureException.class})
+    ProblemDetail conflict(RuntimeException e) {
+        String detail = e instanceof OptimisticLockingFailureException
+                ? "The parcel was modified by another request; please refresh and try again"
+                : e.getMessage();
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
     }
 
     /** Domain validation that passed the request annotations; the message is not echoed. */

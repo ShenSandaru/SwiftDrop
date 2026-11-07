@@ -19,6 +19,19 @@ public interface ParcelQueries {
      */
     Map<UUID, Long> countActiveParcelsByCourier();
 
+    /** Dispatcher parcel list with explicit current-assignment and source/status filtering. */
+    PageResult<DispatchParcelSummary> findDispatchParcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page);
+
+    /** Parcels in the delivery handoff state that have no active courier. */
+    PageResult<DispatchParcelSummary> findAwaitingDeliveryAssignment(PageRequest page);
+
+    /** Active assignment rows of one task type, oldest first. */
+    PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page);
+
+    /** Assignment history, empty when the parcel does not exist. */
+    Optional<ParcelAssignmentHistory> findAssignmentHistory(UUID parcelId);
+
     /**
      * The merchant's parcels, newest first (merchant dashboard, MER-4).
      *
