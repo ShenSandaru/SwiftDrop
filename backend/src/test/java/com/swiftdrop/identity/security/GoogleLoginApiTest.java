@@ -92,7 +92,12 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.identity.bootstrap.admin-email=",
         "swiftdrop.identity.bootstrap.admin-password="})
 @AutoConfigureMockMvc
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {
+        com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.merchant.domain.MerchantRepository.class,
+        com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+})
 class GoogleLoginApiTest {
 
     static final String CLIENT_ID = "test-client.apps.googleusercontent.com";

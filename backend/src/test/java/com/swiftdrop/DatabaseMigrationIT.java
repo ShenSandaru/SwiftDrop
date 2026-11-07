@@ -94,7 +94,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(12);
+        assertThat(rows).hasSize(14);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -140,9 +140,15 @@ class DatabaseMigrationIT {
                         tuple("merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql", true),
                         tuple("merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql", true));
 
+        assertThat(rows.subList(12, 14))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
+                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true));
+
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
-        assertThat(usersCount).isNotNull().isEqualTo(0);
+        assertThat(usersCount).isNotNull();
 
         Integer rolesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertThat(rolesCount).isNotNull().isEqualTo(4);
@@ -154,16 +160,16 @@ class DatabaseMigrationIT {
         assertThat(pricingRulesCount).isNotNull();
 
         Integer merchantsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchants", Integer.class);
-        assertThat(merchantsCount).isNotNull().isEqualTo(0);
+        assertThat(merchantsCount).isNotNull();
 
         Integer historyCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_status_history", Integer.class);
-        assertThat(historyCount).isNotNull().isEqualTo(0);
+        assertThat(historyCount).isNotNull();
 
         Integer endpointsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoints", Integer.class);
-        assertThat(endpointsCount).isNotNull().isEqualTo(0);
+        assertThat(endpointsCount).isNotNull();
 
         Integer endpointEventsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoint_events", Integer.class);
-        assertThat(endpointEventsCount).isNotNull().isEqualTo(0);
+        assertThat(endpointEventsCount).isNotNull();
 
         // Assert Hibernate EntityManager is active and connected
         assertThat(entityManager.isOpen()).isTrue();

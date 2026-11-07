@@ -62,7 +62,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureMockMvc
 @Import({AuthorizationMatrixHarnessTest.HarnessFixtureController.class,
         AuthorizationMatrixHarnessTest.TestSecurityConfig.class})
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {
+        com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.merchant.domain.MerchantRepository.class,
+        com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+})
 class AuthorizationMatrixHarnessTest {
 
     private static final UUID ALICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
