@@ -150,8 +150,8 @@ class DatabaseMigrationIT {
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
-                        tuple("merchant/V202611042000__merchant_create_merchant_api_keys.sql", true),
-                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true));
+                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true),
+                        tuple("merchant/V202611081000__merchant_create_merchant_api_keys.sql", true));
 
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
