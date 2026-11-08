@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.domain;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -74,6 +75,21 @@ public class OutboxEvent {
         this.payload = Objects.requireNonNull(payload, "payload");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.nextAttemptAt = createdAt;
+    }
+
+    /** The broker confirmed the message (ADR 0004 §3). */
+    public void markPublished(Instant now) {
+        this.publishedAt = Objects.requireNonNull(now, "now");
+    }
+
+    /**
+     * A publish attempt failed: count it, remember why, and wait {@code backoff} before the next one.
+     * The row is never dropped (ADR 0004 §4.2).
+     */
+    public void recordFailure(String category, Instant now, Duration backoff) {
+        this.attempts++;
+        this.lastFailureCategory = Objects.requireNonNull(category, "category");
+        this.nextAttemptAt = now.plus(backoff);
     }
 
     public Long getId() {

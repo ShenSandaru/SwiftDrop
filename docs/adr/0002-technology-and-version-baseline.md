@@ -34,7 +34,7 @@ Sources were checked on 2026-10-24.
 | springdoc-openapi (`springdoc-openapi-starter-webmvc-ui`) | **3.2.0** | Pinned (not Boot-managed) |
 | JaCoCo (`jacoco-maven-plugin`) | **0.8.12** | Pinned (not Boot-managed; SD-004) |
 | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test | 6.0.x, 5.x, 3.x | Boot-managed |
-| Testcontainers | 2.0.x | Boot-managed |
+| Testcontainers | 2.0.x (`junit-jupiter`, `postgresql`, `rabbitmq` modules; test scope) | Boot-managed |
 | Maven | **3.9.16** | Pinned through the Maven Wrapper |
 | Maven Wrapper | 3.3.4, `only-script` type, with `distributionSha256Sum` | Generated with `mvn wrapper:wrapper` in Stage 4 |
 | Lombok | Not used | Java records instead |

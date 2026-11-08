@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only; delivery writes outbox rows, no relay yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay, exchange and merchant queue; no consumers yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -209,19 +209,40 @@ tracking     → delivery
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
-  **No exchanges, queues, producers or consumers exist yet.** A connection smoke test against
-  RabbitMQ 4.3 succeeded in Stage 5.
+- **Implemented (SD-501, SD-502):**
+  - Topology: `delivery` declares the durable topic exchange `swiftdrop.events`
+    (`delivery.api.ParcelEventTopology`). `merchant` declares its quorum queue
+    `merchant.parcel-status-changed` (bound with `parcel.status-changed`) with the ADR 0004 §5.1
+    arguments: dead-letter exchange `swiftdrop.dead-letter`, dead-letter routing key = queue name,
+    delivery limit 5, maximum length 100,000, `reject-publish`, `at-least-once`; and
+    `merchant.parcel-status-changed.dlq`. The `notification` queue is not declared yet (SD-505).
+    Messages wait in the merchant queue until its consumer exists (SD-410).
+  - Relay (`delivery.infrastructure.outbox`): polls every second in one transaction behind
+    `pg_try_advisory_xact_lock`, publishes in outbox order with publisher confirms and the mandatory
+    flag, blocks only a failing parcel for the rest of the poll, stops the poll on a broker failure or
+    confirm timeout, retries a row with backoff (1 s ×2, max 1 min), marks rows only after a positive
+    confirm, and deletes published rows after 7 days. Micrometer gauges `swiftdrop.outbox.*` and
+    rate-limited `ERROR` lines report backlog, failing rows and a stalled relay. Settings:
+    `swiftdrop.outbox.relay.*` (`OutboxRelayProperties`); `SWIFTDROP_OUTBOX_RELAY_ENABLED=false` turns
+    it off. Tests switch the relay and RabbitMQ declarations off
+    (`src/test/resources/config/application.properties`) so they never touch a local broker.
+  - Verified against RabbitMQ 4.3 by `OutboxRelayIT` (`-Pintegration`, Testcontainers): the
+    `stream_queue` feature flag is enabled; the queue arguments, including `x-dead-letter-strategy`,
+    are accepted; a status change reaches the merchant queue with the §2 message properties; a
+    message rejected without requeue reaches the dead-letter queue; an unroutable message is
+    returned and counts as a failure.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
   `ParcelEvents.eventsBetween` rebuilds past events from history, identical to the outbox payloads.
-  The relay that publishes the outbox to RabbitMQ is not implemented (Member 9).
+  The relay publishes the outbox to RabbitMQ (see above).
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).**
-  **None of it is implemented yet**, and the decision is not an authorization to implement it
-  without an approved task:
+  Publishing (§2, §3, §4.1, §4.2) and the merchant queue (§5) are implemented as described above;
+  consumers, webhooks and notifications are not, and the decision is not an authorization to
+  implement them without an approved task:
   - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
     Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
   - **Event:** `parcel.status-changed`, a versioned JSON envelope with event ID and per-parcel
