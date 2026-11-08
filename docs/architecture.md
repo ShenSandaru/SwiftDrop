@@ -339,8 +339,14 @@ tracking     → delivery
   that accepts only `X-Api-Key` through `merchant.api.MerchantAuthentication` and answers every
   failure with the same `401` (`WWW-Authenticate: ApiKey`); its principal
   (`AuthenticatedMerchant`) carries only the merchant and key IDs with the authority
-  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute. The order endpoints
-  themselves (SD-405) are not implemented yet. Webhook signing is decided in
+  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute.
+- **Implemented (SD-405):** `POST /api/v1/merchant-orders` takes the customer booking body plus
+  `merchantOrderReference` (letters, digits and `. _ : -`, at most 100) and calls
+  `delivery.api.ParcelCreation`: `201` with `Location` for a new order, `200` with the existing parcel
+  for a repeated reference (D-25). `GET /api/v1/merchant-orders/{merchantOrderReference}` returns the
+  caller's own order, `404` otherwise. The merchant always comes from the API key. Because `merchant`
+  may not use `pricing` (ADR 0003), it passes the size by name through
+  `NewMerchantParcel.withSizeName` in `delivery.api`. Webhook signing is decided in
   [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
