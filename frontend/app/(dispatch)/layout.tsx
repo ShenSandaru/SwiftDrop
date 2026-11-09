@@ -11,6 +11,7 @@ export default function DispatchPortalLayout({ children }: { children: React.Rea
   return (
     <PortalShell
       portalName={isAdmin ? "Admin Portal" : "Dispatcher Portal"}
+      role={isAdmin ? "ADMIN" : "DISPATCHER"}
       allowedRoles={["ADMIN", "DISPATCHER"]}
       workspaceBadge={isAdmin ? "Admin Workspace · Dispatch Operations" : "Dispatch Workspace · Fleet Operations"}
       navItems={isAdmin ? ADMIN_NAV : DISPATCHER_NAV}

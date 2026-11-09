@@ -17,8 +17,6 @@ import {
   RefreshCw,
   Search,
   Truck,
-  UserRound,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,11 +24,12 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
-import { formatApiError, type PageResponse, type UserResponse } from "@/lib/api";
+import { formatApiError, type PageResponse } from "@/lib/api";
 import type { ParcelStatus } from "@/lib/delivery";
 import type {
   DispatchAssignment,
   DispatchAssignmentType,
+  DispatchCourier,
   DispatchParcelItem,
 } from "@/lib/dispatch";
 import {
@@ -43,7 +42,6 @@ import {
 } from "@/lib/dispatch";
 
 const PARCEL_PAGE_SIZE = 8;
-const COURIER_PAGE_SIZE = 8;
 const FILTER_STATUSES: Array<ParcelStatus | "ALL"> = [
   "ALL",
   "CREATED",
@@ -120,12 +118,10 @@ export default function DispatchPortalPage() {
   const [activeLoading, setActiveLoading] = useState(true);
   const [activeError, setActiveError] = useState<string | null>(null);
 
-  const [courierPageNumber, setCourierPageNumber] = useState(0);
-  const [couriers, setCouriers] = useState<UserResponse[]>([]);
+  const [couriers, setCouriers] = useState<DispatchCourier[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
   const [activeAssignments, setActiveAssignments] = useState<DispatchAssignment[]>([]);
   const [couriersLoading, setCouriersLoading] = useState(true);
-  const [couriersError, setCouriersError] = useState<string | null>(null);
   const [assignmentFeedback, setAssignmentFeedback] = useState<string | null>(null);
 
   const [selectedParcel, setSelectedParcel] = useState<
@@ -242,26 +238,32 @@ export default function DispatchPortalPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
+    Promise.allSettled([
       listAllDispatchCouriers(),
       getCourierWorkloads(),
       listAllActiveDispatchAssignments("PICKUP"),
       listAllActiveDispatchAssignments("DELIVERY"),
     ])
-      .then(([loadedCouriers, loadedWorkloads, pickups, deliveries]) => {
-        if (active) {
-          setCouriers(loadedCouriers);
-          setWorkloads(loadedWorkloads);
-          setActiveAssignments([...pickups, ...deliveries]);
-          setCouriersError(null);
+      .then(([couriersResult, workloadsResult, pickupsResult, deliveriesResult]) => {
+        if (!active) {
+          return;
         }
-      })
-      .catch((failure: unknown) => {
-        if (active) {
-          setCouriersError(formatApiError(failure));
+
+        if (couriersResult.status === "fulfilled") {
+          setCouriers(couriersResult.value);
+        } else {
+          setCouriers([]);
+        }
+
+        if (workloadsResult.status === "fulfilled") {
+          setWorkloads(workloadsResult.value);
+        } else {
           setWorkloads(null);
-          setActiveAssignments([]);
         }
+
+        const pickups = pickupsResult.status === "fulfilled" ? pickupsResult.value : [];
+        const deliveries = deliveriesResult.status === "fulfilled" ? deliveriesResult.value : [];
+        setActiveAssignments([...pickups, ...deliveries]);
       })
       .finally(() => {
         if (active) {
@@ -274,32 +276,42 @@ export default function DispatchPortalPage() {
     };
   }, [refreshKey]);
 
-  const visibleParcels = parcelPage?.items ?? [];
-  const courierItems = couriers.slice(
-    courierPageNumber * COURIER_PAGE_SIZE,
-    (courierPageNumber + 1) * COURIER_PAGE_SIZE,
-  );
-  const courierTotalPages = Math.ceil(couriers.length / COURIER_PAGE_SIZE);
-  const activeAssignmentsByCourier = useMemo(() => {
-    const map = new Map<string, DispatchAssignment[]>();
-    for (const assignment of activeAssignments) {
-      const list = map.get(assignment.courierId) ?? [];
-      list.push(assignment);
-      map.set(assignment.courierId, list);
-    }
-    return map;
-  }, [activeAssignments]);
+  const visibleParcels = useMemo(() => parcelPage?.items ?? [], [parcelPage]);
   const courierById = useMemo(
     () => new Map(couriers.map((courier) => [courier.id, courier.fullName])),
     [couriers],
   );
 
-  function courierActiveCount(courierId: string): number {
-    if (workloads !== null) {
-      return workloads[courierId] ?? 0;
+  const dialogCouriers = useMemo<DispatchCourier[]>(() => {
+    if (couriers.length > 0) {
+      return couriers;
     }
-    return activeAssignmentsByCourier.get(courierId)?.length ?? 0;
-  }
+
+    const courierIds = new Set<string>();
+    if (workloads) {
+      for (const id of Object.keys(workloads)) {
+        courierIds.add(id);
+      }
+    }
+    for (const assignment of activeAssignments) {
+      courierIds.add(assignment.courierId);
+    }
+    for (const parcel of activeParcels) {
+      if (parcel.assignedCourierId) {
+        courierIds.add(parcel.assignedCourierId);
+      }
+    }
+    for (const parcel of visibleParcels) {
+      if (parcel.assignedCourierId) {
+        courierIds.add(parcel.assignedCourierId);
+      }
+    }
+
+    return Array.from(courierIds).map((id) => ({
+      id,
+      fullName: `Courier ${id.slice(0, 8)}`,
+    }));
+  }, [couriers, workloads, activeAssignments, activeParcels, visibleParcels]);
 
   function refreshDashboard() {
     setMetricsLoading(true);
@@ -309,7 +321,6 @@ export default function DispatchPortalPage() {
     setMetricsError(null);
     setParcelPageError(null);
     setActiveError(null);
-    setCouriersError(null);
     setAssignmentFeedback(null);
     setRefreshKey((current) => current + 1);
   }
@@ -328,37 +339,38 @@ export default function DispatchPortalPage() {
     setParcelPageNumber(nextPage);
   }
 
-  function changeCourierPage(nextPage: number) {
-    setCourierPageNumber(nextPage);
-  }
-
-
-
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-            <Truck className="size-3.5" aria-hidden="true" />
-            Dispatch operations
+    <div className="space-y-8">
+      {/* Dashboard Toolbar & Section Navigation */}
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-primary">
+              <Truck className="size-3.5" aria-hidden="true" />
+              Dispatch Operations
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="size-3.5" aria-hidden="true" />
+              <time suppressHydrationWarning>{today}</time>
+            </span>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-            Dispatcher Dashboard
-          </h1>
           <p className="text-sm text-muted-foreground">
-            Manage parcel pickups, courier assignments, and deliveries
+            Manage parcel pickups, courier assignments, and active island-wide deliveries.
           </p>
-          <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CalendarDays className="size-3.5" aria-hidden="true" />
-            <time suppressHydrationWarning>{today}</time>
-          </p>
+          <nav aria-label="Dashboard sections" className="flex flex-wrap gap-1.5 pt-1">
+            <SectionLink href="#dashboard-overview">Overview</SectionLink>
+            <SectionLink href="#pickup-requests">Pickup requests</SectionLink>
+            <SectionLink href="#active-deliveries">Active deliveries</SectionLink>
+            <SectionLink href="#parcel-tracking">Parcel tracking</SectionLink>
+          </nav>
         </div>
         <Button
           type="button"
           variant="outline"
           onClick={refreshDashboard}
           disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
-          className="w-full sm:w-auto"
+          className="w-full shrink-0 sm:w-auto"
         >
           <RefreshCw
             className={
@@ -370,75 +382,83 @@ export default function DispatchPortalPage() {
           />
           Refresh dashboard
         </Button>
-      </header>
+      </div>
 
-      <nav aria-label="Dashboard sections" className="flex gap-2 overflow-x-auto pb-1">
-        <SectionLink href="#pickup-requests">Pickup requests</SectionLink>
-        <SectionLink href="#active-deliveries">Active deliveries</SectionLink>
-        <SectionLink href="#couriers">Couriers</SectionLink>
-        <SectionLink href="#parcel-tracking">Parcel tracking</SectionLink>
-      </nav>
-
-      {metricsError && (
-        <p role="status" className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          {metricsError}
-        </p>
-      )}
       {assignmentFeedback && (
-        <p role="status" className="rounded-lg border border-primary/20 bg-accent p-3 text-sm text-primary">
+        <p role="status" className="rounded-xl border border-primary/20 bg-accent p-3.5 text-sm font-medium text-primary">
           {assignmentFeedback}
         </p>
       )}
 
-      <section aria-label="Parcel statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard
-          label="Total parcels"
-          value={metrics.total}
-          description="All parcels visible to dispatch"
-          icon={Package}
-          loading={metricsLoading}
+      {/* 1. Dashboard Overview */}
+      <section id="dashboard-overview" aria-labelledby="heading-dashboard-overview" className="scroll-mt-20 space-y-4">
+        <SectionHeading
+          id="heading-dashboard-overview"
+          eyebrow="Operational summary"
+          title="Dashboard overview"
+          description="Live snapshot of parcel volume, pending pickup queue, active assignments, and completed deliveries."
         />
-        <MetricCard
-          label="Pending pickup requests"
-          value={metrics.pendingPickup}
-          description="CREATED parcels with no active pickup courier"
-          icon={ClipboardList}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Active pickups"
-          value={metrics.activePickups}
-          description="Active pickup assignments"
-          icon={MapPin}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Active deliveries"
-          value={metrics.activeDeliveries}
-          description="Active delivery assignments"
-          icon={Truck}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Delivered parcels"
-          value={metrics.delivered}
-          description="Parcels in the DELIVERED status"
-          icon={PackageCheck}
-          loading={metricsLoading}
-        />
+        <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+          <CardContent className="space-y-4 p-4 sm:p-5">
+            {metricsError && (
+              <p role="status" className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+                <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                {metricsError}
+              </p>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <MetricCard
+                label="Total parcels"
+                value={metrics.total}
+                description="All parcels visible to dispatch"
+                icon={Package}
+                loading={metricsLoading}
+              />
+              <MetricCard
+                label="Pending pickup requests"
+                value={metrics.pendingPickup}
+                description="CREATED parcels with no active pickup courier"
+                icon={ClipboardList}
+                loading={metricsLoading}
+              />
+              <MetricCard
+                label="Active pickups"
+                value={metrics.activePickups}
+                description="Active pickup assignments"
+                icon={MapPin}
+                loading={metricsLoading}
+              />
+              <MetricCard
+                label="Active deliveries"
+                value={metrics.activeDeliveries}
+                description="Active delivery assignments"
+                icon={Truck}
+                loading={metricsLoading}
+              />
+              <MetricCard
+                label="Delivered parcels"
+                value={metrics.delivered}
+                description="Parcels in the DELIVERED status"
+                icon={PackageCheck}
+                loading={metricsLoading}
+              />
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
-      <section id="pickup-requests" className="scroll-mt-6 space-y-4">
+      {/* 2. Pickup Requests */}
+      <section id="pickup-requests" aria-labelledby="heading-pickup-requests" className="scroll-mt-20 space-y-4">
         <SectionHeading
+          id="heading-pickup-requests"
           eyebrow="Dispatch queue"
           title="Pickup requests"
           description="Customer and merchant parcels with their current pickup assignment state."
         />
-        <Card className="rounded-xl border-border bg-card shadow-xs">
+        <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
           <CardContent className="space-y-4 p-4 sm:p-5">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-              <label className="relative block">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+              <label className="relative block sm:col-span-2 lg:col-span-1">
                 <span className="sr-only">Search parcel IDs or tracking numbers</span>
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
@@ -449,15 +469,15 @@ export default function DispatchPortalPage() {
                     setParcelPageLoading(true);
                   }}
                   placeholder="Search parcel ID or tracking number"
-                  className="h-10 pl-9"
+                  className="h-10 bg-background pl-9"
                 />
               </label>
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span>Status</span>
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                <span className="shrink-0">Status</span>
                 <select
                   value={parcelStatus}
                   onChange={(event) => changeParcelStatus(event.target.value)}
-                  className="h-10 min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
                 >
                   {FILTER_STATUSES.map((status) => (
                     <option key={status} value={status}>
@@ -466,8 +486,8 @@ export default function DispatchPortalPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span>Source</span>
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                <span className="shrink-0">Source</span>
                 <select
                   value={sourceFilter}
                   onChange={(event) => {
@@ -475,7 +495,7 @@ export default function DispatchPortalPage() {
                     setParcelPageNumber(0);
                     setParcelPageLoading(true);
                   }}
-                  className="h-10 min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="h-10 w-full min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
                 >
                   {SOURCE_FILTERS.map((source) => (
                     <option key={source} value={source}>
@@ -484,8 +504,8 @@ export default function DispatchPortalPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span>Assignment</span>
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:col-span-2 sm:justify-start lg:col-span-1">
+                <span className="shrink-0">Assignment</span>
                 <select
                   value={assignmentFilter}
                   onChange={(event) => {
@@ -493,7 +513,7 @@ export default function DispatchPortalPage() {
                     setParcelPageNumber(0);
                     setParcelPageLoading(true);
                   }}
-                  className="h-10 min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
                 >
                   <option value="ALL">All assignments</option>
                   <option value="UNASSIGNED">Unassigned</option>
@@ -538,11 +558,13 @@ export default function DispatchPortalPage() {
                           parcel={parcel}
                           courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
                           onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
-                          onAssign={() => setSelectedParcel({
-                            parcel,
-                            mode: "assignment",
-                            assignmentType: "PICKUP",
-                          })}
+                          onAssign={() =>
+                            setSelectedParcel({
+                              parcel,
+                              mode: "assignment",
+                              assignmentType: "PICKUP",
+                            })
+                          }
                         />
                       ))}
                     </tbody>
@@ -555,11 +577,13 @@ export default function DispatchPortalPage() {
                       parcel={parcel}
                       courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
                       onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
-                      onAssign={() => setSelectedParcel({
-                        parcel,
-                        mode: "assignment",
-                        assignmentType: "PICKUP",
-                      })}
+                      onAssign={() =>
+                        setSelectedParcel({
+                          parcel,
+                          mode: "assignment",
+                          assignmentType: "PICKUP",
+                        })
+                      }
                     />
                   ))}
                 </div>
@@ -581,13 +605,15 @@ export default function DispatchPortalPage() {
         </Card>
       </section>
 
-      <section id="active-deliveries" className="scroll-mt-6 space-y-4">
+      {/* 3. Active Deliveries */}
+      <section id="active-deliveries" aria-labelledby="heading-active-deliveries" className="scroll-mt-20 space-y-4">
         <SectionHeading
+          id="heading-active-deliveries"
           eyebrow="In progress"
           title="Active deliveries"
           description="Parcels with an active delivery assignment, sorted by last update."
         />
-        <Card className="rounded-xl border-border bg-card shadow-xs">
+        <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
           <CardContent className="p-4 sm:p-5">
             {activeError && <ErrorMessage message={activeError} />}
             {activeLoading && <LoadingRows label="Loading active deliveries" />}
@@ -640,83 +666,36 @@ export default function DispatchPortalPage() {
         </Card>
       </section>
 
-      <section id="couriers" className="scroll-mt-6 space-y-4">
+      {/* 4. Parcel Tracking */}
+      <section id="parcel-tracking" aria-labelledby="heading-parcel-tracking" className="scroll-mt-20 space-y-4">
         <SectionHeading
-          eyebrow="Fleet"
-          title="Courier accounts"
-          description="Availability is derived from active assignment records, not account status alone."
+          id="heading-parcel-tracking"
+          eyebrow="Live lookup"
+          title="Parcel tracking"
+          description="Inspect real-time parcel status timelines or open the public tracking view with a tracking number."
         />
-        <Card className="rounded-xl border-border bg-card shadow-xs">
-          <CardContent className="space-y-4 p-4 sm:p-5">
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-              <p>
-                All enabled couriers are eligible for parcel assignments and reassignments. Active parcel counts are displayed for operational guidance.
-              </p>
+        <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-accent text-primary">
+                <MapPin className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Public & staff parcel timeline</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Select any parcel row above for the detailed dispatch timeline, or open the live public tracker by tracking code.
+                </p>
+              </div>
             </div>
-            {couriersError && <ErrorMessage message={couriersError} />}
-            {couriersLoading && <LoadingRows label="Loading courier accounts" />}
-            {!couriersLoading && !couriersError && courierItems.length === 0 && (
-              <EmptyState
-                icon={Users}
-                title="No courier accounts found"
-                description="Create courier accounts through the existing staff user management workflow."
-              />
-            )}
-            {!couriersLoading && !couriersError && courierItems.length > 0 && (
-              <>
-                <div className="space-y-2">
-                  {courierItems.map((courier) => (
-                    <CourierAccountCard
-                      key={courier.id}
-                      courier={courier}
-                      activeCount={courierActiveCount(courier.id)}
-                      onAssign={() => {
-                        setParcelStatus("CREATED");
-                        setSourceFilter("ALL");
-                        setAssignmentFilter("UNASSIGNED");
-                        setSearch("");
-                        setParcelPageNumber(0);
-                        setParcelPageLoading(true);
-                        document.getElementById("pickup-requests")?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                    />
-                  ))}
-                </div>
-                <Pagination
-                  page={courierPageNumber}
-                  totalPages={courierTotalPages}
-                  totalItems={couriers.length}
-                  pageSize={COURIER_PAGE_SIZE}
-                  loading={couriersLoading}
-                  onPrevious={() => changeCourierPage(Math.max(0, courierPageNumber - 1))}
-                  onNext={() => changeCourierPage(Math.min(courierTotalPages - 1, courierPageNumber + 1))}
-                />
-              </>
-            )}
+            <Link
+              href="/track"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-accent px-3.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+            >
+              Open tracking
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+            </Link>
           </CardContent>
         </Card>
-      </section>
-
-      <section id="parcel-tracking" className="scroll-mt-6">
-        <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-accent p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="flex items-start gap-3">
-            <MapPin className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-            <div>
-              <h2 className="text-sm font-bold text-foreground">Parcel tracking</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Open parcel details for the staff timeline, or use public tracking with a tracking number.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/track"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/5"
-          >
-            Open tracking
-            <ArrowUpRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
       </section>
 
       {selectedParcel && (
@@ -724,7 +703,7 @@ export default function DispatchPortalPage() {
           parcel={selectedParcel.parcel}
           mode={selectedParcel.mode}
           assignmentType={selectedParcel.mode === "assignment" ? selectedParcel.assignmentType : null}
-          couriers={couriers}
+          couriers={dialogCouriers}
           workloads={workloads}
           couriersLoading={couriersLoading}
           onAssigned={(assignment) => {
@@ -750,8 +729,8 @@ function MetricCard({
   loading = false,
 }: MetricCardProps & { loading?: boolean }) {
   return (
-    <Card className="rounded-xl border-border bg-card shadow-xs">
-      <CardContent className="flex h-full items-start justify-between gap-3 p-4">
+    <div className="flex h-full flex-col justify-between gap-3 rounded-lg border border-border bg-background p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
           {loading && !unavailable ? (
@@ -761,21 +740,23 @@ function MetricCard({
               {unavailable || value === null ? "—" : value.toLocaleString("en-US")}
             </p>
           )}
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
         </div>
-        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-accent text-primary">
-          <Icon className="size-5" aria-hidden="true" />
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-accent text-primary">
+          <Icon className="size-4" aria-hidden="true" />
         </span>
-      </CardContent>
-    </Card>
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+    </div>
   );
 }
 
 function SectionHeading({
+  id,
   eyebrow,
   title,
   description,
 }: {
+  id?: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -783,7 +764,7 @@ function SectionHeading({
   return (
     <div className="space-y-1">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
-      <h2 className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
+      <h2 id={id} className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
       <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
     </div>
   );
@@ -793,7 +774,7 @@ function SectionLink({ href, children }: { href: string; children: ReactNode }) 
   return (
     <a
       href={href}
-      className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       {children}
     </a>
@@ -822,7 +803,7 @@ function ParcelTableRow({
       <td className="px-4 py-3"><StatusBadge status={parcel.status} /></td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(parcel.createdAt)}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
-        {parcel.assignedCourierId ? courierName ?? parcel.assignedCourierId : "Unassigned"}
+        {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1">
@@ -866,7 +847,9 @@ function ParcelMobileCard({
       </p>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>Requested {formatDate(parcel.createdAt)}</span>
-        <span className="truncate">Courier: {parcel.assignedCourierId ? courierName ?? parcel.assignedCourierId : "Unassigned"}</span>
+        <span className="truncate">
+          Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
+        </span>
       </div>
       <div className="flex gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onDetails} className="flex-1">
@@ -898,7 +881,9 @@ function ActiveDeliveryRow({
         <span className="mt-1 block text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}…</span>
       </td>
       <td className="px-4 py-3 text-muted-foreground">{parcel.dropoffCity}</td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">{courierName ?? parcel.assignedCourierId ?? "Not assigned"}</td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Not assigned"}
+      </td>
       <td className="px-4 py-3"><StatusBadge status={parcel.status} /></td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
       <td className="px-4 py-3">
@@ -927,61 +912,13 @@ function ActiveDeliveryCard({
         <StatusBadge status={parcel.status} />
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>Courier: {courierName ?? parcel.assignedCourierId ?? "Not assigned"}</span>
+        <span>
+          Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Not assigned"}
+        </span>
         <span>{formatDateTime(parcel.updatedAt)}</span>
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onDetails}>View details</Button>
     </article>
-  );
-}
-
-function CourierAccountCard({
-  courier,
-  activeCount,
-  onAssign,
-}: {
-  courier: UserResponse;
-  activeCount: number;
-  onAssign: () => void;
-}) {
-  return (
-    <article className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
-          <UserRound className="size-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{courier.fullName}</p>
-          <p className="truncate font-mono text-[10px] text-muted-foreground">{courier.id}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-[360px] sm:grid-cols-2">
-        <CourierValue label="Account status" value={courier.enabled ? "ACTIVE" : "INACTIVE"} />
-        <CourierValue
-          label="Active workload"
-          value={activeCount === 1 ? "1 parcel" : `${activeCount} parcels`}
-        />
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={!courier.enabled}
-        onClick={onAssign}
-        title={courier.enabled ? "Choose an unassigned parcel to assign" : "Courier account is disabled"}
-      >
-        {courier.enabled ? "Assign parcel" : "Disabled"}
-      </Button>
-    </article>
-  );
-}
-
-function CourierValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-muted/60 px-2.5 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-semibold text-foreground">{value}</p>
-    </div>
   );
 }
 

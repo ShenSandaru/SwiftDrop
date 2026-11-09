@@ -21,9 +21,7 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { href: "/admin/reports", label: "Reports", exact: true },
 ];
 
-export const DISPATCHER_NAV: PortalNavItem[] = [
-  { href: "/dispatch", label: "Dispatch Fleet", exact: true },
-];
+export const DISPATCHER_NAV: PortalNavItem[] = [];
 
 export interface PortalShellProps {
   portalName: string;

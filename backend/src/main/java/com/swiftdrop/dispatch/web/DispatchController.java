@@ -1,5 +1,6 @@
 package com.swiftdrop.dispatch.web;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -64,6 +65,13 @@ class DispatchController {
     @GetMapping("/courier-workloads")
     Map<UUID, Long> courierWorkloads() {
         return dispatch.courierWorkloads();
+    }
+
+    @GetMapping("/couriers")
+    List<DispatchCourierResponse> couriers() {
+        return dispatch.activeCouriers().stream()
+                .map(DispatchCourierResponse::from)
+                .toList();
     }
 
     @GetMapping("/parcels/{id}/assignment-history")

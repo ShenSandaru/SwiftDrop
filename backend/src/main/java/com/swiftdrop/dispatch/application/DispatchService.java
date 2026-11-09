@@ -1,5 +1,6 @@
 package com.swiftdrop.dispatch.application;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -49,6 +50,11 @@ public class DispatchService {
     @Transactional(readOnly = true)
     public Map<UUID, Long> courierWorkloads() {
         return parcels.countActiveParcelsByCourier();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSummary> activeCouriers() {
+        return users.findEnabledCouriers();
     }
 
     @Transactional(readOnly = true)

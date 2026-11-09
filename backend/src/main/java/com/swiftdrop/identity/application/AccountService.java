@@ -142,6 +142,13 @@ public class AccountService implements UserDirectory {
         return users.findById(id).map(AccountService::toSummary);
     }
 
+    @Override
+    public List<UserSummary> findEnabledCouriers() {
+        return users.findByRoleAndEnabledTrue(Role.COURIER).stream()
+                .map(AccountService::toSummary)
+                .toList();
+    }
+
     private static UserSummary toSummary(User user) {
         Set<String> roleNames = user.getRoles().stream()
                 .map(Enum::name)

@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { StatusTimeline } from "@/components/delivery/status-timeline";
 import { formatDateTime, formatWeight, SIZE_LABELS, STATUS_LABELS } from "@/components/delivery/format";
-import { formatApiError, type UserResponse } from "@/lib/api";
+import { formatApiError } from "@/lib/api";
 import type { ParcelDetail } from "@/lib/delivery";
 import type {
   DispatchAssignment,
   DispatchAssignmentType,
+  DispatchCourier,
   DispatchParcelItem,
 } from "@/lib/dispatch";
 import {
@@ -24,7 +25,7 @@ interface ParcelDialogProps {
   parcel: DispatchParcelItem;
   mode: "details" | "assignment";
   assignmentType: DispatchAssignmentType | null;
-  couriers: UserResponse[];
+  couriers: DispatchCourier[];
   workloads: Record<string, number> | null;
   couriersLoading: boolean;
   onAssigned: (assignment: DispatchAssignment) => void;
@@ -72,7 +73,7 @@ export function ParcelDialog({
     () => new Map(couriers.map((courier) => [courier.id, courier.fullName])),
     [couriers],
   );
-  const eligibleCouriers = couriers.filter((courier) => courier.enabled);
+  const eligibleCouriers = couriers;
 
   useEffect(() => {
     let active = true;

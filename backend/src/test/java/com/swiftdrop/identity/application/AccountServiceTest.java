@@ -315,6 +315,20 @@ class AccountServiceTest {
         verify(users).findByRole(any(Role.class), any(org.springframework.data.domain.Pageable.class));
     }
 
+    @Test
+    void findEnabledCouriersReturnsOnlyActiveCouriers() {
+        User courier = withId(new User("courier@example.com", "hash", "Kasun Perera", Set.of(Role.COURIER)));
+        when(users.findByRoleAndEnabledTrue(Role.COURIER)).thenReturn(List.of(courier));
+
+        List<UserSummary> result = service.findEnabledCouriers();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().fullName()).isEqualTo("Kasun Perera");
+        assertThat(result.getFirst().roles()).containsExactly("COURIER");
+        assertThat(result.getFirst().enabled()).isTrue();
+        verify(users).findByRoleAndEnabledTrue(Role.COURIER);
+    }
+
     private static User existing(String passwordHash) {
         return withId(new User("alice@example.com", passwordHash, "Alice", Set.of(Role.CUSTOMER)));
     }

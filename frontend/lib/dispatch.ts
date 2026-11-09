@@ -1,4 +1,4 @@
-import { api, type PageResponse, type UserResponse } from "@/lib/api";
+import { api, type PageResponse } from "@/lib/api";
 import type { ParcelDetail, ParcelStatus, ParcelSize } from "@/lib/delivery";
 
 export type DispatchAssignmentType = "PICKUP" | "DELIVERY";
@@ -33,6 +33,11 @@ export interface DispatchAssignment {
 export interface DispatchAssignmentHistory {
   parcelId: string;
   assignments: DispatchAssignment[];
+}
+
+export interface DispatchCourier {
+  id: string;
+  fullName: string;
 }
 
 export interface DispatchParcelPageRequest {
@@ -73,23 +78,12 @@ export async function countDispatchParcels(status?: ParcelStatus): Promise<numbe
   return page.totalItems;
 }
 
-export function listDispatchCouriers(page: number, size: number): Promise<PageResponse<UserResponse>> {
-  const query = new URLSearchParams({ page: String(page), size: String(size), role: "COURIER" });
-  return api.get<PageResponse<UserResponse>>(`/api/v1/users?${query.toString()}`);
+export function listDispatchCouriers(): Promise<DispatchCourier[]> {
+  return api.get<DispatchCourier[]>("/api/v1/dispatch/couriers");
 }
 
-export async function listAllDispatchCouriers(): Promise<UserResponse[]> {
-  const firstPage = await listDispatchCouriers(0, 100);
-  if (firstPage.totalPages < 2) {
-    return firstPage.items;
-  }
-
-  const remaining = await Promise.all(
-    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      listDispatchCouriers(index + 1, 100),
-    ),
-  );
-  return [...firstPage.items, ...remaining.flatMap((page) => page.items)];
+export async function listAllDispatchCouriers(): Promise<DispatchCourier[]> {
+  return listDispatchCouriers();
 }
 
 export function listActiveDispatchAssignments(
