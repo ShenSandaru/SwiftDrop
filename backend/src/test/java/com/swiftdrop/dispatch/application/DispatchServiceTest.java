@@ -81,4 +81,20 @@ class DispatchServiceTest {
 
         verify(assignments, never()).assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
     }
+
+    @Test
+    void delegatesReassignmentToDifferentCourier() {
+        UUID replacementCourierId = UUID.randomUUID();
+        UserSummary courier = new UserSummary(replacementCourierId, "Replacement Courier", "courier2@example.com",
+                Set.of("COURIER"), true);
+        ParcelAssignmentSummary expected = new ParcelAssignmentSummary(UUID.randomUUID(), PARCEL_ID, replacementCourierId,
+                ParcelAssignmentType.PICKUP, ParcelAssignmentStatus.ACTIVE, Instant.now(), null, DISPATCHER_ID);
+        when(users.findUser(replacementCourierId)).thenReturn(Optional.of(courier));
+        when(assignments.assignCourier(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .thenReturn(expected);
+
+        assertThat(service.assign(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .isEqualTo(expected);
+        verify(assignments).assignCourier(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+    }
 }

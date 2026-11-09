@@ -77,13 +77,13 @@ class ParcelAssignmentService implements ParcelAssignment {
             if (current.getCourierId().equals(courierUserId)) {
                 return current.toSummary();
             }
-            throw new ParcelConflictException("The parcel is already assigned to another courier");
-        }
-        if (parcel.getAssignedCourierId() != null) {
-            if (parcel.getAssignedCourierId().equals(courierUserId)) {
-                throw new ParcelConflictException("The parcel assignment history is missing for current courier");
+            if (!current.getCourierId().equals(parcel.getAssignedCourierId())) {
+                throw new ParcelConflictException("The current parcel assignment does not match its history");
             }
-            throw new ParcelConflictException("The parcel is already assigned to another courier");
+            current.reassign(now);
+            assignments.saveAndFlush(current);
+        } else if (parcel.getAssignedCourierId() != null) {
+            throw new ParcelConflictException("The current parcel assignment has no active history record");
         }
 
         parcel.assignPickupCourier(courierUserId, now);

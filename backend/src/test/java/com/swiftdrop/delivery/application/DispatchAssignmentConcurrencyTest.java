@@ -123,22 +123,26 @@ class DispatchAssignmentConcurrencyTest {
     }
 
     @Test
-    void competingAssignmentOnAlreadyAssignedParcelThrowsParcelConflict() {
+    void sequentialReassignmentOnAlreadyAssignedParcelSucceedsAndMarksPreviousReassigned() {
         UUID courier1 = UUID.randomUUID();
         UUID courier2 = UUID.randomUUID();
 
-        parcel.assignCourier(courier1, NOW.minusSeconds(30));
+        parcel.assignPickupCourier(courier1, NOW.minusSeconds(30));
         ParcelAssignmentRecord active = new ParcelAssignmentRecord(
                 PARCEL_ID, courier1, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
         when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
                 .thenReturn(Optional.of(active));
 
-        assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, courier2, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
-                .isInstanceOf(ParcelConflictException.class)
-                .hasMessage("The parcel is already assigned to another courier");
+        ParcelAssignmentSummary summary = service.assignCourier(
+                PARCEL_ID, courier2, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
 
-        assertThat(parcel.getAssignedCourierId()).isEqualTo(courier1);
-        assertThat(active.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+        assertThat(summary.courierId()).isEqualTo(courier2);
+        assertThat(summary.status()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+        assertThat(summary.completedAt()).isNull();
+
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(courier2);
+        assertThat(active.getStatus()).isEqualTo(ParcelAssignmentStatus.REASSIGNED);
+        assertThat(active.toSummary().completedAt()).isEqualTo(NOW);
     }
 
     @Test

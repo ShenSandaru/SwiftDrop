@@ -144,7 +144,7 @@ class DispatchAssignmentConcurrencyIT {
     }
 
     @Test
-    void assigningAlreadyAssignedParcelToDifferentCourier_returns409Conflict() throws Exception {
+    void reassigningParcelToDifferentCourier_persistsPreviousReassignedAndNewActiveRecord() throws Exception {
         UUID courier1 = insertUser("courier-alpha", "COURIER");
         UUID courier2 = insertUser("courier-beta", "COURIER");
         UUID parcelId = insertParcel("CREATED");
@@ -156,22 +156,55 @@ class DispatchAssignmentConcurrencyIT {
                         .content(body1)
                         .with(TestPrincipal.dispatcherAdmin(dispatcherId).postProcessor()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.courierId").value(courier1.toString()));
+                .andExpect(jsonPath("$.courierId").value(courier1.toString()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.completedAt").doesNotExist());
 
-        // Competing attempt to assign courier2
+        // Sequential reassignment to courier2
         String body2 = toJson(parcelId, courier2, "PICKUP");
         mvc.perform(post("/api/v1/dispatch/parcel-assignments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body2)
                         .with(TestPrincipal.dispatcherAdmin(dispatcherId).postProcessor()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("The parcel is already assigned to another courier"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.courierId").value(courier2.toString()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.completedAt").doesNotExist());
 
-        // Verify courier1 remains assigned
+        // Verify parcels table has the new courier assigned
         UUID assignedInDb = jdbc.queryForObject(
                 "SELECT assigned_courier_id FROM parcels WHERE id = ?",
                 UUID.class, parcelId);
-        assertThat(assignedInDb).isEqualTo(courier1);
+        assertThat(assignedInDb).isEqualTo(courier2);
+
+        // Verify total assignments count for parcel is 2
+        Integer totalCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM parcel_assignments WHERE parcel_id = ?",
+                Integer.class, parcelId);
+        assertThat(totalCount).isEqualTo(2);
+
+        // Verify exactly 1 ACTIVE assignment exists
+        Integer activeCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM parcel_assignments WHERE parcel_id = ? AND status = 'ACTIVE'",
+                Integer.class, parcelId);
+        assertThat(activeCount).isEqualTo(1);
+
+        // Verify exactly 1 REASSIGNED assignment exists with completed_at set
+        Integer reassignedCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM parcel_assignments WHERE parcel_id = ? AND status = 'REASSIGNED' AND completed_at IS NOT NULL",
+                Integer.class, parcelId);
+        assertThat(reassignedCount).isEqualTo(1);
+
+        // Verify the previous assignment belongs to courier1 and the active assignment belongs to courier2
+        UUID activeCourierInDb = jdbc.queryForObject(
+                "SELECT courier_id FROM parcel_assignments WHERE parcel_id = ? AND status = 'ACTIVE'",
+                UUID.class, parcelId);
+        assertThat(activeCourierInDb).isEqualTo(courier2);
+
+        UUID reassignedCourierInDb = jdbc.queryForObject(
+                "SELECT courier_id FROM parcel_assignments WHERE parcel_id = ? AND status = 'REASSIGNED'",
+                UUID.class, parcelId);
+        assertThat(reassignedCourierInDb).isEqualTo(courier1);
     }
 
     @Test
