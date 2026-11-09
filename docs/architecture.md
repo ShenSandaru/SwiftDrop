@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only; delivery writes outbox rows, no relay yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; no consumers yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -209,19 +209,32 @@ tracking     → delivery
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
-  **No exchanges, queues, producers or consumers exist yet.** A connection smoke test against
-  RabbitMQ 4.3 succeeded in Stage 5.
+  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5. **No queues or consumers
+  exist yet** (`notification`, `merchant`).
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
   `ParcelEvents.eventsBetween` rebuilds past events from history, identical to the outbox payloads.
-  The relay that publishes the outbox to RabbitMQ is not implemented (Member 9).
+- **Implemented (ADR 0004 §3, §4.2, §9; `delivery.infrastructure.outbox`):** `delivery` declares
+  the durable topic exchange `swiftdrop.events` (`ParcelStatusChanged.EXCHANGE`, routing key
+  `parcel.status-changed`). A scheduled relay polls every second in one transaction behind a
+  PostgreSQL advisory lock, publishes unpublished rows in outbox order with the ADR message
+  properties (persistent, `message-id` = event ID), waits for the publisher confirm (correlated
+  confirms, returns, mandatory flag) and marks rows published. Nacks, returns, confirm timeouts and
+  connection failures leave the row unpublished with exponential backoff; a failing or waiting row
+  blocks only its own parcel's later rows; broker-wide failures end the poll. A monitor exposes
+  `swiftdrop.outbox.*` gauges and logs one `ERROR` line (IDs only) when an ADR §9 threshold is
+  crossed and one line when it clears; a daily job deletes published rows older than 7 days.
+  Settings are `swiftdrop.outbox.relay.*` with the ADR defaults; the relay is switched off on the
+  test classpath and on with `swiftdrop.outbox.relay.enabled`. Until a consumer binds a queue,
+  every event is returned as unroutable and waits in the outbox, which the monitor reports.
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
-- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).**
-  **None of it is implemented yet**, and the decision is not an authorization to implement it
-  without an approved task:
+- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).** The
+  publishing side (outbox, relay, exchange) is implemented as above; **the consumer side
+  (queues, dead-lettering, consumers, webhooks, notifications) is not**, and the decision is not an
+  authorization to implement it without an approved task:
   - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
     Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
   - **Event:** `parcel.status-changed`, a versioned JSON envelope with event ID and per-parcel
