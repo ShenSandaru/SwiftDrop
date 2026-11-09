@@ -76,6 +76,7 @@ class CourierFlowIT {
     private UUID customerId;
     private String customer;
     private UUID courierAId;
+    private UUID dispatcherId;
     private String courierA;
     private String courierB;
 
@@ -93,6 +94,8 @@ class CourierFlowIT {
         courierAId = insertUser("courier-a", "COURIER");
         courierA = login(courierAId);
         courierB = login(insertUser("courier-b", "COURIER"));
+        // Assignments name a real dispatcher (ADR 0008; foreign key to users)
+        dispatcherId = insertUser("dispatcher", "DISPATCHER_ADMIN");
     }
 
     @Test
@@ -100,7 +103,7 @@ class CourierFlowIT {
         JsonNode booked = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED);
         String parcelId = booked.get("id").asString();
         String trackingNumber = booked.get("trackingNumber").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
 
         JsonNode today = body(get(courierA, "/api/v1/courier/parcels"), HttpStatus.OK);
         assertThat(today).hasSize(1);
@@ -148,7 +151,7 @@ class CourierFlowIT {
     @Test
     void courierCannotSeeOrChangeAnotherCouriersDelivery() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
 
         assertThat(body(get(courierB, "/api/v1/courier/parcels"), HttpStatus.OK)).isEmpty();
         assertThat(get(courierB, "/api/v1/parcels/" + parcelId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -164,7 +167,7 @@ class CourierFlowIT {
     @Test
     void failedDeliveryNeedsAReasonAndTheReceiptShowsIt() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
         changeStatus(courierA, parcelId, "{\"toStatus\":\"PICKED_UP\"}");
 
         assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"FAILED\"}").getStatusCode())
@@ -183,7 +186,7 @@ class CourierFlowIT {
     @Test
     void uploadsAreCheckedByContentAndSize() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
         assertThat(uploadProof(courierA, parcelId, "Kumari", JPEG).getStatusCode())
                 .as("proof before out for delivery").isEqualTo(HttpStatus.CONFLICT);
         for (String step : new String[] {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"}) {
