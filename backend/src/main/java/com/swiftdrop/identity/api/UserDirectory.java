@@ -1,5 +1,6 @@
 package com.swiftdrop.identity.api;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,6 +17,13 @@ public interface UserDirectory {
      * @return the user summary, or empty if no user exists with this ID
      */
     Optional<UserSummary> findUser(UUID id);
+
+    /**
+     * Retrieves all enabled users having the {@code COURIER} role.
+     *
+     * @return list of enabled courier user summaries
+     */
+    List<UserSummary> findEnabledCouriers();
 
     /**
      * Creates a new user with the {@code MERCHANT} role.

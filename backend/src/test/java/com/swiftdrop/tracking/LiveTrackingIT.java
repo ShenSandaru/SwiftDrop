@@ -77,6 +77,7 @@ class LiveTrackingIT {
 
     private final HttpClient client = HttpClient.newHttpClient();
     private UUID courierId;
+    private UUID dispatcherId;
 
     @BeforeEach
     void setUp() {
@@ -86,12 +87,16 @@ class LiveTrackingIT {
         courierId = UUID.randomUUID();
         jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Courier', TRUE, now())",
                 courierId, "courier-" + courierId + "@example.com");
+        // Assignments name a real dispatcher (ADR 0008; foreign key to users)
+        dispatcherId = UUID.randomUUID();
+        jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Dispatcher', TRUE, now())",
+                dispatcherId, "dispatcher-" + dispatcherId + "@example.com");
     }
 
     @Test
     void streamDeliversSnapshotThenLiveChangesAndEndsAfterTheFinalStatus() throws Exception {
         CreatedParcel parcel = merchantParcel();
-        assignment.assignCourier(parcel.parcelId(), courierId, UUID.randomUUID());
+        assignment.assignCourier(parcel.parcelId(), courierId, dispatcherId);
         BlockingQueue<String> lines = new LinkedBlockingQueue<>();
         CompletableFuture<HttpResponse<Stream<String>>> response = open(parcel.trackingNumber().toLowerCase(), lines);
 

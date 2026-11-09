@@ -107,6 +107,14 @@ class ParcelAuthorizationMatrixIT {
 
     @BeforeEach
     void createPeopleAndParcels() {
+        jdbc.update("DELETE FROM parcel_outbox_events");
+        jdbc.update("DELETE FROM delivery_proofs");
+        jdbc.update("DELETE FROM parcel_assignments");
+        jdbc.update("DELETE FROM parcel_status_history");
+        jdbc.update("DELETE FROM parcels");
+        jdbc.update("DELETE FROM user_roles");
+        jdbc.update("DELETE FROM users");
+
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("650.00"), "LKR", new BigDecimal("400.00"), new BigDecimal("100.00"),
                 new BigDecimal("150.00"), UUID.randomUUID()));
@@ -117,15 +125,16 @@ class ParcelAuthorizationMatrixIT {
         UUID courierId = insertUser(Role.COURIER);
         assignedCourier = TestPrincipal.user(courierId, Role.COURIER);
         otherCourier = TestPrincipal.user(insertUser(Role.COURIER), Role.COURIER);
-        admin = TestPrincipal.user(insertUser(Role.DISPATCHER_ADMIN), Role.DISPATCHER_ADMIN);
+        UUID adminId = insertUser(Role.ADMIN);
+        admin = TestPrincipal.user(adminId, Role.ADMIN);
         merchant = TestPrincipal.user(insertUser(Role.MERCHANT), Role.MERCHANT);
         dualRole = TestPrincipal.user(insertUser(Role.COURIER, Role.CUSTOMER), Role.COURIER, Role.CUSTOMER);
 
         booked = booking.bookForCustomer(ownerId, booking());
-        assignment.assignCourier(booked.getId(), courierId, UUID.randomUUID());
+        assignment.assignCourier(booked.getId(), courierId, adminId);
 
         delivered = booking.bookForCustomer(ownerId, booking());
-        assignment.assignCourier(delivered.getId(), courierId, UUID.randomUUID());
+        assignment.assignCourier(delivered.getId(), courierId, adminId);
         for (ParcelStatus step : List.of(ParcelStatus.PICKED_UP, ParcelStatus.IN_TRANSIT, ParcelStatus.OUT_FOR_DELIVERY)) {
             statuses.changeStatus(delivered.getId(), new StatusChange(step, null, null), Actor.courier(courierId));
         }

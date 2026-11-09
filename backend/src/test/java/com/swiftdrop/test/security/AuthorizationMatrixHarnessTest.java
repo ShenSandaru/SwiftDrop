@@ -204,7 +204,7 @@ class AuthorizationMatrixHarnessTest {
         }
 
         @GetMapping("/admin-only")
-        @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+        @PreAuthorize("hasRole('ADMIN')")
         String adminOnly() {
             return "admin-ok";
         }

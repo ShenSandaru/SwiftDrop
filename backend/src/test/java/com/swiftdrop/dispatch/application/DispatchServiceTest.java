@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -80,5 +81,32 @@ class DispatchServiceTest {
                 .isInstanceOf(DispatchCourierUnavailableException.class);
 
         verify(assignments, never()).assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+    }
+
+    @Test
+    void delegatesReassignmentToDifferentCourier() {
+        UUID replacementCourierId = UUID.randomUUID();
+        UserSummary courier = new UserSummary(replacementCourierId, "Replacement Courier", "courier2@example.com",
+                Set.of("COURIER"), true);
+        ParcelAssignmentSummary expected = new ParcelAssignmentSummary(UUID.randomUUID(), PARCEL_ID, replacementCourierId,
+                ParcelAssignmentType.PICKUP, ParcelAssignmentStatus.ACTIVE, Instant.now(), null, DISPATCHER_ID);
+        when(users.findUser(replacementCourierId)).thenReturn(Optional.of(courier));
+        when(assignments.assignCourier(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .thenReturn(expected);
+
+        assertThat(service.assign(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .isEqualTo(expected);
+        verify(assignments).assignCourier(PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+    }
+
+    @Test
+    void retrievesActiveCouriersFromUserDirectory() {
+        UserSummary courier = new UserSummary(COURIER_ID, "Courier", "courier@example.com", Set.of("COURIER"), true);
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier));
+
+        List<UserSummary> active = service.activeCouriers();
+
+        assertThat(active).containsExactly(courier);
+        verify(users).findEnabledCouriers();
     }
 }

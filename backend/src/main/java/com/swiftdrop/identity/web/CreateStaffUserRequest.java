@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * Request body for creating staff accounts (COURIER or DISPATCHER_ADMIN) under SD-102.
+ * Request body for creating staff accounts (COURIER or DISPATCHER) under SD-102.
  */
 public record CreateStaffUserRequest(
         @NotBlank @Size(max = 200) String fullName,

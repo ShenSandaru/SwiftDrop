@@ -8,6 +8,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -191,8 +194,17 @@ class DeliveryQueriesIT {
                 .map(serializer::fromJson)
                 .toList();
 
-        assertThat(rebuilt).hasSize(2).isEqualTo(outbox);
-        assertThat(events.eventsBetween(created.parcelId(), 2, 2)).containsExactly(outbox.get(1));
+        Comparator<Instant> withinPostgresRounding = (t1, t2) ->
+                Math.abs(ChronoUnit.NANOS.between(t1, t2)) <= 1000 ? 0 : t1.compareTo(t2);
+
+        assertThat(rebuilt).hasSize(2)
+                .usingRecursiveComparison()
+                .withComparatorForType(withinPostgresRounding, Instant.class)
+                .isEqualTo(outbox);
+        assertThat(events.eventsBetween(created.parcelId(), 2, 2))
+                .usingRecursiveComparison()
+                .withComparatorForType(withinPostgresRounding, Instant.class)
+                .isEqualTo(List.of(outbox.get(1)));
     }
 
     private CreatedParcel order(String reference) {

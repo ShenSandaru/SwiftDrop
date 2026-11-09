@@ -1,5 +1,6 @@
 package com.swiftdrop.dispatch.web;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ import com.swiftdrop.shared.web.PageResponse;
 
 @RestController
 @RequestMapping("/api/v1/dispatch")
-@PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
 class DispatchController {
 
     private final DispatchService dispatch;
@@ -52,14 +53,6 @@ class DispatchController {
         return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
     }
 
-    @GetMapping("/awaiting-delivery-assignments")
-    PageResponse<DispatchParcelSummary> awaitingDeliveryAssignments(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
-        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.awaitingDeliveryAssignment(request), request);
-    }
-
     @GetMapping("/active-assignments")
     PageResponse<ParcelAssignmentSummary> activeAssignments(
             @RequestParam ParcelAssignmentType type,
@@ -72,6 +65,13 @@ class DispatchController {
     @GetMapping("/courier-workloads")
     Map<UUID, Long> courierWorkloads() {
         return dispatch.courierWorkloads();
+    }
+
+    @GetMapping("/couriers")
+    List<DispatchCourierResponse> couriers() {
+        return dispatch.activeCouriers().stream()
+                .map(DispatchCourierResponse::from)
+                .toList();
     }
 
     @GetMapping("/parcels/{id}/assignment-history")

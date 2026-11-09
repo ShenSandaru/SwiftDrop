@@ -202,29 +202,10 @@ public class Parcel {
         setCurrentCourier(courierUserId, now);
     }
 
-    public void assignDeliveryCourier(UUID courierUserId, Instant now) {
-        Objects.requireNonNull(courierUserId, "courierUserId");
-        Objects.requireNonNull(now, "now");
-        if (status != ParcelStatus.PICKED_UP || assignedCourierId != null) {
-            throw new ParcelConflictException("A delivery courier can only be assigned after pickup completion");
-        }
-        setCurrentCourier(courierUserId, now);
-    }
-
     private void setCurrentCourier(UUID courierUserId, Instant now) {
         this.assignedCourierId = courierUserId;
         this.assignedAt = now;
         this.updatedAt = now;
-    }
-
-    public void releaseCurrentCourier(Instant now) {
-        Objects.requireNonNull(now, "now");
-        if (status != ParcelStatus.PICKED_UP && !ParcelLifecycle.isTerminal(status)) {
-            throw new ParcelConflictException("The courier can only be released after task completion");
-        }
-        assignedCourierId = null;
-        assignedAt = null;
-        updatedAt = now;
     }
 
     /**
