@@ -12,18 +12,23 @@ export interface PortalNavItem {
   exact?: boolean;
 }
 
-export const DISPATCHER_ADMIN_NAV: PortalNavItem[] = [
-  { href: "/dispatch", label: "Dispatch Fleet", exact: true },
+export const ADMIN_NAV: PortalNavItem[] = [
   { href: "/admin", label: "Overview", exact: true },
+  { href: "/dispatch", label: "Dispatch Fleet", exact: true },
   { href: "/admin/merchants", label: "Merchants", exact: true },
   { href: "/admin/users", label: "User Directory", exact: true },
   { href: "/admin/pricing", label: "Pricing & Zones", exact: true },
   { href: "/admin/reports", label: "Reports", exact: true },
 ];
 
+export const DISPATCHER_NAV: PortalNavItem[] = [
+  { href: "/dispatch", label: "Dispatch Fleet", exact: true },
+];
+
 export interface PortalShellProps {
   portalName: string;
-  role: BackendRole;
+  role?: BackendRole;
+  allowedRoles?: BackendRole[];
   workspaceBadge: string;
   navItems: PortalNavItem[];
   children: React.ReactNode;
@@ -36,14 +41,16 @@ export interface PortalShellProps {
 export function PortalShell({
   portalName,
   role,
+  allowedRoles,
   workspaceBadge,
   navItems,
   children,
 }: PortalShellProps) {
   const pathname = usePathname();
+  const displayRole = role || (allowedRoles && allowedRoles.length > 0 ? allowedRoles.join(" / ") : "AUTHORIZED");
 
   return (
-    <RoleGuard requiredRole={role} roleLabel={portalName}>
+    <RoleGuard requiredRole={role} allowedRoles={allowedRoles} roleLabel={portalName}>
       <main className="container mx-auto flex-1 px-4 py-8 max-w-5xl space-y-6">
         {/* Workspace Header */}
         <div className="space-y-3">
@@ -53,7 +60,7 @@ export function PortalShell({
               {workspaceBadge}
             </div>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border uppercase tracking-wider">
-              Role: {role}
+              Role: {displayRole}
             </span>
           </div>
 
