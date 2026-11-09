@@ -139,7 +139,7 @@ class AuthenticationApiTest {
 
     @Test
     void publicRegistrationCannotGrantPrivilegedRoles() throws Exception {
-        for (String role : List.of("MERCHANT", "COURIER", "DISPATCHER_ADMIN")) {
+        for (String role : List.of("MERCHANT", "COURIER", "DISPATCHER", "ADMIN", "DISPATCHER_ADMIN")) {
             register("""
                     {"fullName": "Mallory", "email": "mallory@example.com", "password": "correct horse",
                      "roles": ["%s"], "role": "%s"}""".formatted(role, role))
@@ -217,7 +217,7 @@ class AuthenticationApiTest {
                         "another-key-that-is-long-enough-for-hs256!!".getBytes(), "HmacSHA256"))
                 .algorithm(MacAlgorithm.HS256).build()
                 .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),
-                        claims(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN)))
+                        claims(now, now.plusSeconds(600), "swiftdrop", Role.ADMIN)))
                 .getTokenValue();
         String validButTampered = token(claims(now, now.plusSeconds(600), "swiftdrop", Role.CUSTOMER));
 
@@ -227,8 +227,8 @@ class AuthenticationApiTest {
                 forged,
                 tamperSignature(validButTampered),
                 // Expired beyond the 60-second clock skew
-                token(claims(now.minusSeconds(900), now.minusSeconds(120), "swiftdrop", Role.DISPATCHER_ADMIN)),
-                token(claims(now, now.plusSeconds(600), "someone-else", Role.DISPATCHER_ADMIN)))) {
+                token(claims(now.minusSeconds(900), now.minusSeconds(120), "swiftdrop", Role.ADMIN)),
+                token(claims(now, now.plusSeconds(600), "someone-else", Role.ADMIN)))) {
             mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + bad))
                     .andExpect(status().isUnauthorized());
         }
@@ -237,12 +237,12 @@ class AuthenticationApiTest {
     @Test
     void activeExistingUserWithValidTokenCanAccessProtectedEndpoint() throws Exception {
         UUID userId = UUID.randomUUID();
-        User activeAdmin = withId(user("mock-hash", Role.DISPATCHER_ADMIN));
+        User activeAdmin = withId(user("mock-hash", Role.ADMIN));
         ReflectionTestUtils.setField(activeAdmin, "id", userId);
         when(users.findById(userId)).thenReturn(Optional.of(activeAdmin));
 
         Instant now = Instant.now();
-        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN, userId));
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.ADMIN, userId));
 
         mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
@@ -263,7 +263,7 @@ class AuthenticationApiTest {
             mvc.perform(get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                     .andExpect(status().isUnauthorized());
 
-            if (role == Role.DISPATCHER_ADMIN) {
+            if (role == Role.ADMIN) {
                 mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                         .andExpect(status().isUnauthorized());
                 mvc.perform(get("/api/v1/users").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
@@ -278,7 +278,7 @@ class AuthenticationApiTest {
         when(users.findById(nonexistentId)).thenReturn(Optional.empty());
 
         Instant now = Instant.now();
-        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN, nonexistentId));
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.ADMIN, nonexistentId));
 
         mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnauthorized());
@@ -294,7 +294,7 @@ class AuthenticationApiTest {
                     .issuer("swiftdrop")
                     .issuedAt(now)
                     .expiresAt(now.plusSeconds(600))
-                    .claim("roles", List.of("DISPATCHER_ADMIN"));
+                    .claim("roles", List.of("ADMIN"));
             if (invalidSub != null) {
                 builder.subject(invalidSub);
             }
@@ -308,13 +308,13 @@ class AuthenticationApiTest {
     @Test
     void reenabledUserCanAuthenticateAgainUsingExistingToken() throws Exception {
         UUID userId = UUID.randomUUID();
-        User user = withId(user("mock-hash", Role.DISPATCHER_ADMIN));
+        User user = withId(user("mock-hash", Role.ADMIN));
         ReflectionTestUtils.setField(user, "id", userId);
         user.setEnabled(false);
         when(users.findById(userId)).thenReturn(Optional.of(user));
 
         Instant now = Instant.now();
-        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN, userId));
+        String token = token(claimsWithSubject(now, now.plusSeconds(600), "swiftdrop", Role.ADMIN, userId));
 
         // 1. Initially disabled -> 401 Unauthorized
         mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
@@ -334,7 +334,7 @@ class AuthenticationApiTest {
         for (Role role : Role.values()) {
             String token = token(claims(now, now.plusSeconds(600), "swiftdrop", role));
             mvc.perform(get(DISPATCHER_ONLY).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                    .andExpect(role == Role.DISPATCHER_ADMIN ? status().isOk() : status().isForbidden());
+                    .andExpect(role == Role.ADMIN ? status().isOk() : status().isForbidden());
         }
     }
 
@@ -388,7 +388,7 @@ class AuthenticationApiTest {
     @Test
     void nonAdminRolesCannotCreateCourierOrListUsers() throws Exception {
         Instant now = Instant.now();
-        for (Role role : List.of(Role.CUSTOMER, Role.MERCHANT, Role.COURIER)) {
+        for (Role role : List.of(Role.CUSTOMER, Role.MERCHANT, Role.COURIER, Role.DISPATCHER)) {
             String token = token(claims(now, now.plusSeconds(600), "swiftdrop", role));
 
             createStaff(token, """
@@ -400,8 +400,8 @@ class AuthenticationApiTest {
     }
 
     @Test
-    void dispatcherAdminCanListUsersWithoutExposingPasswordHashes() throws Exception {
-        User admin = withId(new User("admin@swiftdrop.com", "{bcrypt}hash1", "Admin", Set.of(Role.DISPATCHER_ADMIN)));
+    void adminCanListUsersWithoutExposingPasswordHashes() throws Exception {
+        User admin = withId(new User("admin@swiftdrop.com", "{bcrypt}hash1", "Admin", Set.of(Role.ADMIN)));
         User courier = withId(new User("courier@swiftdrop.com", "{bcrypt}hash2", "Courier Bob", Set.of(Role.COURIER)));
         User customer = withId(new User("customer@swiftdrop.com", "{bcrypt}hash3", "Customer Alice", Set.of(Role.CUSTOMER)));
         when(users.findAll()).thenReturn(List.of(admin, courier, customer));
@@ -410,7 +410,7 @@ class AuthenticationApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(3)))
                 .andExpect(jsonPath("$[0].email").value("admin@swiftdrop.com"))
-                .andExpect(jsonPath("$[0].roles", contains("DISPATCHER_ADMIN")))
+                .andExpect(jsonPath("$[0].roles", contains("ADMIN")))
                 .andExpect(jsonPath("$[1].email").value("courier@swiftdrop.com"))
                 .andExpect(jsonPath("$[1].roles", contains("COURIER")))
                 .andExpect(jsonPath("$[2].email").value("customer@swiftdrop.com"))
@@ -497,7 +497,7 @@ class AuthenticationApiTest {
 
     private String adminToken() {
         Instant now = Instant.now();
-        return token(claims(now, now.plusSeconds(600), "swiftdrop", Role.DISPATCHER_ADMIN));
+        return token(claims(now, now.plusSeconds(600), "swiftdrop", Role.ADMIN));
     }
 
     private User savedUser() {
@@ -546,7 +546,7 @@ class AuthenticationApiTest {
     static class RoleFixtureController {
 
         @GetMapping(DISPATCHER_ONLY)
-        @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+        @PreAuthorize("hasRole('ADMIN')")
         String dispatcherOnly() {
             return "ok";
         }

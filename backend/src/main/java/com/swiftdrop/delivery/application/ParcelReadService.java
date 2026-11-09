@@ -48,7 +48,7 @@ public class ParcelReadService {
      */
     public Page<Parcel> list(Viewer viewer, ParcelStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
-        if (viewer.isAdmin()) {
+        if (viewer.hasDispatchAccess()) {
             return status == null ? parcels.findAll(pageable) : parcels.findByStatus(status, pageable);
         }
         if (viewer.roles().contains(ActorRole.CUSTOMER)) {

@@ -31,7 +31,7 @@ import com.swiftdrop.shared.web.PageResponse;
 
 @RestController
 @RequestMapping("/api/v1/dispatch")
-@PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
 class DispatchController {
 
     private final DispatchService dispatch;

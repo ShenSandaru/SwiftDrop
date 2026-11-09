@@ -116,7 +116,7 @@ class AdminUserManagementApiTest {
 
     @BeforeEach
     void setUp() {
-        adminUser = withId(new User("admin@swiftdrop.com", passwordEncoder.encode("admin-pass"), "Admin Dave", Set.of(Role.DISPATCHER_ADMIN)), ADMIN_ID);
+        adminUser = withId(new User("admin@swiftdrop.com", passwordEncoder.encode("admin-pass"), "Admin Dave", Set.of(Role.ADMIN)), ADMIN_ID);
         targetUser = withId(new User("target@swiftdrop.com", passwordEncoder.encode("target-pass"), "Target Alice", Set.of(Role.CUSTOMER)), TARGET_USER_ID);
 
         when(users.findById(ADMIN_ID)).thenReturn(Optional.of(adminUser));
@@ -207,23 +207,57 @@ class AdminUserManagementApiTest {
     }
 
     @Test
-    void createStaffDispatcherAdminReturns201Created() throws Exception {
-        when(users.findByEmail("newadmin@swiftdrop.com")).thenReturn(Optional.empty());
+    void createStaffDispatcherReturns201Created() throws Exception {
+        when(users.findByEmail("newdispatcher@swiftdrop.com")).thenReturn(Optional.empty());
 
         mvc.perform(post("/api/v1/staff-users")
-                        .with(TestPrincipal.dispatcherAdmin(ADMIN_ID).postProcessor())
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "fullName": "Admin Sarah",
+                                  "fullName": "Dispatcher Sarah",
+                                  "email": "newdispatcher@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "DISPATCHER"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("newdispatcher@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("DISPATCHER")));
+    }
+
+    @Test
+    void createStaffRejectsAdminRole() throws Exception {
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "New Admin",
                                   "email": "newadmin@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "ADMIN"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Staff account role must be COURIER or DISPATCHER"));
+    }
+
+    @Test
+    void createStaffRejectsLegacyDispatcherAdminRole() throws Exception {
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Legacy Staff",
+                                  "email": "legacy@swiftdrop.com",
                                   "password": "secure-pass-123",
                                   "role": "DISPATCHER_ADMIN"
                                 }
                                 """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("newadmin@swiftdrop.com"))
-                .andExpect(jsonPath("$.roles", contains("DISPATCHER_ADMIN")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Staff account role must be COURIER or DISPATCHER"));
     }
 
     @Test
@@ -419,7 +453,7 @@ class AdminUserManagementApiTest {
                 .subject(adminId.toString())
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(900))
-                .claim("roles", List.of("DISPATCHER_ADMIN"))
+                .claim("roles", List.of("ADMIN"))
                 .build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

@@ -58,9 +58,9 @@ class ParcelController {
                 .body(ParcelCreatedResponse.from(parcel));
     }
 
-    /** Customers see their own parcels, dispatchers/admins all; newest first. */
+    /** Customers see their own parcels, dispatchers and admins all; newest first. */
     @GetMapping
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'DISPATCHER')")
     PageResponse<ParcelListItemResponse> list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -73,20 +73,20 @@ class ParcelController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'ADMIN', 'DISPATCHER')")
     ParcelDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return ParcelDetailResponse.from(reads.detail(id, Callers.viewer(jwt)));
     }
 
     @GetMapping("/{id}/receipt")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'DISPATCHER')")
     ReceiptResponse receipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return ReceiptResponse.from(reads.receipt(id, Callers.viewer(jwt)));
     }
 
-    /** Proof photo for the owner, the assigned courier or an admin; never cached. */
+    /** Proof photo for the owner, the assigned courier, dispatchers or admins; never cached. */
     @GetMapping("/{id}/proof/photo")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'ADMIN', 'DISPATCHER')")
     ResponseEntity<byte[]> proofPhoto(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         DeliveryProofService.Photo photo = proofs.photo(id, Callers.viewer(jwt))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo not found"));

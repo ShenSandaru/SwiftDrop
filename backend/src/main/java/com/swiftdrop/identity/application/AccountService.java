@@ -56,7 +56,7 @@ public class AccountService implements UserDirectory {
 
     /** Bootstraps the initial administrator account on startup. */
     public User bootstrapAdmin(String email, String rawPassword) {
-        return registerUser("System Administrator", email, rawPassword, EnumSet.of(Role.DISPATCHER_ADMIN));
+        return registerUser("System Administrator", email, rawPassword, EnumSet.of(Role.ADMIN));
     }
 
     /** Registers a courier staff account. */
@@ -64,10 +64,10 @@ public class AccountService implements UserDirectory {
         return registerUser(fullName, email, rawPassword, EnumSet.of(Role.COURIER));
     }
 
-    /** Registers a staff account (COURIER or DISPATCHER_ADMIN). */
+    /** Registers a staff account (COURIER or DISPATCHER). Rejects ADMIN. */
     public User registerStaff(String fullName, String email, String rawPassword, Role role) {
-        if (role != Role.COURIER && role != Role.DISPATCHER_ADMIN) {
-            throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER_ADMIN");
+        if (role != Role.COURIER && role != Role.DISPATCHER) {
+            throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER");
         }
         return registerUser(fullName, email, rawPassword, EnumSet.of(role));
     }
@@ -123,13 +123,16 @@ public class AccountService implements UserDirectory {
         return users.findAll(pageable);
     }
 
-    /** Enables or disables a user account. An administrator cannot disable their own account. */
+    /** Enables or disables a user account. The system Administrator account cannot be disabled. */
     public User updateUserStatus(UUID targetUserId, boolean enabled, UUID actingAdminId) {
         if (targetUserId.equals(actingAdminId) && !enabled) {
             throw new SelfDisablingException("An administrator cannot disable their own account");
         }
         User user = users.findById(targetUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (user.getRoles().contains(Role.ADMIN) && !enabled) {
+            throw new SelfDisablingException("The system Administrator account cannot be disabled");
+        }
         user.setEnabled(enabled);
         return users.saveAndFlush(user);
     }

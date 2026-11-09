@@ -24,7 +24,15 @@ public record Viewer(UUID userId, Set<ActorRole> roles) {
     }
 
     public boolean isAdmin() {
-        return roles.contains(ActorRole.DISPATCHER_ADMIN);
+        return roles.contains(ActorRole.ADMIN);
+    }
+
+    public boolean isDispatcher() {
+        return roles.contains(ActorRole.DISPATCHER);
+    }
+
+    public boolean hasDispatchAccess() {
+        return isAdmin() || isDispatcher();
     }
 
     public boolean owns(Parcel parcel) {
@@ -35,18 +43,18 @@ public record Viewer(UUID userId, Set<ActorRole> roles) {
         return roles.contains(ActorRole.COURIER) && userId.equals(parcel.getAssignedCourierId());
     }
 
-    /** Detail and timeline: the owning customer, the assigned courier, dispatchers/admins. */
+    /** Detail and timeline: the owning customer, the assigned courier, dispatchers and admins. */
     public boolean canView(Parcel parcel) {
-        return isAdmin() || owns(parcel) || isAssignedCourierOf(parcel);
+        return hasDispatchAccess() || owns(parcel) || isAssignedCourierOf(parcel);
     }
 
     /** Courier notes may describe the recipient, so customers do not see them. */
     public boolean canSeeNotes(Parcel parcel) {
-        return isAdmin() || isAssignedCourierOf(parcel);
+        return hasDispatchAccess() || isAssignedCourierOf(parcel);
     }
 
-    /** Receipts: the owning customer and dispatchers/admins (ADR 0006 §6). */
+    /** Receipts: the owning customer, dispatchers and admins (ADR 0006 §6). */
     public boolean canSeeReceipt(Parcel parcel) {
-        return isAdmin() || owns(parcel);
+        return hasDispatchAccess() || owns(parcel);
     }
 }

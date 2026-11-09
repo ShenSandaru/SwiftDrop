@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,8 +74,12 @@ class ParcelReadServiceTest {
     void ownerAssignedCourierAndAdminSeeDetail() {
         assertThat(service.detail(PARCEL_ID, Viewer.of(OWNER_ID, ActorRole.CUSTOMER)).history()).hasSize(1);
         assertThat(service.detail(PARCEL_ID, Viewer.of(COURIER_ID, ActorRole.COURIER)).parcel()).isSameAs(parcel);
-        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)).parcel())
+        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.ADMIN)).parcel())
                 .isSameAs(parcel);
+        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER)).parcel())
+                .isSameAs(parcel);
+        assertThatThrownBy(() -> service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)))
+                .isInstanceOf(ParcelNotFoundException.class);
     }
 
     @Test
@@ -99,15 +104,21 @@ class ParcelReadServiceTest {
     void notesAreVisibleToCourierAndAdminButNotToTheCustomer() {
         assertThat(service.detail(PARCEL_ID, Viewer.of(OWNER_ID, ActorRole.CUSTOMER)).notesVisible()).isFalse();
         assertThat(service.detail(PARCEL_ID, Viewer.of(COURIER_ID, ActorRole.COURIER)).notesVisible()).isTrue();
-        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)).notesVisible())
+        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.ADMIN)).notesVisible())
+                .isTrue();
+        assertThat(service.detail(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER)).notesVisible())
                 .isTrue();
     }
 
     @Test
     void receiptIsForOwnerAndAdminOnly() {
         assertThat(service.receipt(PARCEL_ID, Viewer.of(OWNER_ID, ActorRole.CUSTOMER)).parcel()).isSameAs(parcel);
-        assertThat(service.receipt(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)).parcel())
+        assertThat(service.receipt(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.ADMIN)).parcel())
                 .isSameAs(parcel);
+        assertThat(service.receipt(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER)).parcel())
+                .isSameAs(parcel);
+        assertThatThrownBy(() -> service.receipt(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)))
+                .isInstanceOf(ParcelNotFoundException.class);
         assertThatThrownBy(() -> service.receipt(PARCEL_ID, Viewer.of(COURIER_ID, ActorRole.COURIER)))
                 .isInstanceOf(ParcelNotFoundException.class);
     }
@@ -145,19 +156,21 @@ class ParcelReadServiceTest {
         when(parcels.findByStatus(eq(ParcelStatus.FAILED), any())).thenReturn(Page.empty());
 
         service.list(Viewer.of(OWNER_ID, ActorRole.CUSTOMER), ParcelStatus.DELIVERED, 0, 20);
-        service.list(Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN), ParcelStatus.FAILED, 0, 20);
+        service.list(Viewer.of(UUID.randomUUID(), ActorRole.ADMIN), ParcelStatus.FAILED, 0, 20);
+        service.list(Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER), ParcelStatus.FAILED, 0, 20);
 
         verify(parcels).findByCustomerIdAndStatus(eq(OWNER_ID), eq(ParcelStatus.DELIVERED), any());
-        verify(parcels).findByStatus(eq(ParcelStatus.FAILED), any());
+        verify(parcels, times(2)).findByStatus(eq(ParcelStatus.FAILED), any());
     }
 
     @Test
     void adminsListAllParcels() {
         when(parcels.findAll(any(Pageable.class))).thenReturn(Page.empty());
 
-        service.list(Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN), null, 0, 20);
+        service.list(Viewer.of(UUID.randomUUID(), ActorRole.ADMIN), null, 0, 20);
+        service.list(Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER), null, 0, 20);
 
-        verify(parcels).findAll(any(Pageable.class));
+        verify(parcels, times(2)).findAll(any(Pageable.class));
     }
 
     @Test

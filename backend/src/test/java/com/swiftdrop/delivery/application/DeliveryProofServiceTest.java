@@ -126,7 +126,10 @@ class DeliveryProofServiceTest {
         assertThat(service.photo(PARCEL_ID, Viewer.of(OWNER_ID, ActorRole.CUSTOMER))).get()
                 .satisfies(photo -> assertThat(photo.contentType()).isEqualTo("image/jpeg"));
         assertThat(service.photo(PARCEL_ID, Viewer.of(COURIER_ID, ActorRole.COURIER))).isPresent();
-        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN))).isPresent();
+        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.ADMIN))).isPresent();
+        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER))).isPresent();
+        assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)))
+                .isInstanceOf(ParcelNotFoundException.class);
         assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.CUSTOMER)))
                 .isInstanceOf(ParcelNotFoundException.class);
         assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.COURIER)))
