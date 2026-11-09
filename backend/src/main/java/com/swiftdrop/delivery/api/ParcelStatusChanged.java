@@ -21,6 +21,11 @@ public record ParcelStatusChanged(
 ) {
 
     public static final String EVENT_TYPE = "parcel.status-changed";
+    /**
+     * The durable topic exchange the event is published to, declared by {@code delivery}; the
+     * routing key is {@link #EVENT_TYPE}. Consumers bind their own queues to it (ADR 0004 §5).
+     */
+    public static final String EXCHANGE = "swiftdrop.events";
     public static final int SCHEMA_VERSION = 1;
     public static final String PRODUCER = "delivery";
 

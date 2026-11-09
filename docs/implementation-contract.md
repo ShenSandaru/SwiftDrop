@@ -527,7 +527,13 @@ team approval recorded in `architecture.md` is enough.
 | PR-02 | All merchant queries take the merchant ID | — |
 
 Other modules can use `ParcelCreation`, `ParcelAssignment`, `ParcelQueries` and `ParcelEvents` now.
-Not implemented here: the outbox relay (WS9), the required reports (WS8), dispatch and merchant
-endpoints. Known detail: Spring validates a request body before method security runs, so a caller
+Not implemented here: the required reports (WS8), dispatch and merchant endpoints.
+
+**Outbox relay (SD-502) and delivery's publishing part of SD-501**, implemented on 2026-11-09 by
+the `delivery` owner, taken over from WS9 (Member 9 keeps the queues, dead-lettering, consumers,
+replay, SD-701 and SD-904). `delivery` declares `swiftdrop.events`; consumers bind their queues to
+`ParcelStatusChanged.EXCHANGE` with routing key `ParcelStatusChanged.EVENT_TYPE`. Behaviour and
+settings: [architecture.md](architecture.md) section 7. Until a consumer binds a queue, events are
+returned as unroutable and wait in the outbox. Known detail: Spring validates a request body before method security runs, so a caller
 without the role who sends an *invalid* body gets 400 instead of 403; nothing about parcels is
 revealed.
