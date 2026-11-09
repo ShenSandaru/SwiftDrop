@@ -39,7 +39,6 @@ import {
   listActiveDispatchAssignments,
   listAllActiveDispatchAssignments,
   listAllDispatchCouriers,
-  listAwaitingDeliveryAssignments,
   listDispatchParcels,
 } from "@/lib/dispatch";
 
@@ -61,7 +60,6 @@ interface DashboardMetrics {
   total: number | null;
   pendingPickup: number | null;
   activePickups: number | null;
-  awaitingDelivery: number | null;
   activeDeliveries: number | null;
   delivered: number | null;
 }
@@ -78,7 +76,6 @@ const EMPTY_METRICS: DashboardMetrics = {
   total: null,
   pendingPickup: null,
   activePickups: null,
-  awaitingDelivery: null,
   activeDeliveries: null,
   delivered: null,
 };
@@ -123,11 +120,6 @@ export default function DispatchPortalPage() {
   const [activeLoading, setActiveLoading] = useState(true);
   const [activeError, setActiveError] = useState<string | null>(null);
 
-  const [deliveryPageNumber, setDeliveryPageNumber] = useState(0);
-  const [deliveryPage, setDeliveryPage] = useState<PageResponse<DispatchParcelItem> | null>(null);
-  const [deliveryLoading, setDeliveryLoading] = useState(true);
-  const [deliveryError, setDeliveryError] = useState<string | null>(null);
-
   const [courierPageNumber, setCourierPageNumber] = useState(0);
   const [couriers, setCouriers] = useState<UserResponse[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
@@ -148,7 +140,6 @@ export default function DispatchPortalPage() {
       countDispatchParcels(),
       listDispatchParcels({ page: 0, size: 1, status: "CREATED", assigned: false }),
       listActiveDispatchAssignments("PICKUP", 0, 1),
-      listAwaitingDeliveryAssignments(0, 1),
       listActiveDispatchAssignments("DELIVERY", 0, 1),
       countDispatchParcels("DELIVERED"),
     ] as const;
@@ -169,9 +160,8 @@ export default function DispatchPortalPage() {
         total: readCount(0),
         pendingPickup: readCount(1),
         activePickups: readCount(2),
-        awaitingDelivery: readCount(3),
-        activeDeliveries: readCount(4),
-        delivered: readCount(5),
+        activeDeliveries: readCount(3),
+        delivered: readCount(4),
       });
       if (results.some((result) => result.status === "rejected")) {
         setMetricsError("Some parcel totals could not be loaded. Unavailable values are shown as —.");
@@ -252,31 +242,6 @@ export default function DispatchPortalPage() {
 
   useEffect(() => {
     let active = true;
-    listAwaitingDeliveryAssignments(deliveryPageNumber, PARCEL_PAGE_SIZE)
-      .then((loaded) => {
-        if (active) {
-          setDeliveryPage(loaded);
-          setDeliveryError(null);
-        }
-      })
-      .catch((failure: unknown) => {
-        if (active) {
-          setDeliveryError(formatApiError(failure));
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setDeliveryLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [deliveryPageNumber, refreshKey]);
-
-  useEffect(() => {
-    let active = true;
     Promise.all([
       listAllDispatchCouriers(),
       getCourierWorkloads(),
@@ -340,12 +305,10 @@ export default function DispatchPortalPage() {
     setMetricsLoading(true);
     setParcelPageLoading(true);
     setActiveLoading(true);
-    setDeliveryLoading(true);
     setCouriersLoading(true);
     setMetricsError(null);
     setParcelPageError(null);
     setActiveError(null);
-    setDeliveryError(null);
     setCouriersError(null);
     setAssignmentFeedback(null);
     setRefreshKey((current) => current + 1);
@@ -367,12 +330,6 @@ export default function DispatchPortalPage() {
 
   function changeCourierPage(nextPage: number) {
     setCourierPageNumber(nextPage);
-  }
-
-  function changeDeliveryPage(nextPage: number) {
-    setDeliveryLoading(true);
-    setDeliveryError(null);
-    setDeliveryPageNumber(nextPage);
   }
 
 
@@ -400,12 +357,12 @@ export default function DispatchPortalPage() {
           type="button"
           variant="outline"
           onClick={refreshDashboard}
-          disabled={metricsLoading || parcelPageLoading || activeLoading || deliveryLoading || couriersLoading}
+          disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
           className="w-full sm:w-auto"
         >
           <RefreshCw
             className={
-              metricsLoading || parcelPageLoading || activeLoading || deliveryLoading || couriersLoading
+              metricsLoading || parcelPageLoading || activeLoading || couriersLoading
                 ? "animate-spin"
                 : ""
             }
@@ -417,7 +374,6 @@ export default function DispatchPortalPage() {
 
       <nav aria-label="Dashboard sections" className="flex gap-2 overflow-x-auto pb-1">
         <SectionLink href="#pickup-requests">Pickup requests</SectionLink>
-        <SectionLink href="#delivery-assignments">Delivery assignments</SectionLink>
         <SectionLink href="#active-deliveries">Active deliveries</SectionLink>
         <SectionLink href="#couriers">Couriers</SectionLink>
         <SectionLink href="#parcel-tracking">Parcel tracking</SectionLink>
@@ -455,13 +411,6 @@ export default function DispatchPortalPage() {
           value={metrics.activePickups}
           description="Active pickup assignments"
           icon={MapPin}
-          loading={metricsLoading}
-        />
-        <MetricCard
-          label="Awaiting delivery assignment"
-          value={metrics.awaitingDelivery}
-          description="Picked-up parcels with no current delivery courier"
-          icon={Users}
           loading={metricsLoading}
         />
         <MetricCard
@@ -627,105 +576,6 @@ export default function DispatchPortalPage() {
               onNext={() =>
                 changeParcelPage(Math.min((parcelPage?.totalPages ?? 1) - 1, parcelPageNumber + 1))
               }
-            />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section id="delivery-assignments" className="scroll-mt-6 space-y-4">
-        <SectionHeading
-          eyebrow="Handoffs"
-          title="Awaiting delivery assignment"
-          description="Parcels whose pickup courier has completed collection and is ready to be released to a delivery courier."
-        />
-        <Card className="rounded-xl border-border bg-card shadow-xs">
-          <CardContent className="space-y-4 p-4 sm:p-5">
-            {deliveryError && <ErrorMessage message={deliveryError} />}
-            {deliveryLoading && <LoadingRows label="Loading delivery assignment queue" />}
-            {!deliveryLoading && !deliveryError && (deliveryPage?.items.length ?? 0) === 0 && (
-              <EmptyState
-                icon={CheckCircle2}
-                title="No parcels awaiting delivery assignment"
-                description="Picked-up parcels will appear here after the courier completes collection."
-              />
-            )}
-            {!deliveryLoading && !deliveryError && (deliveryPage?.items.length ?? 0) > 0 && (
-              <>
-                <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
-                  <table className="w-full min-w-[780px] text-left text-sm">
-                    <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Parcel</th>
-                        <th className="px-4 py-3 font-semibold">Pickup complete</th>
-                        <th className="px-4 py-3 font-semibold">Destination</th>
-                        <th className="px-4 py-3 font-semibold">Current courier</th>
-                        <th className="px-4 py-3 font-semibold">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {deliveryPage?.items.map((parcel) => (
-                        <tr key={parcel.id}>
-                          <td className="px-4 py-3">
-                            <span className="block font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</span>
-                            <span className="mt-1 block text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}…</span>
-                          </td>
-                          <td className="px-4 py-3"><StatusBadge status="PICKED_UP" /></td>
-                          <td className="px-4 py-3 text-muted-foreground">{parcel.dropoffCity}</td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) ?? parcel.assignedCourierId : "Not assigned"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedParcel({ parcel, mode: "details" })}>
-                                View
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedParcel({ parcel, mode: "assignment", assignmentType: "DELIVERY" })}
-                              >
-                                Assign delivery
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="space-y-3 md:hidden">
-                  {deliveryPage?.items.map((parcel) => (
-                    <article key={parcel.id} className="space-y-3 rounded-lg border border-border bg-background p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}…</p>
-                        </div>
-                        <StatusBadge status="PICKED_UP" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">Destination: {parcel.dropoffCity}</p>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => setSelectedParcel({ parcel, mode: "details" })} className="flex-1">
-                          View details
-                        </Button>
-                        <Button type="button" size="sm" onClick={() => setSelectedParcel({ parcel, mode: "assignment", assignmentType: "DELIVERY" })} className="flex-1">
-                          Assign delivery
-                        </Button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </>
-            )}
-            <Pagination
-              page={deliveryPage?.page ?? deliveryPageNumber}
-              totalPages={deliveryPage?.totalPages ?? 0}
-              totalItems={deliveryPage?.totalItems ?? 0}
-              pageSize={PARCEL_PAGE_SIZE}
-              loading={deliveryLoading}
-              onPrevious={() => changeDeliveryPage(Math.max(0, deliveryPageNumber - 1))}
-              onNext={() => changeDeliveryPage(Math.min((deliveryPage?.totalPages ?? 1) - 1, deliveryPageNumber + 1))}
             />
           </CardContent>
         </Card>

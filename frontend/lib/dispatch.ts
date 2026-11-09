@@ -92,16 +92,6 @@ export async function listAllDispatchCouriers(): Promise<UserResponse[]> {
   return [...firstPage.items, ...remaining.flatMap((page) => page.items)];
 }
 
-export function listAwaitingDeliveryAssignments(
-  page: number,
-  size: number,
-): Promise<PageResponse<DispatchParcelItem>> {
-  const query = new URLSearchParams({ page: String(page), size: String(size) });
-  return api.get<PageResponse<DispatchParcelItem>>(
-    `/api/v1/dispatch/awaiting-delivery-assignments?${query.toString()}`,
-  );
-}
-
 export function listActiveDispatchAssignments(
   type: DispatchAssignmentType,
   page: number,

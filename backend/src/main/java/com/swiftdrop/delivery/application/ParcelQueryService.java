@@ -88,15 +88,6 @@ class ParcelQueryService implements ParcelQueries {
     }
 
     @Override
-    public PageResult<DispatchParcelSummary> findAwaitingDeliveryAssignment(PageRequest page) {
-        Objects.requireNonNull(page, "page");
-        Page<Parcel> found = parcels.findByStatusAndAssignedCourierIdIsNull(
-                ParcelStatus.PICKED_UP, pageable(page, OLDEST_FIRST));
-        return PageResult.of(found.getContent().stream().map(ParcelQueryService::toDispatchSummary).toList(),
-                page, found.getTotalElements());
-    }
-
-    @Override
     public PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(page, "page");

@@ -52,14 +52,6 @@ class DispatchController {
         return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
     }
 
-    @GetMapping("/awaiting-delivery-assignments")
-    PageResponse<DispatchParcelSummary> awaitingDeliveryAssignments(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
-        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.awaitingDeliveryAssignment(request), request);
-    }
-
     @GetMapping("/active-assignments")
     PageResponse<ParcelAssignmentSummary> activeAssignments(
             @RequestParam ParcelAssignmentType type,

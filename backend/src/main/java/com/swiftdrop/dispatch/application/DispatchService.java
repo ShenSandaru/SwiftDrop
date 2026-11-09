@@ -42,11 +42,6 @@ public class DispatchService {
     }
 
     @Transactional(readOnly = true)
-    public PageResult<DispatchParcelSummary> awaitingDeliveryAssignment(PageRequest page) {
-        return parcels.findAwaitingDeliveryAssignment(page);
-    }
-
-    @Transactional(readOnly = true)
     public PageResult<ParcelAssignmentSummary> activeAssignments(ParcelAssignmentType type, PageRequest page) {
         return parcels.findActiveAssignments(type, page);
     }
