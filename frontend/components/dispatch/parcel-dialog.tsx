@@ -72,9 +72,7 @@ export function ParcelDialog({
     () => new Map(couriers.map((courier) => [courier.id, courier.fullName])),
     [couriers],
   );
-  const eligibleCouriers = couriers.filter(
-    (courier) => courier.enabled && workloads !== null && (workloads[courier.id] ?? 0) === 0,
-  );
+  const eligibleCouriers = couriers.filter((courier) => courier.enabled);
 
   useEffect(() => {
     let active = true;
@@ -265,7 +263,7 @@ export function ParcelDialog({
                       {assignmentType === "PICKUP" ? "Pickup assignment" : "Delivery assignment"}
                     </p>
                     <p className="mt-1 text-muted-foreground">
-                      Assignment is validated by the backend against the current parcel stage and active courier workload.
+                      Assignment is validated by the backend against the current parcel stage.
                     </p>
                   </div>
                 </div>
@@ -305,9 +303,9 @@ export function ParcelDialog({
               {isAssignment && (
                 <section className="space-y-3">
                   <div>
-                    <h3 className="text-sm font-bold text-foreground">Courier availability</h3>
+                    <h3 className="text-sm font-bold text-foreground">Courier selection</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Only enabled couriers with no active assignment can be selected.
+                      Select an enabled courier to assign this parcel. Active workload counts are displayed for guidance.
                     </p>
                   </div>
                   {couriersLoading ? (
@@ -315,13 +313,9 @@ export function ParcelDialog({
                       <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                       Loading courier availability…
                     </div>
-                  ) : workloads === null ? (
-                    <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
-                      Courier availability could not be verified. Refresh the dashboard before assigning.
-                    </p>
                   ) : eligibleCouriers.length === 0 ? (
                     <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                      No available couriers were returned by the backend.
+                      No enabled couriers found. Create or enable courier accounts first.
                     </p>
                   ) : (
                     <ul className="divide-y divide-border rounded-lg border border-border">
@@ -335,8 +329,12 @@ export function ParcelDialog({
                                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{courier.id}</span>
                               </span>
                             </span>
-                            <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-primary">
-                              <span>AVAILABLE</span>
+                            <span className="flex shrink-0 items-center gap-3 text-xs">
+                              <span className="rounded-full bg-muted px-2.5 py-0.5 font-medium text-muted-foreground">
+                                {workloads !== null
+                                  ? `${workloads[courier.id] ?? 0} active`
+                                  : "Enabled"}
+                              </span>
                               <input
                                 type="radio"
                                 name="courier"
@@ -445,7 +443,7 @@ export function ParcelDialog({
             <Button
               type="button"
               onClick={submitAssignment}
-              disabled={!canAssign || !selectedCourierId || workloads === null || couriersLoading || isSubmitting}
+              disabled={!canAssign || !selectedCourierId || couriersLoading || isSubmitting}
             >
               {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
               Confirm {assignmentLabel} assignment

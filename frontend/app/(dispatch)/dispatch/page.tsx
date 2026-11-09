@@ -315,14 +315,26 @@ export default function DispatchPortalPage() {
     (courierPageNumber + 1) * COURIER_PAGE_SIZE,
   );
   const courierTotalPages = Math.ceil(couriers.length / COURIER_PAGE_SIZE);
-  const assignmentByCourier = useMemo(
-    () => new Map(activeAssignments.map((assignment) => [assignment.courierId, assignment])),
-    [activeAssignments],
-  );
+  const activeAssignmentsByCourier = useMemo(() => {
+    const map = new Map<string, DispatchAssignment[]>();
+    for (const assignment of activeAssignments) {
+      const list = map.get(assignment.courierId) ?? [];
+      list.push(assignment);
+      map.set(assignment.courierId, list);
+    }
+    return map;
+  }, [activeAssignments]);
   const courierById = useMemo(
     () => new Map(couriers.map((courier) => [courier.id, courier.fullName])),
     [couriers],
   );
+
+  function courierActiveCount(courierId: string): number {
+    if (workloads !== null) {
+      return workloads[courierId] ?? 0;
+    }
+    return activeAssignmentsByCourier.get(courierId)?.length ?? 0;
+  }
 
   function refreshDashboard() {
     setMetricsLoading(true);
@@ -363,15 +375,7 @@ export default function DispatchPortalPage() {
     setDeliveryPageNumber(nextPage);
   }
 
-  function courierAvailability(courier: UserResponse): "AVAILABLE" | "BUSY" | "INACTIVE" | "UNKNOWN" {
-    if (!courier.enabled) {
-      return "INACTIVE";
-    }
-    if (workloads === null) {
-      return "UNKNOWN";
-    }
-    return (workloads[courier.id] ?? 0) > 0 ? "BUSY" : "AVAILABLE";
-  }
+
 
   return (
     <div className="space-y-6">
@@ -797,7 +801,7 @@ export default function DispatchPortalPage() {
             <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
               <p>
-                AVAILABLE couriers have no active pickup or delivery task. BUSY couriers already hold a task; INACTIVE couriers have disabled accounts. The backend revalidates availability when an assignment is submitted.
+                All enabled couriers are eligible for parcel assignments and reassignments. Active parcel counts are displayed for operational guidance.
               </p>
             </div>
             {couriersError && <ErrorMessage message={couriersError} />}
@@ -816,8 +820,7 @@ export default function DispatchPortalPage() {
                     <CourierAccountCard
                       key={courier.id}
                       courier={courier}
-                      availability={courierAvailability(courier)}
-                      assignment={assignmentByCourier.get(courier.id) ?? null}
+                      activeCount={courierActiveCount(courier.id)}
                       onAssign={() => {
                         setParcelStatus("CREATED");
                         setSourceFilter("ALL");
@@ -1084,13 +1087,11 @@ function ActiveDeliveryCard({
 
 function CourierAccountCard({
   courier,
-  availability,
-  assignment,
+  activeCount,
   onAssign,
 }: {
   courier: UserResponse;
-  availability: "AVAILABLE" | "BUSY" | "INACTIVE" | "UNKNOWN";
-  assignment: DispatchAssignment | null;
+  activeCount: number;
   onAssign: () => void;
 }) {
   return (
@@ -1104,23 +1105,22 @@ function CourierAccountCard({
           <p className="truncate font-mono text-[10px] text-muted-foreground">{courier.id}</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-[440px] sm:grid-cols-3">
-        <CourierValue label="Availability" value={availability} />
+      <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-[360px] sm:grid-cols-2">
+        <CourierValue label="Account status" value={courier.enabled ? "ACTIVE" : "INACTIVE"} />
         <CourierValue
-          label="Current parcel"
-          value={assignment ? `ID ${assignment.parcelId.slice(0, 8)}…` : "None"}
+          label="Active workload"
+          value={activeCount === 1 ? "1 parcel" : `${activeCount} parcels`}
         />
-        <CourierValue label="Active task type" value={assignment?.type ?? "None"} />
       </div>
       <Button
         type="button"
         variant="outline"
         size="sm"
-        disabled={availability !== "AVAILABLE"}
+        disabled={!courier.enabled}
         onClick={onAssign}
-        title={availability === "AVAILABLE" ? "Choose an unassigned parcel" : "Only available couriers can be assigned"}
+        title={courier.enabled ? "Choose an unassigned parcel to assign" : "Courier account is disabled"}
       >
-        {availability === "AVAILABLE" ? "Select parcel" : "Unavailable"}
+        {courier.enabled ? "Assign parcel" : "Disabled"}
       </Button>
     </article>
   );
