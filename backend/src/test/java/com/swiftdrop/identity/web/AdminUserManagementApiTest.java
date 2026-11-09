@@ -1,5 +1,6 @@
 package com.swiftdrop.identity.web;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -15,6 +16,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -71,6 +77,9 @@ class AdminUserManagementApiTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtEncoder encoder;
 
     @MockitoBean
     private UserRepository users;
@@ -344,6 +353,76 @@ class AdminUserManagementApiTest {
         mvc.perform(get("/api/v1/users/me")
                         .with(TestPrincipal.customer(TARGET_USER_ID).postProcessor()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void disabledAdminCannotReenableOwnAccount() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + ADMIN_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": true}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(adminUser.isEnabled()).isFalse();
+    }
+
+    @Test
+    void disabledAdminCannotDisableAnotherUser() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + TARGET_USER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": false}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(targetUser.isEnabled()).isTrue();
+    }
+
+    @Test
+    void disabledAdminCannotCreateStaffAccounts() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(post("/api/v1/users/staff")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName": "New Staff", "email": "newstaff@swiftdrop.com", "password": "staff-password-123"}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void activeAdminCanPerformLegitimateOperations() throws Exception {
+        adminUser.setEnabled(true);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + TARGET_USER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false));
+
+        assertThat(targetUser.isEnabled()).isFalse();
+    }
+
+    private String adminBearerToken(UUID adminId) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("swiftdrop")
+                .subject(adminId.toString())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(900))
+                .claim("roles", List.of("DISPATCHER_ADMIN"))
+                .build();
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
     }
 
     private static User withId(User user, UUID id) {
