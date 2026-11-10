@@ -1,8 +1,12 @@
 package com.swiftdrop.delivery;
 
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+
+import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.Staff;
 
 /**
  * A minimal hub network for integration tests that book parcels (ADR 0009 §1): Colombo is the
@@ -26,6 +30,28 @@ public final class TestHubs {
     /** The served zone for a city name used in tests: Kandy, otherwise Colombo. */
     public static UUID zoneFor(String city) {
         return "Kandy".equalsIgnoreCase(city) ? KANDY_ZONE : COLOMBO_ZONE;
+    }
+
+    /**
+     * Moves a picked-up parcel along its route to its destination hub, as a dispatcher does
+     * (ADR 0009 §3): scan at the origin hub, then a line-haul leg and a scan for every further hub.
+     */
+    public static void toDestinationHub(ParcelHubOperations hubOperations, JdbcTemplate jdbc, UUID parcelId,
+            Staff staff) {
+        Map<String, Object> route = jdbc.queryForMap(
+                "SELECT origin_hub_id, via_hub_id, destination_hub_id FROM parcels WHERE id = ?", parcelId);
+        UUID origin = (UUID) route.get("origin_hub_id");
+        UUID via = (UUID) route.get("via_hub_id");
+        UUID destination = (UUID) route.get("destination_hub_id");
+        hubOperations.scanAtHub(parcelId, origin, staff);
+        if (via != null) {
+            hubOperations.sendToNextHub(parcelId, staff);
+            hubOperations.scanAtHub(parcelId, via, staff);
+        }
+        if (!destination.equals(origin)) {
+            hubOperations.sendToNextHub(parcelId, staff);
+            hubOperations.scanAtHub(parcelId, destination, staff);
+        }
     }
 
     private static void insert(JdbcTemplate jdbc, String code, String name, String city, UUID zoneId, boolean central) {
