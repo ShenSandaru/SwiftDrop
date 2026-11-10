@@ -96,7 +96,7 @@ export function HubBoard({ parcels, couriers, loading, error, onChanged, onFeedb
           {actionError}
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {LANES.map((lane) => {
           const items = inNetwork.filter((parcel) => lane.matches(parcel.actions));
           const Icon = lane.icon;
@@ -141,9 +141,9 @@ function HubCard({ parcel, couriers, busy, run }: {
 
   return (
     <article className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
         <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold tracking-[0.12em] text-primary">{parcel.trackingNumber}</p>
+          <p className="break-all font-mono text-xs font-semibold tracking-[0.12em] text-primary">{parcel.trackingNumber}</p>
           <p className="truncate text-xs text-muted-foreground">
             <span className="capitalize">{parcel.pickupCity}</span> → <span className="capitalize">{parcel.dropoffCity}</span>
           </p>
@@ -184,12 +184,12 @@ function HubCard({ parcel, couriers, busy, run }: {
       </div>
 
       {(has("ASSIGN_DELIVERY") || has("ASSIGN_RETURN")) && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <label htmlFor={`courier-${parcel.id}`} className="sr-only">
             {taskType === "RETURN" ? "Return courier" : "Delivery courier"}
           </label>
           <select id={`courier-${parcel.id}`} value={courierId} onChange={(event) => setCourierId(event.target.value)}
-            className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2 text-xs">
+            className="h-8 min-w-[10rem] flex-1 rounded-lg border border-input bg-transparent px-2 text-xs">
             <option value="">{parcel.assignedCourierId ? "Reassign to…" : "Choose a courier…"}</option>
             {couriers.map((courier) => (
               <option key={courier.id} value={courier.id} disabled={courier.id === parcel.assignedCourierId}>
