@@ -33,7 +33,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.application.Actor;
 import com.swiftdrop.delivery.application.Booking;
 import com.swiftdrop.delivery.application.DeliveryProofService;
@@ -84,6 +87,8 @@ class ParcelAuthorizationMatrixIT {
     private ParcelAssignment assignment;
     @Autowired
     private ParcelStatusService statuses;
+    @Autowired
+    private ParcelHubOperations hubOperations;
     @Autowired
     private DeliveryProofService proofs;
 
@@ -137,9 +142,13 @@ class ParcelAuthorizationMatrixIT {
 
         delivered = booking.bookForCustomer(ownerId, booking());
         assignment.assignCourier(delivered.getId(), courierId, adminId);
-        for (ParcelStatus step : List.of(ParcelStatus.PICKED_UP, ParcelStatus.IN_TRANSIT, ParcelStatus.OUT_FOR_DELIVERY)) {
-            statuses.changeStatus(delivered.getId(), new StatusChange(step, null, null), Actor.courier(courierId));
-        }
+        // Through the hub network (ADR 0009 §3): the same courier picks up and later delivers
+        statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.PICKED_UP, null, null),
+                Actor.courier(courierId));
+        TestHubs.toDestinationHub(hubOperations, jdbc, delivered.getId(), Staff.admin(adminId));
+        assignment.assignCourier(delivered.getId(), courierId, adminId, ParcelAssignmentType.DELIVERY);
+        statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.OUT_FOR_DELIVERY, null, null),
+                Actor.courier(courierId));
         proofs.capture(delivered.getId(), Actor.courier(courierId), "Kumari Silva", JPEG);
         statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.DELIVERED, null, null),
                 Actor.courier(courierId));
