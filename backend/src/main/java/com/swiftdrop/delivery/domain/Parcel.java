@@ -2,7 +2,9 @@ package com.swiftdrop.delivery.domain;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.AttributeOverride;
@@ -21,6 +23,7 @@ import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.swiftdrop.delivery.api.DispatchAction;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
@@ -448,6 +451,52 @@ public class Parcel {
     public void cancel(Instant now) {
         move(ParcelStatus.CANCELLED, now);
         clearCurrentCourier();
+    }
+
+    // ---- What a dispatcher may do next (ADR 0009 §3, §5) -----------------------------------------
+
+    /** The hub this parcel must be scanned in at next, or {@code null} if no scan is due. */
+    public UUID expectedHubId() {
+        if (getRoute() == null) {
+            return null;
+        }
+        return switch (status) {
+            case PICKED_UP -> originHubId;
+            case IN_TRANSIT -> nextHubId;
+            case DELIVERY_ATTEMPT_FAILED -> destinationHubId;
+            default -> null;
+        };
+    }
+
+    /**
+     * The dispatcher steps the rules allow now. Legacy parcels follow their courier (ADR 0006), so a
+     * dispatcher can only mark them failed.
+     */
+    public Set<DispatchAction> dispatchActions(int maxAttempts) {
+        if (status.isFinal()) {
+            return Set.of();
+        }
+        if (status == ParcelStatus.CREATED) {
+            return EnumSet.of(DispatchAction.ASSIGN_PICKUP, DispatchAction.CANCEL);
+        }
+        Set<DispatchAction> actions = EnumSet.of(DispatchAction.MARK_FAILED);
+        if (isLegacy()) {
+            return actions;
+        }
+        if (expectedHubId() != null) {
+            actions.add(DispatchAction.SCAN_AT_HUB);
+        }
+        if (status == ParcelStatus.AT_HUB && !isAtDestinationHub()) {
+            actions.add(DispatchAction.SEND_TO_NEXT_HUB);
+        }
+        if (isAtDestinationHub()) {
+            actions.add(canAttemptDelivery(maxAttempts) ? DispatchAction.ASSIGN_DELIVERY
+                    : DispatchAction.START_RETURN);
+        }
+        if (status == ParcelStatus.RETURNING) {
+            actions.add(DispatchAction.ASSIGN_RETURN);
+        }
+        return actions;
     }
 
     // ---- Rules ----------------------------------------------------------------------------------
