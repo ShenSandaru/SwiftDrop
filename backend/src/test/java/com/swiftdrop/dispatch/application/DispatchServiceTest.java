@@ -16,11 +16,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelQueries;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
@@ -32,6 +35,7 @@ class DispatchServiceTest {
 
     private ParcelQueries parcels;
     private ParcelAssignment assignments;
+    private ParcelHubOperations hubOperations;
     private UserDirectory users;
     private DispatchService service;
 
@@ -39,8 +43,9 @@ class DispatchServiceTest {
     void setUp() {
         parcels = mock(ParcelQueries.class);
         assignments = mock(ParcelAssignment.class);
+        hubOperations = mock(ParcelHubOperations.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, users);
+        service = new DispatchService(parcels, assignments, hubOperations, users);
     }
 
     @Test
@@ -108,5 +113,24 @@ class DispatchServiceTest {
 
         assertThat(active).containsExactly(courier);
         verify(users).findEnabledCouriers();
+    }
+
+    @Test
+    void hubStepsAreDelegatedWithTheCaller() {
+        UUID parcel = UUID.randomUUID();
+        UUID hub = UUID.randomUUID();
+        Staff staff = Staff.dispatcher(UUID.randomUUID());
+
+        service.scanAtHub(parcel, hub, staff);
+        service.sendToNextHub(parcel, staff);
+        service.startReturn(parcel, staff);
+        service.markFailed(parcel, FailureReason.DAMAGED, "Crushed", staff);
+        service.cancel(parcel, staff);
+
+        verify(hubOperations).scanAtHub(parcel, hub, staff);
+        verify(hubOperations).sendToNextHub(parcel, staff);
+        verify(hubOperations).startReturn(parcel, staff);
+        verify(hubOperations).markFailed(parcel, FailureReason.DAMAGED, "Crushed", staff);
+        verify(hubOperations).cancel(parcel, staff);
     }
 }

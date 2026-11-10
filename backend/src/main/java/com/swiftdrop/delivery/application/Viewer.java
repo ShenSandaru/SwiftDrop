@@ -45,12 +45,35 @@ public record Viewer(UUID userId, Set<ActorRole> roles) {
 
     /** Detail and timeline: the owning customer, the assigned courier, dispatchers and admins. */
     public boolean canView(Parcel parcel) {
-        return hasDispatchAccess() || owns(parcel) || isAssignedCourierOf(parcel);
+        return canView(parcel, false);
+    }
+
+    /**
+     * As above, and also a courier who held a task on the parcel: the parcel changes hands at hubs
+     * (ADR 0009 §5), and a courier still sees what they picked up, delivered or returned.
+     *
+     * @param heldTask whether this caller has or had a courier task on the parcel
+     */
+    public boolean canView(Parcel parcel, boolean heldTask) {
+        return hasDispatchAccess() || owns(parcel) || isCourierOn(parcel, heldTask);
     }
 
     /** Courier notes may describe the recipient, so customers do not see them. */
     public boolean canSeeNotes(Parcel parcel) {
-        return hasDispatchAccess() || isAssignedCourierOf(parcel);
+        return canSeeNotes(parcel, false);
+    }
+
+    public boolean canSeeNotes(Parcel parcel, boolean heldTask) {
+        return hasDispatchAccess() || isCourierOn(parcel, heldTask);
+    }
+
+    /** Whether this caller is a courier who must look up their tasks on the parcel. */
+    public boolean isCourier() {
+        return roles.contains(ActorRole.COURIER);
+    }
+
+    private boolean isCourierOn(Parcel parcel, boolean heldTask) {
+        return isAssignedCourierOf(parcel) || (isCourier() && heldTask);
     }
 
     /** Receipts: the owning customer, dispatchers and admins (ADR 0006 §6). */

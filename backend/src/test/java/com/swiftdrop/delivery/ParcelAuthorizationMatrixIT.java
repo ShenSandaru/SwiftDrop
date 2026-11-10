@@ -33,7 +33,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.application.Actor;
 import com.swiftdrop.delivery.application.Booking;
 import com.swiftdrop.delivery.application.DeliveryProofService;
@@ -85,6 +88,8 @@ class ParcelAuthorizationMatrixIT {
     @Autowired
     private ParcelStatusService statuses;
     @Autowired
+    private ParcelHubOperations hubOperations;
+    @Autowired
     private DeliveryProofService proofs;
 
     @MockitoBean
@@ -107,6 +112,8 @@ class ParcelAuthorizationMatrixIT {
 
     @BeforeEach
     void createPeopleAndParcels() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         jdbc.update("DELETE FROM parcel_outbox_events");
         jdbc.update("DELETE FROM delivery_proofs");
         jdbc.update("DELETE FROM parcel_assignments");
@@ -135,9 +142,13 @@ class ParcelAuthorizationMatrixIT {
 
         delivered = booking.bookForCustomer(ownerId, booking());
         assignment.assignCourier(delivered.getId(), courierId, adminId);
-        for (ParcelStatus step : List.of(ParcelStatus.PICKED_UP, ParcelStatus.IN_TRANSIT, ParcelStatus.OUT_FOR_DELIVERY)) {
-            statuses.changeStatus(delivered.getId(), new StatusChange(step, null, null), Actor.courier(courierId));
-        }
+        // Through the hub network (ADR 0009 §3): the same courier picks up and later delivers
+        statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.PICKED_UP, null, null),
+                Actor.courier(courierId));
+        TestHubs.toDestinationHub(hubOperations, jdbc, delivered.getId(), Staff.admin(adminId));
+        assignment.assignCourier(delivered.getId(), courierId, adminId, ParcelAssignmentType.DELIVERY);
+        statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.OUT_FOR_DELIVERY, null, null),
+                Actor.courier(courierId));
         proofs.capture(delivered.getId(), Actor.courier(courierId), "Kumari Silva", JPEG);
         statuses.changeStatus(delivered.getId(), new StatusChange(ParcelStatus.DELIVERED, null, null),
                 Actor.courier(courierId));
@@ -284,13 +295,13 @@ class ParcelAuthorizationMatrixIT {
 
     private static Booking booking() {
         DeliveryContact contact = new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
-                UUID.randomUUID(), null);
+                TestHubs.COLOMBO_ZONE, null);
         return new Booking(contact, contact, ParcelSize.SMALL, 1000, null);
     }
 
     private static String bookingJson() {
         String address = "{\"contactName\":\"Nimal Perera\",\"phone\":\"+94771234567\",\"line1\":\"12 Temple Rd\","
-                + "\"city\":\"Colombo\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + TestHubs.COLOMBO_ZONE + "\"}";
         return "{\"pickup\":" + address + ",\"dropoff\":" + address + ",\"size\":\"SMALL\",\"weightGrams\":1000}";
     }
 }

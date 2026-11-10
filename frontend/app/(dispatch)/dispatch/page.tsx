@@ -7,8 +7,6 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowUpRight,
-  Boxes,
-  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
@@ -21,18 +19,16 @@ import {
   PackageCheck,
   PackagePlus,
   RefreshCw,
-  Route,
   Search,
-  SlidersHorizontal,
   Truck,
   Warehouse,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/delivery/status-badge";
-import { formatDate, formatDateTime, formatWeight, SIZE_LABELS, STATUS_LABELS } from "@/components/delivery/format";
+import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
+import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
 import { formatApiError, type PageResponse } from "@/lib/api";
 import type { ParcelStatus } from "@/lib/delivery";
@@ -83,23 +79,6 @@ const EMPTY_METRICS: DashboardMetrics = {
   delivered: null,
 };
 
-interface BranchRoutingRecord {
-  destinationBranch: string;
-  manifestCode: string;
-  sortingBay: string;
-  notes?: string;
-  assignedAt: string;
-}
-
-const REGIONAL_BRANCHES = [
-  { id: "KDY-BR", name: "Kandy Regional Hub (Central Province)", recommendedFor: "Kandy" },
-  { id: "CMB-GW", name: "Colombo Central Gateway (Western Province)", recommendedFor: "Colombo" },
-  { id: "GLE-BR", name: "Galle Coastal Branch (Southern Province)", recommendedFor: "Galle" },
-  { id: "NEG-BR", name: "Negombo Transit Hub (Gampaha District)", recommendedFor: "Negombo" },
-  { id: "KUR-BR", name: "Kurunegala Wayamba Branch (North Western)", recommendedFor: "Kurunegala" },
-  { id: "JAF-BR", name: "Jaffna Northern Branch (Northern Province)", recommendedFor: "Jaffna" },
-];
-
 export default function DispatchPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<DispatchMainTab>("overview");
@@ -134,8 +113,6 @@ export default function DispatchPage() {
   const [warehouseParcels, setWarehouseParcels] = useState<DispatchParcelItem[]>([]);
   const [warehouseLoading, setWarehouseLoading] = useState(true);
   const [warehouseError, setWarehouseError] = useState<string | null>(null);
-  const [warehouseRoutings, setWarehouseRoutings] = useState<Record<string, BranchRoutingRecord>>({});
-  const [routingModalParcel, setRoutingModalParcel] = useState<DispatchParcelItem | null>(null);
 
   const [couriers, setCouriers] = useState<DispatchCourier[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
@@ -264,8 +241,8 @@ export default function DispatchPage() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      listDispatchParcels({ page: 0, size: 15, status: "PICKED_UP" }),
-      listDispatchParcels({ page: 0, size: 15, status: "IN_TRANSIT" }),
+      ...(["PICKED_UP", "AT_HUB", "IN_TRANSIT", "DELIVERY_ATTEMPT_FAILED", "RETURNING"] as const).map((status) =>
+        listDispatchParcels({ page: 0, size: 25, status })),
     ])
       .then((pages) => {
         if (active) {
@@ -393,18 +370,6 @@ export default function DispatchPage() {
     setParcelPageLoading(true);
     setParcelPageError(null);
     setParcelPageNumber(nextPage);
-  }
-
-  function handleBranchRoutingConfirm(record: BranchRoutingRecord) {
-    if (!routingModalParcel) return;
-    setWarehouseRoutings((prev) => ({
-      ...prev,
-      [routingModalParcel.id]: record,
-    }));
-    setAssignmentFeedback(
-      `Parcel ${routingModalParcel.trackingNumber} successfully sorted at Hub and assigned to ${record.destinationBranch} (Manifest ${record.manifestCode}).`,
-    );
-    setRoutingModalParcel(null);
   }
 
   const warehouseCount = warehouseParcels.length;
@@ -945,180 +910,18 @@ export default function DispatchPage() {
         <section aria-labelledby="heading-warehouse-ops" className="space-y-5">
           <SectionHeading
             id="heading-warehouse-ops"
-            eyebrow="Intermediate Hub Management"
-            title="Warehouse Intake & Branch Sorting"
-            description="Process inbound picked-up items arriving from couriers, scan & sort items by destination province, and assign inter-hub transfer routes to nearest destination branches."
+            eyebrow="Hub network"
+            title="Hubs & line haul"
+            description="Scan picked-up parcels in at their origin branch, send them along their route through the central hub, then hand them to a delivery courier at the destination branch. Failed attempts come back here for another try or the return."
           />
-
-          {/* Regional Hub Network Status Cards */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">Inbound Intake</span>
-                <Boxes className="size-4 text-primary" />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-foreground">
-                {warehouseParcels.filter((p) => p.status === "PICKED_UP").length}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Arrived from first-mile couriers</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">Sorting Queue</span>
-                <SlidersHorizontal className="size-4 text-primary" />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-foreground">
-                {warehouseParcels.filter((p) => !warehouseRoutings[p.id]).length}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Awaiting destination branch assignment</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">Inter-Hub Transit</span>
-                <Route className="size-4 text-primary" />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-foreground">
-                {Object.keys(warehouseRoutings).length}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Manifests routed to regional branches</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">Regional Hubs</span>
-                <Building2 className="size-4 text-primary" />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-foreground">6 Active</p>
-              <p className="mt-1 text-xs text-muted-foreground">Western, Central & Southern</p>
-            </div>
-          </div>
-
-          {/* Warehouse Parcels Table */}
-          <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
-            <CardContent className="space-y-4 p-4 sm:p-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Inbound & Sorting Queue</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Items collected from senders undergoing intake scanning and transfer manifest routing.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                  <span>Central Gateway Sorting Active</span>
-                </div>
-              </div>
-
-              {warehouseError && <ErrorMessage message={warehouseError} />}
-              {warehouseLoading && <LoadingRows label="Loading warehouse parcels" />}
-
-              {!warehouseLoading && !warehouseError && warehouseParcels.length === 0 && (
-                <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
-                  <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <Warehouse className="size-6" />
-                  </div>
-                  <div className="max-w-md mx-auto">
-                    <h4 className="text-sm font-bold text-foreground">No inbound parcels awaiting warehouse sorting</h4>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Once couriers complete pickups from customers or merchants (status moving from CREATED to PICKED_UP), parcels will arrive here for hub scanning, sorting by destination province, and branch transfer assignment.
-                    </p>
-                  </div>
-                  <div className="pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setActiveTab("pickup")}
-                    >
-                      <PackagePlus className="size-4 mr-1.5" /> Check Pickup Queue
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!warehouseLoading && !warehouseError && warehouseParcels.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full min-w-[900px] text-left text-sm">
-                    <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Tracking Number</th>
-                        <th className="px-4 py-3 font-semibold">Route (Origin → Destination)</th>
-                        <th className="px-4 py-3 font-semibold">Current Hub Intake</th>
-                        <th className="px-4 py-3 font-semibold">Assigned Destination Branch</th>
-                        <th className="px-4 py-3 font-semibold">Status</th>
-                        <th className="px-4 py-3 font-semibold">Warehouse Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {warehouseParcels.map((parcel) => {
-                        const routing = warehouseRoutings[parcel.id];
-                        return (
-                          <tr key={parcel.id} className="hover:bg-muted/30">
-                            <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">
-                              {parcel.trackingNumber}
-                              <span className="block text-[10px] font-sans text-muted-foreground">
-                                {SIZE_LABELS[parcel.size]} · {formatWeight(parcel.weightGrams)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-foreground">
-                              <span className="font-medium">{parcel.pickupCity}</span>
-                              <span className="mx-1 text-muted-foreground">➔</span>
-                              <span className="font-semibold text-primary">{parcel.dropoffCity}</span>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                              <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                                <Building2 className="size-3 text-primary" />
-                                {parcel.pickupCity} Central Hub
-                              </span>
-                              <span className="block text-[10px] text-muted-foreground">Gate B Intake Scan</span>
-                            </td>
-                            <td className="px-4 py-3 text-xs">
-                              {routing ? (
-                                <div>
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                    {routing.destinationBranch}
-                                  </span>
-                                  <span className="block text-[10px] text-muted-foreground font-mono">
-                                    Manifest: {routing.manifestCode} · {routing.sortingBay}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                                  Pending Branch Routing
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <StatusBadge status={parcel.status} />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={routing ? "outline" : "default"}
-                                  onClick={() => setRoutingModalParcel(parcel)}
-                                >
-                                  {routing ? "Change Branch" : "Sort & Assign Branch"}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setSelectedParcel({ parcel, mode: "details" })}
-                                >
-                                  Details
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <HubBoard
+            parcels={warehouseParcels}
+            couriers={dialogCouriers}
+            loading={warehouseLoading}
+            error={warehouseError}
+            onChanged={refreshDashboard}
+            onFeedback={setAssignmentFeedback}
+          />
         </section>
       )}
 
@@ -1274,15 +1077,6 @@ export default function DispatchPage() {
         />
       )}
 
-      {/* Warehouse Destination Branch Sorting Modal */}
-      {routingModalParcel && (
-        <BranchRoutingDialog
-          parcel={routingModalParcel}
-          existingRouting={warehouseRoutings[routingModalParcel.id]}
-          onConfirm={handleBranchRoutingConfirm}
-          onClose={() => setRoutingModalParcel(null)}
-        />
-      )}
     </div>
   );
 }
@@ -1331,162 +1125,6 @@ function TabButton({
         </span>
       )}
     </button>
-  );
-}
-
-function BranchRoutingDialog({
-  parcel,
-  existingRouting,
-  onConfirm,
-  onClose,
-}: {
-  parcel: DispatchParcelItem;
-  existingRouting?: BranchRoutingRecord;
-  onConfirm: (record: BranchRoutingRecord) => void;
-  onClose: () => void;
-}) {
-  const defaultBranch = useMemo(() => {
-    const matched = REGIONAL_BRANCHES.find((b) =>
-      parcel.dropoffCity.toLowerCase().includes(b.recommendedFor.toLowerCase()),
-    );
-    return matched ? matched.name : REGIONAL_BRANCHES[0].name;
-  }, [parcel.dropoffCity]);
-
-  const [selectedBranch, setSelectedBranch] = useState(
-    existingRouting?.destinationBranch ?? defaultBranch,
-  );
-  const [sortingBay, setSortingBay] = useState(existingRouting?.sortingBay ?? "Bay A-01 (Express)");
-  const [notes, setNotes] = useState(existingRouting?.notes ?? "");
-
-  const generatedManifest = useMemo(() => {
-    if (existingRouting?.manifestCode) return existingRouting.manifestCode;
-    const code = parcel.trackingNumber || "0000";
-    const hash =
-      (Math.abs(
-        code.split("").reduce((acc, ch) => (acc << 5) - acc + ch.charCodeAt(0), 0),
-      ) %
-        9000) +
-      1000;
-    return `MNF-${code.slice(-4)}-${hash}`;
-  }, [existingRouting, parcel.trackingNumber]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-xs sm:p-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg space-y-5">
-        <div className="flex items-start justify-between border-b border-border pb-3">
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-primary">Warehouse Hub Intake</span>
-            <h3 className="text-lg font-bold text-foreground">Sort & Assign Destination Branch</h3>
-            <p className="font-mono text-xs text-muted-foreground">{parcel.trackingNumber}</p>
-          </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
-        </div>
-
-        <div className="space-y-4 text-xs">
-          {/* Route Overview */}
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Pickup Origin:</span>
-              <strong className="text-foreground">{parcel.pickupCity}</strong>
-            </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Dropoff Destination:</span>
-              <strong className="text-primary font-bold">{parcel.dropoffCity}</strong>
-            </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Size & Weight:</span>
-              <span className="text-foreground">{SIZE_LABELS[parcel.size]} · {formatWeight(parcel.weightGrams)}</span>
-            </div>
-          </div>
-
-          {/* Select Nearest Destination Branch */}
-          <div className="space-y-1.5">
-            <label htmlFor="branch-select" className="font-semibold text-foreground">
-              Nearest Destination Branch / Hub
-            </label>
-            <select
-              id="branch-select"
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background p-2.5 text-xs text-foreground outline-none focus:border-ring"
-            >
-              {REGIONAL_BRANCHES.map((b) => (
-                <option key={b.id} value={b.name}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted-foreground">
-              The item will be routed via inter-hub transfer to this branch for final courier assignment.
-            </p>
-          </div>
-
-          {/* Sorting Bay */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label htmlFor="bay-select" className="font-semibold text-foreground">Sorting Bay</label>
-              <select
-                id="bay-select"
-                value={sortingBay}
-                onChange={(e) => setSortingBay(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background p-2.5 text-xs text-foreground outline-none focus:border-ring"
-              >
-                <option value="Bay A-01 (Express Central)">Bay A-01 (Express Central)</option>
-                <option value="Bay B-04 (Southern Coastal)">Bay B-04 (Southern Coastal)</option>
-                <option value="Bay C-02 (Western Metro)">Bay C-02 (Western Metro)</option>
-                <option value="Bay D-01 (Northern Line)">Bay D-01 (Northern Line)</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">Transfer Manifest</label>
-              <div className="h-9 flex items-center px-3 font-mono text-xs rounded-lg border border-border bg-muted/40 text-foreground">
-                {generatedManifest}
-              </div>
-            </div>
-          </div>
-
-          {/* Dispatcher Notes */}
-          <div className="space-y-1.5">
-            <label htmlFor="dispatch-notes" className="font-semibold text-foreground">Handling & Transit Notes</label>
-            <Input
-              id="dispatch-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Fragile package, place on 14:00 Colombo-Kandy shuttle"
-              className="h-9"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() =>
-              onConfirm({
-                destinationBranch: selectedBranch,
-                manifestCode: generatedManifest,
-                sortingBay,
-                notes,
-                assignedAt: new Date().toISOString(),
-              })
-            }
-          >
-            Confirm Branch Routing
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 

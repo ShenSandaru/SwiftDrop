@@ -96,7 +96,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(16);
+        assertThat(rows).hasSize(18);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -153,6 +153,13 @@ class DatabaseMigrationIT {
                 .containsExactly(
                         tuple("identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql", true),
                         tuple("delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql", true));
+
+        assertThat(rows.get(16))
+                .containsEntry("script", "delivery/V202611111000__delivery_create_hubs.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(17))
+                .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
+                .containsEntry("success", true);
 
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);

@@ -287,8 +287,8 @@ tracking     → delivery
   transition matrix, `FAILED` from `PICKED_UP` to `OUT_FOR_DELIVERY` with a reason code, proof
   required for `DELIVERED`, assignment only while `CREATED`, no cancellation, retry or override.
 - **Decided ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md), Accepted;
-  supersedes ADR 0006 §1–§3 and the assignment rules of ADR 0008 §4–§5). Not implemented yet;
-  until it is, the ADR 0006 rules above are what the code does:**
+  supersedes ADR 0006 §1–§3 and the assignment rules of ADR 0008 §4–§5). Implemented; parcels
+  picked up without a route (before the hubs existed) keep the ADR 0006 rules:**
   - A branch hub per pricing zone plus one central hub (Colombo); the route (origin branch →
     central → destination branch, shorter when one of them is central or both are the same) is
     fixed at pickup. Booking for a zone without a hub is rejected.
@@ -312,6 +312,15 @@ tracking     → delivery
   - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+  - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
+    (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
+    the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
+    task (`PICKUP`, `DELIVERY`, `RETURN`).
+  - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,
+    `.../return`, `.../failure` and `.../cancellation` (DISPATCHER, ADMIN); the dispatch list
+    offers each parcel's allowed actions. Customer cancellation before pickup:
+    `POST /api/v1/parcels/{id}/cancellation`. The attempt limit is
+    `SWIFTDROP_MAX_DELIVERY_ATTEMPTS` (default 3, 1 to 5).
 - **Open:** rate limiting of the public tracking endpoints; the required reports (ADM-4).
 
 ## 9. Authentication and authorization

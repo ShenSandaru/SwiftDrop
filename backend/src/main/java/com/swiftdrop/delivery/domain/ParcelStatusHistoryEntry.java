@@ -65,6 +65,14 @@ public class ParcelStatusHistoryEntry {
     @Column(name = "occurred_at", nullable = false, updatable = false)
     private Instant occurredAt;
 
+    /** The hub reached ({@code AT_HUB}) or left ({@code IN_TRANSIT}); ADR 0009 §7. */
+    @Column(name = "hub_code", length = 20, updatable = false)
+    private String hubCode;
+
+    /** The delivery attempt ({@code OUT_FOR_DELIVERY}, {@code DELIVERY_ATTEMPT_FAILED}); ADR 0009 §7. */
+    @Column(updatable = false)
+    private Integer attempt;
+
     protected ParcelStatusHistoryEntry() {
         // for JPA
     }
@@ -77,6 +85,18 @@ public class ParcelStatusHistoryEntry {
     public ParcelStatusHistoryEntry(UUID parcelId, int sequence, ParcelStatus fromStatus, ParcelStatus toStatus,
             UUID actorUserId, ActorRole actorRole, String note, FailureReason failureReasonCode, UUID eventId,
             Instant occurredAt) {
+        this(parcelId, sequence, fromStatus, toStatus, actorUserId, actorRole, note, failureReasonCode, eventId,
+                occurredAt, null, null);
+    }
+
+    /**
+     * @param failureReasonCode required for {@code FAILED} and {@code DELIVERY_ATTEMPT_FAILED}, otherwise {@code null}
+     * @param hubCode the hub reached or left, or {@code null}
+     * @param attempt the delivery attempt, or {@code null}
+     */
+    public ParcelStatusHistoryEntry(UUID parcelId, int sequence, ParcelStatus fromStatus, ParcelStatus toStatus,
+            UUID actorUserId, ActorRole actorRole, String note, FailureReason failureReasonCode, UUID eventId,
+            Instant occurredAt, String hubCode, Integer attempt) {
         this.parcelId = Objects.requireNonNull(parcelId, "parcelId");
         this.toStatus = Objects.requireNonNull(toStatus, "toStatus");
         this.actorRole = Objects.requireNonNull(actorRole, "actorRole");
@@ -86,9 +106,15 @@ public class ParcelStatusHistoryEntry {
         if (sequence < 1 || creation != (fromStatus == null && toStatus == ParcelStatus.CREATED)) {
             throw new IllegalArgumentException("Only sequence 1 is the creation entry");
         }
-        if ((toStatus == ParcelStatus.FAILED) != (failureReasonCode != null)) {
-            throw new IllegalArgumentException("A failure reason is required for FAILED and only for FAILED");
+        if (toStatus.needsFailureReason() != (failureReasonCode != null)) {
+            throw new IllegalArgumentException(
+                    "A failure reason is required for FAILED and DELIVERY_ATTEMPT_FAILED, and only for them");
         }
+        if (attempt != null && attempt < 1) {
+            throw new IllegalArgumentException("attempt must be >= 1");
+        }
+        this.hubCode = hubCode;
+        this.attempt = attempt;
         this.sequence = sequence;
         this.fromStatus = fromStatus;
         this.actorUserId = actorUserId;
@@ -141,6 +167,14 @@ public class ParcelStatusHistoryEntry {
 
     public Instant getOccurredAt() {
         return occurredAt;
+    }
+
+    public String getHubCode() {
+        return hubCode;
+    }
+
+    public Integer getAttempt() {
+        return attempt;
     }
 
     /** Never includes the note. */

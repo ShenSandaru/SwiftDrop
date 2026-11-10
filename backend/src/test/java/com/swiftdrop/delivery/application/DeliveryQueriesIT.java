@@ -25,6 +25,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.FailureReason;
@@ -34,11 +35,13 @@ import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelEvents;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.delivery.api.ParcelSummary;
 import com.swiftdrop.delivery.api.PublicTrackingView;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 import com.swiftdrop.pricing.api.ParcelSize;
@@ -72,6 +75,8 @@ class DeliveryQueriesIT {
     @Autowired
     private ParcelStatusService statusService;
     @Autowired
+    private ParcelHubOperations hubOperations;
+    @Autowired
     private ParcelEventSerializer serializer;
     @Autowired
     private JdbcTemplate jdbc;
@@ -84,6 +89,8 @@ class DeliveryQueriesIT {
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         merchantId = UUID.randomUUID();
         dispatcherId = insertUser("dispatcher");
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
@@ -136,8 +143,8 @@ class DeliveryQueriesIT {
             assignment.assignCourier(parcel, busy, dispatcherId);
         }
         statusService.changeStatus(failing, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(busy));
-        statusService.changeStatus(failing, new StatusChange(ParcelStatus.FAILED,
-                FailureReason.DAMAGED, null), Actor.courier(busy));
+        // Picked up, the courier's task ends (ADR 0009 §5); a dispatcher marks the damaged parcel failed
+        hubOperations.markFailed(failing, FailureReason.DAMAGED, null, Staff.dispatcher(dispatcherId));
 
         assertThat(queries.countActiveParcelsByCourier())
                 .contains(entry(busy, 2L))
@@ -220,6 +227,7 @@ class DeliveryQueriesIT {
     }
 
     private static DeliveryContact contact(String city) {
-        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, city, UUID.randomUUID(), null);
+        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, city, TestHubs.zoneFor(city),
+                null);
     }
 }

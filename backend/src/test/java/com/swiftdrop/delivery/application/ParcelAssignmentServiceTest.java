@@ -46,7 +46,7 @@ class ParcelAssignmentServiceTest {
     void setUp() {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
-        service = new ParcelAssignmentService(parcels, assignments, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
         when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(parcels.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",

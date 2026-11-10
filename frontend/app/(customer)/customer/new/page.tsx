@@ -166,7 +166,7 @@ export default function BookDeliveryPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="weight">Weight (kg)</Label>
-              <Input id="weight" type="number" inputMode="decimal" min="0.001" max="30" step="0.1" required
+              <Input id="weight" type="number" inputMode="decimal" min="0.001" max="30" step="any" required
                 value={weightKg} onChange={(event) => setWeightKg(event.target.value)}
                 aria-invalid={!weightValid || invalidFields.includes("weightGrams") || undefined} disabled={booking} />
               <p className="text-xs text-muted-foreground">Up to 30 kg. Each started kilogram is charged.</p>

@@ -72,9 +72,14 @@ public class ParcelAssignmentRecord {
         changeStatus(ParcelAssignmentStatus.REASSIGNED, now);
     }
 
+    /** The parcel was cancelled or failed before the task was done (ADR 0009 §5). */
+    public void cancel(Instant now) {
+        changeStatus(ParcelAssignmentStatus.CANCELLED, now);
+    }
+
     private void changeStatus(ParcelAssignmentStatus nextStatus, Instant now) {
         if (status != ParcelAssignmentStatus.ACTIVE) {
-            throw new IllegalStateException("Only an active assignment can be completed or reassigned");
+            throw new IllegalStateException("Only an active assignment can be completed, reassigned or cancelled");
         }
         status = nextStatus;
         completedAt = Objects.requireNonNull(now, "now");

@@ -361,6 +361,11 @@ Not-owned resources return **404**, never 403, so IDs cannot be probed.
 
 ## 7. Parcel lifecycle
 
+**Superseded in part:** [ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)
+(Accepted, implemented) replaces the table below with hub statuses, delivery attempts, returns and
+cancellation; the table still applies to parcels picked up without a route. The ADR is
+authoritative; [docs/architecture.md](architecture.md) §8 lists the endpoints.
+
 **Existing (ADR 0003 §4):** statuses `CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY →
 DELIVERED / FAILED`; forward one step; `DELIVERED`, `FAILED` terminal; only the assigned courier
 makes ordinary updates; a courier must be assigned before `PICKED_UP`; each change records time
