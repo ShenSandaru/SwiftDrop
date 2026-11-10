@@ -57,7 +57,7 @@ class DispatchAssignmentConcurrencyTest {
     void setUp() {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
-        service = new ParcelAssignmentService(parcels, assignments, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
 
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
