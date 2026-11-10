@@ -107,6 +107,8 @@ class ParcelAuthorizationMatrixIT {
 
     @BeforeEach
     void createPeopleAndParcels() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         jdbc.update("DELETE FROM parcel_outbox_events");
         jdbc.update("DELETE FROM delivery_proofs");
         jdbc.update("DELETE FROM parcel_assignments");
@@ -284,13 +286,13 @@ class ParcelAuthorizationMatrixIT {
 
     private static Booking booking() {
         DeliveryContact contact = new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
-                UUID.randomUUID(), null);
+                TestHubs.COLOMBO_ZONE, null);
         return new Booking(contact, contact, ParcelSize.SMALL, 1000, null);
     }
 
     private static String bookingJson() {
         String address = "{\"contactName\":\"Nimal Perera\",\"phone\":\"+94771234567\",\"line1\":\"12 Temple Rd\","
-                + "\"city\":\"Colombo\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + TestHubs.COLOMBO_ZONE + "\"}";
         return "{\"pickup\":" + address + ",\"dropoff\":" + address + ",\"size\":\"SMALL\",\"weightGrams\":1000}";
     }
 }
