@@ -25,7 +25,8 @@ interface LiveState {
 
 /**
  * Public tracking view of a parcel, kept up to date over Server-Sent Events (ADR 0007). Loads the
- * current state, then applies live status events until the parcel is delivered or failed.
+ * current state, then applies live status events until the journey ends (delivered, returned,
+ * cancelled or failed).
  *
  * The browser's EventSource reconnects by itself and gets a fresh snapshot each time; the stream is
  * closed here once the parcel is finished, otherwise the browser would keep reconnecting.
@@ -87,6 +88,16 @@ export function useLiveTracking(trackingNumber: string | null): { view: PublicTr
                 },
               };
             });
+            // The live event carries no hub name or attempt (ADR 0009); the public view does
+            getPublicTracking(trackingNumber)
+              .then((full) => {
+                if (!cancelled) {
+                  setState((previous) => previous.view && full.history.length >= previous.view.history.length
+                    ? { ...previous, view: full }
+                    : previous);
+                }
+              })
+              .catch(() => undefined);
           }
           if (finished) {
             source?.close();
