@@ -57,13 +57,15 @@ class ParcelQueryService implements ParcelQueries {
     private final ParcelAssignmentRepository assignments;
     private final ParcelStatusHistoryRepository history;
     private final HubRepository hubs;
+    private final DeliveryPolicy policy;
 
     ParcelQueryService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
-            ParcelStatusHistoryRepository history, HubRepository hubs) {
+            ParcelStatusHistoryRepository history, HubRepository hubs, DeliveryPolicy policy) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.history = history;
         this.hubs = hubs;
+        this.policy = policy;
     }
 
     @Override
@@ -92,7 +94,9 @@ class ParcelQueryService implements ParcelQueries {
         Page<Parcel> found = normalizedSearch == null
                 ? parcels.findForDispatch(status, source, assigned, pageable)
                 : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, pageable);
-        return PageResult.of(found.getContent().stream().map(ParcelQueryService::toDispatchSummary).toList(),
+        Map<UUID, String> hubCodes = found.isEmpty() ? Map.of()
+                : hubs.findAll().stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
+        return PageResult.of(found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes)).toList(),
                 page, found.getTotalElements());
     }
 
@@ -174,11 +178,18 @@ class ParcelQueryService implements ParcelQueries {
                 parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(), parcel.getCreatedAt());
     }
 
-    private static DispatchParcelSummary toDispatchSummary(Parcel parcel) {
+    /** The board row: where the parcel is in the network and what a dispatcher may do (ADR 0009). */
+    private DispatchParcelSummary toDispatchSummary(Parcel parcel, Map<UUID, String> hubCodes) {
+        UUID expected = parcel.expectedHubId();
         return new DispatchParcelSummary(parcel.getId(), parcel.getTrackingNumber(), parcel.getStatus(),
                 parcel.getSource(), parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(),
                 parcel.getSize(), parcel.getWeightGrams(), parcel.getPickup().getCity(),
-                parcel.getDropoff().getCity(), parcel.getCreatedAt(), parcel.getUpdatedAt());
+                parcel.getDropoff().getCity(), parcel.getCreatedAt(), parcel.getUpdatedAt(),
+                hubCodes.get(parcel.getOriginHubId()), hubCodes.get(parcel.getViaHubId()),
+                hubCodes.get(parcel.getDestinationHubId()),
+                hubCodes.get(parcel.getCurrentHubId()), hubCodes.get(parcel.getNextHubId()), expected,
+                hubCodes.get(expected), parcel.getDeliveryAttempts(), parcel.getLastFailureReason(),
+                parcel.dispatchActions(policy.maxDeliveryAttempts()));
     }
 
     private static UUID parseParcelId(String value) {
