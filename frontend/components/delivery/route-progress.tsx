@@ -10,7 +10,12 @@ const SHORT_LABELS: Record<ParcelStatus, string> = {
   PICKED_UP: "Picked up",
   IN_TRANSIT: "In transit",
   OUT_FOR_DELIVERY: "Out for delivery",
+  AT_HUB: "At hub",
+  DELIVERY_ATTEMPT_FAILED: "Attempt failed",
   DELIVERED: "Delivered",
+  RETURNING: "Returning",
+  RETURNED: "Returned",
+  CANCELLED: "Cancelled",
   FAILED: "Failed",
 };
 
