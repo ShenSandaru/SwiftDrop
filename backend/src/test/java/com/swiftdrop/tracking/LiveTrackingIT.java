@@ -30,20 +30,22 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelCreation;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.application.Actor;
 import com.swiftdrop.delivery.application.ParcelStatusService;
 import com.swiftdrop.delivery.application.StatusChange;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 import com.swiftdrop.pricing.api.ParcelSize;
-import com.swiftdrop.delivery.TestHubs;
 
 /**
  * Live tracking over a real HTTP connection against real PostgreSQL (ADR 0007): the stream opens with
@@ -70,6 +72,8 @@ class LiveTrackingIT {
     private ParcelAssignment assignment;
     @Autowired
     private ParcelStatusService statuses;
+    @Autowired
+    private ParcelHubOperations hubOperations;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -108,7 +112,9 @@ class LiveTrackingIT {
         change(parcel, ParcelStatus.PICKED_UP, null);
         assertThat(nextEvent(lines)).contains("event:status", "id:2", "\"status\":\"PICKED_UP\"", "\"sequence\":2");
 
-        change(parcel, ParcelStatus.FAILED, FailureReason.ADDRESS_NOT_FOUND);
+        // After pickup the courier's task has ended; a dispatcher ends a parcel that cannot go on (ADR 0009 §3)
+        hubOperations.markFailed(parcel.parcelId(), FailureReason.ADDRESS_NOT_FOUND, "Call Nimal at +94771234567",
+                Staff.dispatcher(dispatcherId));
         String last = nextEvent(lines);
         assertThat(last).contains("\"status\":\"FAILED\"", "\"sequence\":3")
                 .doesNotContain("ADDRESS_NOT_FOUND", "Nimal", "+9477", courierId.toString());
