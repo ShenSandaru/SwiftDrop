@@ -18,6 +18,7 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { href: "/admin/merchants", label: "Merchants", exact: true },
   { href: "/admin/users", label: "User Directory", exact: true },
   { href: "/admin/pricing", label: "Pricing & Zones", exact: true },
+  { href: "/admin/hubs", label: "Hub Network", exact: true },
   { href: "/admin/reports", label: "Reports", exact: true },
 ];
 
