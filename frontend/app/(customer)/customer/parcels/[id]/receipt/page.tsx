@@ -10,7 +10,14 @@ import { StatusBadge } from "@/components/delivery/status-badge";
 import { Ticket } from "@/components/delivery/ticket";
 import { FAILURE_REASON_LABELS, SIZE_LABELS, formatDateTime, formatMoney, formatWeight } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
-import { getReceipt, type Address, type Receipt } from "@/lib/delivery";
+import { getReceipt, type Address, type ParcelStatus, type Receipt } from "@/lib/delivery";
+
+/** The receipt's title: proof of how the parcel ended, or a booking confirmation until then. */
+const RECEIPT_TITLES: Partial<Record<ParcelStatus, string>> = {
+  DELIVERED: "Delivery receipt",
+  RETURNED: "Return receipt",
+  CANCELLED: "Cancellation receipt",
+};
 
 /**
  * Printable receipt (CUS-5, D-13): a booking confirmation until delivery, then proof of completion.
@@ -66,7 +73,7 @@ export default function ReceiptPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  {receipt.status === "DELIVERED" ? "Delivery receipt" : "Booking receipt"}
+                  {RECEIPT_TITLES[receipt.status] ?? "Booking receipt"}
                 </p>
                 <p className="text-sm text-muted-foreground">Issued {formatDateTime(receipt.createdAt)}</p>
               </div>
@@ -84,9 +91,17 @@ export default function ReceiptPage() {
               <Item label="Parcel" value={`${SIZE_LABELS[receipt.size]} · ${formatWeight(receipt.weightGrams)}`} />
               <Item label="Contents" value={receipt.description ?? "—"} />
               {receipt.deliveredAt && <Item label="Delivered" value={formatDateTime(receipt.deliveredAt)} />}
-              {receipt.recipientName && <Item label="Received by" value={receipt.recipientName} />}
+              {receipt.returnedAt && <Item label="Returned" value={formatDateTime(receipt.returnedAt)} />}
+              {receipt.recipientName && (
+                <Item label={receipt.status === "RETURNED" ? "Handed back to" : "Received by"} value={receipt.recipientName} />
+              )}
               {receipt.failedAt && <Item label="Delivery failed" value={formatDateTime(receipt.failedAt)} />}
-              {receipt.failureReason && <Item label="Reason" value={FAILURE_REASON_LABELS[receipt.failureReason]} />}
+              {receipt.cancelledAt && <Item label="Cancelled" value={formatDateTime(receipt.cancelledAt)} />}
+              {receipt.deliveryAttempts > 0 && <Item label="Delivery attempts" value={String(receipt.deliveryAttempts)} />}
+              {receipt.failureReason && (
+                <Item label={receipt.status === "RETURNED" ? "Last attempt" : "Reason"}
+                  value={FAILURE_REASON_LABELS[receipt.failureReason]} />
+              )}
             </dl>
           </div>
         </Ticket>
