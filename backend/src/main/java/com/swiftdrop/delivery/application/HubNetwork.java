@@ -4,7 +4,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.domain.Hub;
@@ -28,10 +27,13 @@ public class HubNetwork {
     /**
      * The route between two zones.
      *
+     * <p>Deliberately not {@code @Transactional}: callers may catch the conflict (a pickup falls back
+     * to the ADR 0006 rules), and a conflict thrown through a transactional proxy would mark the
+     * caller's transaction rollback-only. The repository reads join the caller's transaction.
+     *
      * @throws ParcelConflictException if a zone has no active hub, or the route needs a central hub
      *                                 and none is active
      */
-    @Transactional(readOnly = true)
     public HubRoute routeFor(UUID pickupZoneId, UUID dropoffZoneId) {
         Hub origin = branchOf(pickupZoneId, "pickup");
         Hub destination = branchOf(dropoffZoneId, "drop-off");
