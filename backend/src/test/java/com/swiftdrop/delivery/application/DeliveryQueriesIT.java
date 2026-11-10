@@ -42,6 +42,7 @@ import com.swiftdrop.delivery.api.PublicTrackingView;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 import com.swiftdrop.pricing.api.ParcelSize;
+import com.swiftdrop.delivery.TestHubs;
 
 /**
  * The {@code delivery.api} contracts other modules use, against real PostgreSQL: assignment rules,
@@ -84,6 +85,8 @@ class DeliveryQueriesIT {
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         merchantId = UUID.randomUUID();
         dispatcherId = insertUser("dispatcher");
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
@@ -220,6 +223,7 @@ class DeliveryQueriesIT {
     }
 
     private static DeliveryContact contact(String city) {
-        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, city, UUID.randomUUID(), null);
+        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, city, TestHubs.zoneFor(city),
+                null);
     }
 }
