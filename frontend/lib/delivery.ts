@@ -5,12 +5,18 @@
  */
 import { api, ApiError, getApiBaseUrl, type PageResponse } from "@/lib/api";
 
+/** In lifecycle order (ADR 0009 §2). */
 export const PARCEL_STATUSES = [
   "CREATED",
   "PICKED_UP",
+  "AT_HUB",
   "IN_TRANSIT",
   "OUT_FOR_DELIVERY",
+  "DELIVERY_ATTEMPT_FAILED",
   "DELIVERED",
+  "RETURNING",
+  "RETURNED",
+  "CANCELLED",
   "FAILED",
 ] as const;
 export type ParcelStatus = (typeof PARCEL_STATUSES)[number];
