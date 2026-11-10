@@ -43,6 +43,7 @@ import com.swiftdrop.delivery.application.StatusChange;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 import com.swiftdrop.pricing.api.ParcelSize;
+import com.swiftdrop.delivery.TestHubs;
 
 /**
  * Live tracking over a real HTTP connection against real PostgreSQL (ADR 0007): the stream opens with
@@ -81,6 +82,8 @@ class LiveTrackingIT {
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("650.00"), "LKR", new BigDecimal("400.00"), new BigDecimal("100.00"),
                 new BigDecimal("150.00"), UUID.randomUUID()));
@@ -175,7 +178,7 @@ class LiveTrackingIT {
 
     private CreatedParcel merchantParcel() {
         DeliveryContact contact = new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
-                UUID.randomUUID(), null);
+                TestHubs.COLOMBO_ZONE, null);
         return creation.createMerchantParcel(new NewMerchantParcel(UUID.randomUUID(), "ORD-" + UUID.randomUUID(),
                 contact, contact, ParcelSize.SMALL, 1000, null));
     }
