@@ -43,6 +43,7 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.pricing.api.ParcelSize;
+import com.swiftdrop.delivery.domain.HubRepository;
 
 class ParcelQueryServiceTest {
 
@@ -61,7 +62,7 @@ class ParcelQueryServiceTest {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
-        service = new ParcelQueryService(parcels, assignments, history);
+        service = new ParcelQueryService(parcels, assignments, history, mock(HubRepository.class));
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
                         "00500"),
@@ -100,7 +101,9 @@ class ParcelQueryServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<ParcelStatus>> terminal = ArgumentCaptor.forClass(Collection.class);
         verify(parcels).countActiveByCourier(terminal.capture());
-        assertThat(terminal.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.FAILED);
+        // The final statuses of ADR 0009 §2
+        assertThat(terminal.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.RETURNED,
+                ParcelStatus.CANCELLED, ParcelStatus.FAILED);
     }
 
     @Test
