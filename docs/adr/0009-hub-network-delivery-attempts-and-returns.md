@@ -1,7 +1,7 @@
 # 0009. Hub network, delivery attempts, returns and cancellation
 
-- Status: Proposed
-- Date: 2026-11-10
+- Status: Accepted
+- Date: 2026-11-10 (Accepted: 2026-11-10)
 
 ## Context
 
