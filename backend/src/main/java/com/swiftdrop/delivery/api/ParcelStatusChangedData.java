@@ -11,7 +11,10 @@ import java.util.UUID;
  * @param sequence per-parcel sequence number; {@code CREATED} is 1
  * @param ownerCustomerId set for {@link ParcelSource#CUSTOMER} parcels, otherwise {@code null}
  * @param ownerMerchantId set for {@link ParcelSource#MERCHANT} parcels, otherwise {@code null}
- * @param failureReasonCode set only when {@code newStatus} is {@link ParcelStatus#FAILED}
+ * @param failureReasonCode set only when {@code newStatus} needs a reason ({@code FAILED},
+ *                          {@code DELIVERY_ATTEMPT_FAILED})
+ * @param hubCode optional: the hub reached ({@code AT_HUB}) or left ({@code IN_TRANSIT}); ADR 0009 §7
+ * @param attempt optional: the delivery attempt ({@code OUT_FOR_DELIVERY}, {@code DELIVERY_ATTEMPT_FAILED})
  */
 public record ParcelStatusChangedData(
         UUID parcelId,
@@ -23,7 +26,9 @@ public record ParcelStatusChangedData(
         UUID ownerCustomerId,
         UUID ownerMerchantId,
         String merchantOrderReference,
-        FailureReason failureReasonCode
+        FailureReason failureReasonCode,
+        String hubCode,
+        Integer attempt
 ) {
 
     public ParcelStatusChangedData {
@@ -34,8 +39,20 @@ public record ParcelStatusChangedData(
         if (sequence < 1) {
             throw new IllegalArgumentException("sequence must be >= 1");
         }
-        if ((newStatus == ParcelStatus.FAILED) != (failureReasonCode != null)) {
-            throw new IllegalArgumentException("failureReasonCode is required for FAILED and only for FAILED");
+        if (newStatus.needsFailureReason() != (failureReasonCode != null)) {
+            throw new IllegalArgumentException(
+                    "failureReasonCode is required for FAILED and DELIVERY_ATTEMPT_FAILED, and only for them");
         }
+        if (attempt != null && attempt < 1) {
+            throw new IllegalArgumentException("attempt must be >= 1");
+        }
+    }
+
+    /** Without hub and attempt, as before ADR 0009. */
+    public ParcelStatusChangedData(UUID parcelId, String trackingNumber, ParcelStatus previousStatus,
+            ParcelStatus newStatus, int sequence, ParcelSource source, UUID ownerCustomerId, UUID ownerMerchantId,
+            String merchantOrderReference, FailureReason failureReasonCode) {
+        this(parcelId, trackingNumber, previousStatus, newStatus, sequence, source, ownerCustomerId, ownerMerchantId,
+                merchantOrderReference, failureReasonCode, null, null);
     }
 }
