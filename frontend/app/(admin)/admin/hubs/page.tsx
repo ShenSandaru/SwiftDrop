@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, Building2, Loader2, Plus, Star, Warehouse } from "lucide-react";
+import { AlertTriangle, Building2, Loader2, Pencil, Plus, Star, Warehouse } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +43,8 @@ export default function AdminHubsPage() {
     [hubs],
   );
   const unserved = zones.filter((zone) => !servedZones.has(zone.id));
-  const freeZones = zones.filter((zone) => !(hubs ?? []).some((hub) => hub.zoneId === zone.id));
+  const takenZones = new Set((hubs ?? []).map((hub) => hub.zoneId));
+  const freeZones = zones.filter((zone) => !takenZones.has(zone.id));
   const central = hubs?.find((hub) => hub.central && hub.active);
   const branches = (hubs ?? []).filter((hub) => hub !== central);
 
@@ -59,6 +60,22 @@ export default function AdminHubsPage() {
       setError(formatApiError(failure));
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Changes name, city and zone; the code and the central flag stay as they are. */
+  async function saveHub(hub: Hub, changes: { name: string; city: string; zoneId: string | null }) {
+    setBusyHub(hub.id);
+    setError(null);
+    try {
+      await updateHub(hub.id, { ...hub, ...changes });
+      load();
+      return true;
+    } catch (failure) {
+      setError(formatApiError(failure));
+      return false;
+    } finally {
+      setBusyHub(null);
     }
   }
 
@@ -111,14 +128,16 @@ export default function AdminHubsPage() {
           <p className="py-8 text-center text-sm text-muted-foreground">No hubs yet. Start with the central hub.</p>
         ) : (
           <div className="flex flex-col items-center gap-6">
-            {central && <HubCard hub={central} zone={zoneName(central.zoneId)} busy={busyHub === central.id} onToggle={toggleActive} />}
+            {central && <HubCard hub={central} zone={zoneName(central.zoneId)} busy={busyHub === central.id} onToggle={toggleActive}
+              zones={zones} takenZones={takenZones} onSave={saveHub} />}
             {branches.length > 0 && (
               <>
                 {central && <span aria-hidden="true" className="h-6 border-l-2 border-dashed border-primary/40" />}
                 <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {branches.map((hub) => (
                     <li key={hub.id}>
-                      <HubCard hub={hub} zone={zoneName(hub.zoneId)} busy={busyHub === hub.id} onToggle={toggleActive} />
+                      <HubCard hub={hub} zone={zoneName(hub.zoneId)} busy={busyHub === hub.id} onToggle={toggleActive}
+                        zones={zones} takenZones={takenZones} onSave={saveHub} />
                     </li>
                   ))}
                 </ul>
@@ -172,38 +191,92 @@ export default function AdminHubsPage() {
   );
 }
 
-function HubCard({ hub, zone, busy, onToggle }: {
+function HubCard({ hub, zone, busy, onToggle, zones, takenZones, onSave }: {
   hub: Hub;
   zone: string | undefined;
   busy: boolean;
   onToggle: (hub: Hub) => void;
+  zones: Zone[];
+  /** Zones that already have a hub, active or not: the database allows one hub per zone. */
+  takenZones: Set<string | null>;
+  onSave: (hub: Hub, changes: { name: string; city: string; zoneId: string | null }) => Promise<boolean>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ name: hub.name, city: hub.city, zoneId: hub.zoneId ?? "" });
   const Icon = hub.central ? Warehouse : Building2;
+  // Its own zone, plus the zones nobody has
+  const choices = zones.filter((option) => option.id === hub.zoneId || !takenZones.has(option.id));
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (await onSave(hub, { name: draft.name, city: draft.city, zoneId: draft.zoneId || null })) {
+      setEditing(false);
+    }
+  }
+
   return (
     <article className={cn(
-      "flex items-start justify-between gap-3 rounded-2xl border p-4",
+      "rounded-2xl border p-4",
       hub.central ? "border-primary bg-accent" : "border-border bg-background",
       !hub.active && "opacity-60",
     )}>
-      <div className="flex items-start gap-3">
-        <span className={cn("flex size-10 items-center justify-center rounded-xl",
-          hub.central ? "bg-primary text-primary-foreground" : "bg-accent text-primary")}>
-          <Icon className="size-5" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="flex items-center gap-1.5 font-bold text-foreground">
-            {hub.name} {hub.central && <Star className="size-3.5 fill-primary text-primary" aria-label="Central hub" />}
-          </p>
-          <p className="font-mono text-[11px] tracking-[0.15em] text-primary">{hub.code}</p>
-          <p className="text-xs text-muted-foreground">
-            {hub.city}{zone ? ` · serves ${zone}` : hub.central ? " · central only" : ""}
-          </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className={cn("flex size-10 items-center justify-center rounded-xl",
+            hub.central ? "bg-primary text-primary-foreground" : "bg-accent text-primary")}>
+            <Icon className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="flex items-center gap-1.5 font-bold text-foreground">
+              {hub.name} {hub.central && <Star className="size-3.5 fill-primary text-primary" aria-label="Central hub" />}
+            </p>
+            <p className="font-mono text-[11px] tracking-[0.15em] text-primary">{hub.code}</p>
+            <p className="text-xs text-muted-foreground">
+              {hub.city}{zone ? ` · serves ${zone}` : hub.central ? " · central only" : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing((open) => !open)}>
+            <Pencil aria-hidden="true" /> Edit
+          </Button>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => onToggle(hub)}>
+            {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {hub.active ? "Deactivate" : "Activate"}
+          </Button>
         </div>
       </div>
-      <Button variant="outline" size="sm" disabled={busy} onClick={() => onToggle(hub)}>
-        {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
-        {hub.active ? "Deactivate" : "Activate"}
-      </Button>
+
+      {editing && (
+        <form onSubmit={save} className="mt-4 space-y-3 border-t border-dashed border-border pt-4">
+          <div className="space-y-1">
+            <Label htmlFor={`edit-name-${hub.id}`}>Name</Label>
+            <Input id={`edit-name-${hub.id}`} required maxLength={100} value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`edit-city-${hub.id}`}>City</Label>
+            <Input id={`edit-city-${hub.id}`} required maxLength={100} value={draft.city}
+              onChange={(event) => setDraft({ ...draft, city: event.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`edit-zone-${hub.id}`}>Zone it serves</Label>
+            <select id={`edit-zone-${hub.id}`} value={draft.zoneId}
+              onChange={(event) => setDraft({ ...draft, zoneId: event.target.value })}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm">
+              <option value="">{hub.central ? "None (central hub only)" : "Choose a zone"}</option>
+              {choices.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground">The code {hub.code} cannot be changed.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={busy || (!hub.central && !draft.zoneId)}>
+              {busy && <Loader2 className="animate-spin" aria-hidden="true" />} Save
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
     </article>
   );
 }
