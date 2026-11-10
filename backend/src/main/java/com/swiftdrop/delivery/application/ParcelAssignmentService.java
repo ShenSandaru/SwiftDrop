@@ -25,8 +25,10 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 
 /**
  * {@link ParcelAssignment} for {@code dispatch} (ADM-1). {@code dispatch} has already checked that
- * the courier is eligible; this records the assignment under optimistic locking so competing
- * requests cannot silently overwrite assignments or race pickups (SD-317).
+ * the courier is eligible; this records the task under optimistic locking so competing requests
+ * cannot silently overwrite assignments or race pickups (SD-317). Pickup tasks before pickup,
+ * delivery tasks at the destination hub, return tasks while returning (ADR 0009 §5); each may be
+ * reassigned before the courier starts it.
  */
 @Service
 class ParcelAssignmentService implements ParcelAssignment {
@@ -35,16 +37,19 @@ class ParcelAssignmentService implements ParcelAssignment {
 
     private final ParcelRepository parcels;
     private final ParcelAssignmentRepository assignments;
+    private final DeliveryPolicy policy;
     private final Clock clock;
 
     @Autowired
-    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments) {
-        this(parcels, assignments, Clock.systemUTC());
+    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy) {
+        this(parcels, assignments, policy, Clock.systemUTC());
     }
 
-    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, Clock clock) {
+    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
+            Clock clock) {
         this.parcels = parcels;
         this.assignments = assignments;
+        this.policy = policy;
         this.clock = clock;
     }
 
@@ -65,7 +70,8 @@ class ParcelAssignmentService implements ParcelAssignment {
         Parcel parcel = parcels.findById(parcelId).orElseThrow(ParcelNotFoundException::new);
         Instant now = clock.instant();
 
-        if (parcel.getStatus() != ParcelStatus.CREATED) {
+        // The parcel decides whether this kind of task is possible now (ADR 0009 §5)
+        if (type == ParcelAssignmentType.PICKUP && parcel.getStatus() != ParcelStatus.CREATED) {
             throw new ParcelConflictException("A courier can only be assigned before pickup");
         }
 
@@ -74,6 +80,9 @@ class ParcelAssignmentService implements ParcelAssignment {
                 .orElse(null);
 
         if (current != null) {
+            if (current.getType() != type) {
+                throw new ParcelConflictException("The parcel has another active courier task");
+            }
             if (current.getCourierId().equals(courierUserId)) {
                 return current.toSummary();
             }
@@ -86,13 +95,18 @@ class ParcelAssignmentService implements ParcelAssignment {
             throw new ParcelConflictException("The current parcel assignment has no active history record");
         }
 
-        parcel.assignPickupCourier(courierUserId, now);
+        switch (type) {
+            case PICKUP -> parcel.assignPickupCourier(courierUserId, now);
+            case DELIVERY -> parcel.assignDeliveryCourier(courierUserId, policy.maxDeliveryAttempts(), now);
+            case RETURN -> parcel.assignReturnCourier(courierUserId, now);
+        }
         parcels.saveAndFlush(parcel);
 
         ParcelAssignmentRecord assignment = assignments.saveAndFlush(
                 new ParcelAssignmentRecord(parcelId, courierUserId, type, dispatcherUserId, now));
         // IDs only: no personal data in logs
-        log.info("Parcel {} assigned to courier {} by dispatcher {}", parcelId, courierUserId, dispatcherUserId);
+        log.info("Parcel {} {} task assigned to courier {} by dispatcher {}", parcelId, type, courierUserId,
+                dispatcherUserId);
         return assignment.toSummary();
     }
 }
