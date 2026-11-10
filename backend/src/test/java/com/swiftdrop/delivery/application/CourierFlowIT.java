@@ -36,6 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
+import com.swiftdrop.delivery.TestHubs;
 
 /**
  * A parcel's whole journey over real HTTP with real login tokens, against real PostgreSQL: booking,
@@ -82,6 +83,8 @@ class CourierFlowIT {
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("850.00"), "LKR", new BigDecimal("550.00"), new BigDecimal("200.00"),
                 new BigDecimal("100.00"), UUID.randomUUID()));
@@ -257,9 +260,9 @@ class CourierFlowIT {
 
     private static String bookingJson() {
         String pickup = "{\"contactName\":\"Nimal Perera\",\"phone\":\"+94771234567\",\"line1\":\"12 Temple Rd\","
-                + "\"city\":\"Colombo\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + TestHubs.COLOMBO_ZONE + "\"}";
         String dropoff = "{\"contactName\":\"Kumari Silva\",\"phone\":\"+94711234567\",\"line1\":\"4 Lake View\","
-                + "\"city\":\"Kandy\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Kandy\",\"zoneId\":\"" + TestHubs.KANDY_ZONE + "\"}";
         return "{\"pickup\":" + pickup + ",\"dropoff\":" + dropoff + ",\"size\":\"MEDIUM\",\"weightGrams\":2000}";
     }
 }
