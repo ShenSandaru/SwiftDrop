@@ -286,6 +286,19 @@ tracking     → delivery
 - **Decided ([ADR 0006](adr/0006-delivery-lifecycle-and-transition-rules.md), Accepted):** the
   transition matrix, `FAILED` from `PICKED_UP` to `OUT_FOR_DELIVERY` with a reason code, proof
   required for `DELIVERED`, assignment only while `CREATED`, no cancellation, retry or override.
+- **Decided ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md), Accepted;
+  supersedes ADR 0006 §1–§3 and the assignment rules of ADR 0008 §4–§5). Not implemented yet;
+  until it is, the ADR 0006 rules above are what the code does:**
+  - A branch hub per pricing zone plus one central hub (Colombo); the route (origin branch →
+    central → destination branch, shorter when one of them is central or both are the same) is
+    fixed at pickup. Booking for a zone without a hub is rejected.
+  - New statuses `AT_HUB` (records which hub), `DELIVERY_ATTEMPT_FAILED`, `RETURNING`, `RETURNED`
+    and `CANCELLED` (before pickup); `FAILED` becomes an exception state set by a dispatcher.
+  - Up to 3 delivery attempts (configurable 1 to 5); `REFUSED` and `ADDRESS_NOT_FOUND` return at
+    once. Hub scans are done by `DISPATCHER` (and `ADMIN`); courier tasks gain `RETURN`, and pickup
+    reassignment while `CREATED` is allowed.
+  - Events gain optional `hubCode` and `attempt` fields (`schemaVersion` 1). Cash on delivery
+    needs a separate ADR.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
