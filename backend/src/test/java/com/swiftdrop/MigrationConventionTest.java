@@ -167,6 +167,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111000",
                                 "delivery create hubs",
-                                "delivery/V202611111000__delivery_create_hubs.sql"));
+                                "delivery/V202611111000__delivery_create_hubs.sql"),
+                        tuple(
+                                "202611111010",
+                                "delivery add hub lifecycle",
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
     }
 }
