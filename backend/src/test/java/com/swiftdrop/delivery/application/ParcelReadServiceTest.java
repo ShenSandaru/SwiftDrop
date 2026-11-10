@@ -29,8 +29,10 @@ import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.ActorRole;
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
@@ -55,7 +57,8 @@ class ParcelReadServiceTest {
         parcels = mock(ParcelRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
         proofs = mock(DeliveryProofRepository.class);
-        service = new ParcelReadService(parcels, history, proofs);
+        service = new ParcelReadService(parcels, history, proofs, mock(HubRepository.class),
+                mock(ParcelAssignmentRepository.class));
 
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
