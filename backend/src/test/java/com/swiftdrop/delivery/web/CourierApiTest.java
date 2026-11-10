@@ -60,6 +60,7 @@ import com.swiftdrop.pricing.api.ParcelSize;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.TestPrincipal;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 
 /** Courier endpoints over HTTP: roles, request validation, multipart handling and error mapping. */
 @SpringBootTest(properties = {
@@ -132,7 +133,7 @@ class CourierApiTest {
     @Test
     void courierSeesTheDayWithContactsAndNextStatuses() throws Exception {
         when(courierParcels.today(COURIER_ID)).thenReturn(List.of(
-                new CourierParcel(parcel, false, Set.of(ParcelStatus.PICKED_UP))));
+                new CourierParcel(parcel, false, ParcelAssignmentType.PICKUP, false, Set.of(ParcelStatus.PICKED_UP))));
 
         mvc.perform(get("/api/v1/courier/parcels").with(TestPrincipal.courier(COURIER_ID).postProcessor()))
                 .andExpect(status().isOk())
