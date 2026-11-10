@@ -96,6 +96,10 @@ export interface StatusEntry {
   failureReason: FailureReason | null;
   /** Courier note; null for viewers who may not see notes (customers). */
   note: string | null;
+  /** Hub reached or left in this step (ADR 0009); null for other steps. */
+  hubName: string | null;
+  /** Delivery attempt this step belongs to; null for other steps. */
+  attempt: number | null;
 }
 
 export interface ParcelDetail {
@@ -113,6 +117,7 @@ export interface ParcelDetail {
   assignedCourierId: string | null;
   createdAt: string;
   updatedAt: string;
+  deliveryAttempts: number;
   history: StatusEntry[];
 }
 
@@ -130,13 +135,24 @@ export interface Receipt {
   deliveredAt: string | null;
   recipientName: string | null;
   failedAt: string | null;
+  /** For FAILED, and for RETURNED the last failed attempt's reason. */
   failureReason: FailureReason | null;
+  returnedAt: string | null;
+  cancelledAt: string | null;
+  deliveryAttempts: number;
 }
+
+/** What a courier does with a parcel (ADR 0009 §5). */
+export type CourierTask = "PICKUP" | "DELIVERY" | "RETURN";
 
 export interface CourierParcel {
   id: string;
   trackingNumber: string;
   status: ParcelStatus;
+  task: CourierTask;
+  /** The courier finished this task today; nothing more to do. */
+  taskDone: boolean;
+  /** Empty when the task is done. */
   nextStatuses: ParcelStatus[];
   pickup: Address;
   dropoff: Address;
@@ -144,6 +160,7 @@ export interface CourierParcel {
   weightGrams: number;
   description: string | null;
   proofCaptured: boolean;
+  deliveryAttempts: number;
   assignedAt: string | null;
   updatedAt: string;
 }
@@ -159,6 +176,8 @@ export interface Proof {
 export interface PublicStatusEvent {
   status: ParcelStatus;
   occurredAt: string;
+  hubName?: string | null;
+  attempt?: number | null;
 }
 
 export interface PublicTracking {
@@ -187,9 +206,20 @@ export const MAX_WEIGHT_GRAMS = 30_000;
 /** E.164, as the backend validates it: + then 8 to 15 digits, no leading zero. */
 export const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 
+/** Statuses that end the journey: nothing changes afterwards (ADR 0009 §2). */
+export const FINAL_STATUSES: readonly ParcelStatus[] = ["DELIVERED", "RETURNED", "CANCELLED", "FAILED"];
+
 export function isFinalStatus(status: ParcelStatus): boolean {
-  return status === "DELIVERED" || status === "FAILED";
+  return FINAL_STATUSES.includes(status);
 }
+
+/** A customer may cancel only before pickup (ADR 0009 §6); the backend checks it again. */
+export function canCustomerCancel(status: ParcelStatus): boolean {
+  return status === "CREATED";
+}
+
+/** Failure reasons that count as a failed delivery attempt; damage is reported by the hub instead. */
+export const ATTEMPT_FAILURE_REASONS: readonly FailureReason[] = FAILURE_REASONS.filter((reason) => reason !== "DAMAGED");
 
 /** True when pricing (zones, quotes) is not deployed on this backend yet. */
 export function isPricingUnavailable(error: unknown): boolean {
@@ -216,6 +246,11 @@ export function getParcel(id: string): Promise<ParcelDetail> {
 
 export function getReceipt(id: string): Promise<Receipt> {
   return api.get<Receipt>(`/api/v1/parcels/${encodeURIComponent(id)}/receipt`);
+}
+
+/** Cancels the customer's own parcel before pickup (ADR 0009 §6). */
+export function cancelParcel(id: string): Promise<void> {
+  return api.post<void>(`/api/v1/parcels/${encodeURIComponent(id)}/cancellation`);
 }
 
 export function getProofPhoto(id: string): Promise<Blob> {
