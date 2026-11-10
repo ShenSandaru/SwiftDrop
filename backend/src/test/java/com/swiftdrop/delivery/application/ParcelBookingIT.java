@@ -37,6 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
@@ -46,7 +47,6 @@ import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 import com.swiftdrop.pricing.api.ParcelSize;
 import com.swiftdrop.test.security.TestPrincipal;
-import com.swiftdrop.delivery.TestHubs;
 
 /**
  * Booking end to end against real PostgreSQL: HTTP request, parcel, first history entry and outbox
