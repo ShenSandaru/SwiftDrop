@@ -2,10 +2,12 @@ package com.swiftdrop.delivery.application;
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,9 +28,12 @@ import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelSummary;
 import com.swiftdrop.delivery.api.PublicStatusEvent;
 import com.swiftdrop.delivery.api.PublicTrackingView;
+import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
+import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.delivery.domain.TrackingNumberGenerator;
 
@@ -44,17 +49,21 @@ class ParcelQueryService implements ParcelQueries {
     private static final Sort OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "createdAt");
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
     private static final Sort ASSIGNED_OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "assignedAt");
-    private static final EnumSet<ParcelStatus> TERMINAL = EnumSet.of(ParcelStatus.DELIVERED, ParcelStatus.FAILED);
+    /** Final statuses (ADR 0009 §2): no task can follow. */
+    private static final EnumSet<ParcelStatus> TERMINAL = EnumSet.of(ParcelStatus.DELIVERED, ParcelStatus.RETURNED,
+            ParcelStatus.CANCELLED, ParcelStatus.FAILED);
 
     private final ParcelRepository parcels;
     private final ParcelAssignmentRepository assignments;
     private final ParcelStatusHistoryRepository history;
+    private final HubRepository hubs;
 
     ParcelQueryService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
-            ParcelStatusHistoryRepository history) {
+            ParcelStatusHistoryRepository history, HubRepository hubs) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.history = history;
+        this.hubs = hubs;
     }
 
     @Override
@@ -143,9 +152,20 @@ class ParcelQueryService implements ParcelQueries {
                 parcel.getStatus(),
                 parcel.getPickup().getCity(),
                 parcel.getDropoff().getCity(),
-                history.findByParcelIdOrderBySequenceAsc(parcel.getId()).stream()
-                        .map(entry -> new PublicStatusEvent(entry.getToStatus(), entry.getOccurredAt()))
-                        .toList()));
+                publicTimeline(parcel)));
+    }
+
+    /** Status, time, hub name and attempt per step (ADR 0009 §7); hub names, never people or notes. */
+    private List<PublicStatusEvent> publicTimeline(Parcel parcel) {
+        List<ParcelStatusHistoryEntry> entries = history.findByParcelIdOrderBySequenceAsc(parcel.getId());
+        Map<String, String> hubNames = entries.stream().anyMatch(entry -> entry.getHubCode() != null)
+                ? hubs.findAll().stream().collect(Collectors.toMap(Hub::getCode, Hub::getName))
+                : Map.of();
+        return entries.stream()
+                .map(entry -> new PublicStatusEvent(entry.getToStatus(), entry.getOccurredAt(),
+                        entry.getHubCode() == null ? null : hubNames.getOrDefault(entry.getHubCode(), entry.getHubCode()),
+                        entry.getAttempt()))
+                .toList();
     }
 
     static ParcelSummary toSummary(Parcel parcel) {
