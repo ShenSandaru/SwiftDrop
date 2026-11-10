@@ -163,6 +163,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611101210",
                                 "delivery update actor role for admin and dispatcher",
-                                "delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql"));
+                                "delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql"),
+                        tuple(
+                                "202611111000",
+                                "delivery create hubs",
+                                "delivery/V202611111000__delivery_create_hubs.sql"));
     }
 }
