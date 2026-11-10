@@ -40,7 +40,7 @@ class ParcelEventSerializerTest {
         JsonNode data = json.get("data");
         assertThat(data.propertyNames()).containsExactlyInAnyOrder("parcelId", "trackingNumber", "previousStatus",
                 "newStatus", "sequence", "source", "ownerCustomerId", "ownerMerchantId", "merchantOrderReference",
-                "failureReasonCode");
+                "failureReasonCode", "hubCode", "attempt");
         assertThat(data.get("previousStatus").asString()).isEqualTo("OUT_FOR_DELIVERY");
         assertThat(data.get("newStatus").asString()).isEqualTo("FAILED");
         assertThat(data.get("sequence").asInt()).isEqualTo(5);

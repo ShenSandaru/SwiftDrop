@@ -27,6 +27,7 @@ import {
   Mail,
   User,
   Shield,
+  Radio,
   Truck,
   Store,
   UserCheck,
@@ -38,7 +39,7 @@ import {
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
-const ROLE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER_ADMIN"] as const;
+const ROLE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER", "ADMIN"] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
 
 const STAFF_ROLES = [
@@ -49,10 +50,10 @@ const STAFF_ROLES = [
     icon: Truck,
   },
   {
-    value: "DISPATCHER_ADMIN" as const,
-    label: "Dispatcher & Admin",
-    description: "Full system administration, courier assignment, pricing rules, and monitoring.",
-    icon: Shield,
+    value: "DISPATCHER" as const,
+    label: "Dispatcher",
+    description: "Fleet tracking, parcel assignment, route monitoring, and exception handling.",
+    icon: Radio,
   },
 ];
 
@@ -278,7 +279,7 @@ export default function AdminUsersPage() {
   const [staffFullName, setStaffFullName] = useState("");
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
-  const [staffRole, setStaffRole] = useState<"COURIER" | "DISPATCHER_ADMIN">("COURIER");
+  const [staffRole, setStaffRole] = useState<"COURIER" | "DISPATCHER">("COURIER");
   const [showPassword, setShowPassword] = useState(false);
   const [staffFormErrors, setStaffFormErrors] = useState<Record<string, string>>({});
   const [staffFormGeneralError, setStaffFormGeneralError] = useState<string | null>(null);
@@ -338,8 +339,8 @@ export default function AdminUsersPage() {
       errors.password = "Password must be at most 72 bytes.";
     }
 
-    if (staffRole !== "COURIER" && staffRole !== "DISPATCHER_ADMIN") {
-      errors.role = "Role must be COURIER or DISPATCHER_ADMIN.";
+    if (staffRole !== "COURIER" && staffRole !== "DISPATCHER") {
+      errors.role = "Role must be COURIER or DISPATCHER.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -729,10 +730,14 @@ export default function AdminUsersPage() {
                                   "bg-muted text-muted-foreground border-border";
                                 let Icon = User;
 
-                                if (role === "DISPATCHER_ADMIN") {
+                                if (role === "ADMIN") {
                                   badgeStyle =
                                     "bg-primary/10 text-primary border-primary/20";
                                   Icon = Shield;
+                                } else if (role === "DISPATCHER") {
+                                  badgeStyle =
+                                    "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20";
+                                  Icon = Radio;
                                 } else if (role === "COURIER") {
                                   badgeStyle =
                                     "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";

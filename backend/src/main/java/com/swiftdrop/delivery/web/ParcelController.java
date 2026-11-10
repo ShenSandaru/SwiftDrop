@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.application.DeliveryProofService;
 import com.swiftdrop.delivery.application.ParcelBookingService;
+import com.swiftdrop.delivery.application.ParcelHubService;
 import com.swiftdrop.delivery.application.ParcelReadService;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.shared.web.PageLimit;
@@ -42,11 +43,14 @@ class ParcelController {
     private final ParcelBookingService booking;
     private final ParcelReadService reads;
     private final DeliveryProofService proofs;
+    private final ParcelHubService hubOperations;
 
-    ParcelController(ParcelBookingService booking, ParcelReadService reads, DeliveryProofService proofs) {
+    ParcelController(ParcelBookingService booking, ParcelReadService reads, DeliveryProofService proofs,
+            ParcelHubService hubOperations) {
         this.booking = booking;
         this.reads = reads;
         this.proofs = proofs;
+        this.hubOperations = hubOperations;
     }
 
     @PostMapping
@@ -58,9 +62,9 @@ class ParcelController {
                 .body(ParcelCreatedResponse.from(parcel));
     }
 
-    /** Customers see their own parcels, dispatchers/admins all; newest first. */
+    /** Customers see their own parcels, dispatchers and admins all; newest first. */
     @GetMapping
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'DISPATCHER')")
     PageResponse<ParcelListItemResponse> list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -73,20 +77,31 @@ class ParcelController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'ADMIN', 'DISPATCHER')")
     ParcelDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return ParcelDetailResponse.from(reads.detail(id, Callers.viewer(jwt)));
     }
 
+    /**
+     * Cancels the caller's own parcel before pickup (ADR 0009 §3). Parcels of others answer 404;
+     * a parcel already picked up answers 409.
+     */
+    @PostMapping("/{id}/cancellation")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    ResponseEntity<Void> cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        hubOperations.cancelForCustomer(id, Callers.userId(jwt));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/receipt")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'DISPATCHER')")
     ReceiptResponse receipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return ReceiptResponse.from(reads.receipt(id, Callers.viewer(jwt)));
     }
 
-    /** Proof photo for the owner, the assigned courier or an admin; never cached. */
+    /** Proof photo for the owner, the assigned courier, dispatchers or admins; never cached. */
     @GetMapping("/{id}/proof/photo")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'DISPATCHER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'COURIER', 'ADMIN', 'DISPATCHER')")
     ResponseEntity<byte[]> proofPhoto(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         DeliveryProofService.Photo photo = proofs.photo(id, Callers.viewer(jwt))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo not found"));

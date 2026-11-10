@@ -12,18 +12,28 @@ import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.pricing.api.ParcelSize;
 
-/** Parcel detail with its status timeline (CUS-4). Notes are {@code null} for viewers who may not see them. */
+/**
+ * Parcel detail with its status timeline (CUS-4). Notes are {@code null} for viewers who may not see
+ * them.
+ *
+ * @param deliveryAttempts delivery attempts started so far (ADR 0009 §3)
+ */
 record ParcelDetailResponse(UUID id, String trackingNumber, ParcelStatus status, ParcelSource source,
         String merchantOrderReference, AddressResponse pickup, AddressResponse dropoff, ParcelSize size,
         int weightGrams, String description, MoneyResponse fee, UUID assignedCourierId, Instant createdAt,
-        Instant updatedAt, List<StatusEntry> history) {
+        Instant updatedAt, int deliveryAttempts, List<StatusEntry> history) {
 
+    /**
+     * @param hubName the hub reached or left in this step, or {@code null}
+     * @param attempt the delivery attempt of this step, or {@code null}
+     */
     record StatusEntry(int sequence, ParcelStatus status, Instant occurredAt, FailureReason failureReason,
-            String note) {
+            String note, String hubName, Integer attempt) {
 
-        static StatusEntry from(ParcelStatusHistoryEntry entry, boolean withNote) {
+        static StatusEntry from(ParcelStatusHistoryEntry entry, boolean withNote, ParcelView view) {
             return new StatusEntry(entry.getSequence(), entry.getToStatus(), entry.getOccurredAt(),
-                    entry.getFailureReasonCode(), withNote ? entry.getNote() : null);
+                    entry.getFailureReasonCode(), withNote ? entry.getNote() : null, view.hubName(entry.getHubCode()),
+                    entry.getAttempt());
         }
     }
 
@@ -33,8 +43,8 @@ record ParcelDetailResponse(UUID id, String trackingNumber, ParcelStatus status,
                 parcel.getSource(), parcel.getMerchantOrderReference(), AddressResponse.from(parcel.getPickup()),
                 AddressResponse.from(parcel.getDropoff()), parcel.getSize(), parcel.getWeightGrams(),
                 parcel.getDescription(), MoneyResponse.feeOf(parcel), parcel.getAssignedCourierId(),
-                parcel.getCreatedAt(), parcel.getUpdatedAt(),
-                view.history().stream().map(entry -> StatusEntry.from(entry, view.notesVisible())).toList());
+                parcel.getCreatedAt(), parcel.getUpdatedAt(), parcel.getDeliveryAttempts(),
+                view.history().stream().map(entry -> StatusEntry.from(entry, view.notesVisible(), view)).toList());
     }
 
     /** Never includes personal data. */

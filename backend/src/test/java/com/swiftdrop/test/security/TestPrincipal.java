@@ -54,12 +54,30 @@ public interface TestPrincipal {
         return user(userId, Role.COURIER);
     }
 
-    static TestPrincipal dispatcherAdmin() {
-        return user(UUID.randomUUID(), Role.DISPATCHER_ADMIN);
+    static TestPrincipal admin() {
+        return user(UUID.randomUUID(), Role.ADMIN);
     }
 
+    static TestPrincipal admin(UUID userId) {
+        return user(userId, Role.ADMIN);
+    }
+
+    static TestPrincipal dispatcher() {
+        return user(UUID.randomUUID(), Role.DISPATCHER);
+    }
+
+    static TestPrincipal dispatcher(UUID userId) {
+        return user(userId, Role.DISPATCHER);
+    }
+
+    @Deprecated
+    static TestPrincipal dispatcherAdmin() {
+        return admin();
+    }
+
+    @Deprecated
     static TestPrincipal dispatcherAdmin(UUID userId) {
-        return user(userId, Role.DISPATCHER_ADMIN);
+        return admin(userId);
     }
 
     static TestPrincipal user(UUID userId, Role... roles) {

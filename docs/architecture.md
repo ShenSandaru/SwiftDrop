@@ -286,6 +286,19 @@ tracking     → delivery
 - **Decided ([ADR 0006](adr/0006-delivery-lifecycle-and-transition-rules.md), Accepted):** the
   transition matrix, `FAILED` from `PICKED_UP` to `OUT_FOR_DELIVERY` with a reason code, proof
   required for `DELIVERED`, assignment only while `CREATED`, no cancellation, retry or override.
+- **Decided ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md), Accepted;
+  supersedes ADR 0006 §1–§3 and the assignment rules of ADR 0008 §4–§5). Implemented; parcels
+  picked up without a route (before the hubs existed) keep the ADR 0006 rules:**
+  - A branch hub per pricing zone plus one central hub (Colombo); the route (origin branch →
+    central → destination branch, shorter when one of them is central or both are the same) is
+    fixed at pickup. Booking for a zone without a hub is rejected.
+  - New statuses `AT_HUB` (records which hub), `DELIVERY_ATTEMPT_FAILED`, `RETURNING`, `RETURNED`
+    and `CANCELLED` (before pickup); `FAILED` becomes an exception state set by a dispatcher.
+  - Up to 3 delivery attempts (configurable 1 to 5); `REFUSED` and `ADDRESS_NOT_FOUND` return at
+    once. Hub scans are done by `DISPATCHER` (and `ADMIN`); courier tasks gain `RETURN`, and pickup
+    reassignment while `CREATED` is allowed.
+  - Events gain optional `hubCode` and `attempt` fields (`schemaVersion` 1). Cash on delivery
+    needs a separate ADR.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
@@ -299,6 +312,15 @@ tracking     → delivery
   - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+  - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
+    (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
+    the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
+    task (`PICKUP`, `DELIVERY`, `RETURN`).
+  - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,
+    `.../return`, `.../failure` and `.../cancellation` (DISPATCHER, ADMIN); the dispatch list
+    offers each parcel's allowed actions. Customer cancellation before pickup:
+    `POST /api/v1/parcels/{id}/cancellation`. The attempt limit is
+    `SWIFTDROP_MAX_DELIVERY_ATTEMPTS` (default 3, 1 to 5).
 - **Open:** rate limiting of the public tracking endpoints; the required reports (ADM-4).
 
 ## 9. Authentication and authorization

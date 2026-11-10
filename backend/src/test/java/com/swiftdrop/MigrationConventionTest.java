@@ -155,6 +155,22 @@ class MigrationConventionTest {
                         tuple(
                                 "202611051210",
                                 "delivery add parcel assignment version",
-                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));
+                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"),
+                        tuple(
+                                "202611101200",
+                                "identity replace dispatcher admin with admin and dispatcher",
+                                "identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql"),
+                        tuple(
+                                "202611101210",
+                                "delivery update actor role for admin and dispatcher",
+                                "delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql"),
+                        tuple(
+                                "202611111000",
+                                "delivery create hubs",
+                                "delivery/V202611111000__delivery_create_hubs.sql"),
+                        tuple(
+                                "202611111010",
+                                "delivery add hub lifecycle",
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
     }
 }

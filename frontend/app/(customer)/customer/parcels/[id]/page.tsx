@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Camera, MapPin, Phone, Receipt } from "lucide-react";
+import { ArrowLeft, Ban, Camera, Loader2, MapPin, Phone, Receipt } from "lucide-react";
 import { cn } from "cn";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { JourneyNotice, lastHubName } from "@/components/delivery/journey-notice";
 import { RouteHeading } from "@/components/delivery/route-heading";
 import { RouteProgress } from "@/components/delivery/route-progress";
 import { StatusBadge } from "@/components/delivery/status-badge";
@@ -13,7 +14,7 @@ import { StatusTimeline } from "@/components/delivery/status-timeline";
 import { Ticket } from "@/components/delivery/ticket";
 import { SIZE_LABELS, formatDateTime, formatMoney, formatWeight } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
-import { getParcel, getProofPhoto, type Address, type ParcelDetail } from "@/lib/delivery";
+import { cancelParcel, canCustomerCancel, getParcel, getProofPhoto, type Address, type ParcelDetail } from "@/lib/delivery";
 import { useLiveTracking, type LiveConnection } from "@/lib/use-live-tracking";
 
 export default function ParcelDetailPage() {
@@ -77,6 +78,7 @@ export default function ParcelDetailPage() {
             </div>
           </div>
           <RouteProgress status={status} history={history} live={connection === "live"} />
+          <JourneyNotice status={status} attempts={detail.deliveryAttempts} hubName={lastHubName(detail.history)} />
         </div>
       </Ticket>
 
@@ -91,7 +93,12 @@ export default function ParcelDetailPage() {
           <StatusTimeline entries={detail.history} />
         </section>
         <aside className="space-y-4">
-          {detail.status === "DELIVERED" && <ProofPhoto parcelId={detail.id} />}
+          {(detail.status === "DELIVERED" || detail.status === "RETURNED") && (
+            <ProofPhoto parcelId={detail.id} returned={detail.status === "RETURNED"} />
+          )}
+          {canCustomerCancel(status) && (
+            <CancelBooking parcelId={detail.id} onCancelled={() => getParcel(id).then(setDetail).catch(() => undefined)} />
+          )}
           <Link href={`/customer/parcels/${detail.id}/receipt`} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full")}>
             <Receipt aria-hidden="true" /> View receipt
           </Link>
@@ -141,7 +148,7 @@ function AddressCard({ title, address }: { title: string; address: Address }) {
 }
 
 /** Downloaded with the login token (an img tag cannot send it), shown from a temporary object URL. */
-function ProofPhoto({ parcelId }: { parcelId: string }) {
+function ProofPhoto({ parcelId, returned }: { parcelId: string; returned: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
 
@@ -167,14 +174,56 @@ function ProofPhoto({ parcelId }: { parcelId: string }) {
     <figure className="overflow-hidden rounded-2xl border border-border bg-card">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- object URL of a private photo; next/image cannot load it
-        <img src={url} alt="Proof of delivery" className="aspect-[4/3] w-full object-cover" />
+        <img src={url} alt={returned ? "Proof of return" : "Proof of delivery"} className="aspect-[4/3] w-full object-cover" />
       ) : (
         <div className="aspect-[4/3] w-full animate-pulse bg-muted" />
       )}
       <figcaption className="flex items-center gap-1.5 p-3 text-xs font-semibold text-muted-foreground">
-        <Camera className="size-3.5" aria-hidden="true" /> Proof of delivery
+        <Camera className="size-3.5" aria-hidden="true" /> {returned ? "Proof of return" : "Proof of delivery"}
       </figcaption>
     </figure>
+  );
+}
+
+/** Cancelling is possible only before pickup (ADR 0009 §6); asks once before doing it. */
+function CancelBooking({ parcelId, onCancelled }: { parcelId: string; onCancelled: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function cancel() {
+    setBusy(true);
+    setError(null);
+    try {
+      await cancelParcel(parcelId);
+      onCancelled();
+    } catch (failure) {
+      setError(formatApiError(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <Button variant="outline" size="lg" className="w-full text-destructive hover:text-destructive"
+        onClick={() => setConfirming(true)}>
+        <Ban aria-hidden="true" /> Cancel booking
+      </Button>
+    );
+  }
+  return (
+    <section className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+      <p className="text-sm font-semibold text-foreground">Cancel this booking?</p>
+      <p className="text-xs text-muted-foreground">The courier will not come for the parcel. This cannot be undone.</p>
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" onClick={() => setConfirming(false)} disabled={busy}>Keep it</Button>
+        <Button variant="destructive" onClick={cancel} disabled={busy}>
+          {busy && <Loader2 className="animate-spin" aria-hidden="true" />} Cancel
+        </Button>
+      </div>
+    </section>
   );
 }
 

@@ -37,6 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
@@ -84,6 +85,8 @@ class ParcelBookingIT {
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         customerId = insertUser("customer");
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("850.00"), "LKR", new BigDecimal("550.00"), new BigDecimal("200.00"),
@@ -190,13 +193,13 @@ class ParcelBookingIT {
     }
 
     private static DeliveryContact contact() {
-        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
-                null);
+        return new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
+                TestHubs.COLOMBO_ZONE, null);
     }
 
     private static String bookingJson() {
         String address = "{\"contactName\":\"Nimal Perera\",\"phone\":\"+94771234567\",\"line1\":\"12 Temple Rd\","
-                + "\"city\":\"Colombo\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + TestHubs.COLOMBO_ZONE + "\"}";
         return "{\"pickup\":" + address + ",\"dropoff\":" + address + ",\"size\":\"MEDIUM\",\"weightGrams\":2000}";
     }
 }

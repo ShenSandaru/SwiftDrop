@@ -33,7 +33,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.api.FeeQuote;
 
@@ -68,6 +72,8 @@ class CourierFlowIT {
     private PasswordEncoder passwordEncoder;
     @Autowired
     private ParcelAssignment assignment;
+    @Autowired
+    private ParcelHubOperations hubOperations;
 
     @MockitoBean
     private FeeCalculator feeCalculator;
@@ -76,11 +82,14 @@ class CourierFlowIT {
     private UUID customerId;
     private String customer;
     private UUID courierAId;
+    private UUID dispatcherId;
     private String courierA;
     private String courierB;
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("850.00"), "LKR", new BigDecimal("550.00"), new BigDecimal("200.00"),
                 new BigDecimal("100.00"), UUID.randomUUID()));
@@ -93,6 +102,8 @@ class CourierFlowIT {
         courierAId = insertUser("courier-a", "COURIER");
         courierA = login(courierAId);
         courierB = login(insertUser("courier-b", "COURIER"));
+        // Assignments name a real dispatcher (ADR 0008; foreign key to users)
+        dispatcherId = insertUser("dispatcher", "DISPATCHER");
     }
 
     @Test
@@ -100,16 +111,21 @@ class CourierFlowIT {
         JsonNode booked = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED);
         String parcelId = booked.get("id").asString();
         String trackingNumber = booked.get("trackingNumber").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
 
         JsonNode today = body(get(courierA, "/api/v1/courier/parcels"), HttpStatus.OK);
         assertThat(today).hasSize(1);
         assertThat(today.get(0).get("nextStatuses").get(0).asString()).isEqualTo("PICKED_UP");
 
-        for (String step : new String[] {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"}) {
-            assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"" + step + "\"}").getStatusCode())
-                    .isEqualTo(HttpStatus.OK);
-        }
+        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"PICKED_UP\"}").getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        // The pickup task ends at pickup; dispatch moves the parcel through the hubs (ADR 0009 §3)
+        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"IN_TRANSIT\"}").getStatusCode())
+                .as("couriers do not move parcels between hubs").isEqualTo(HttpStatus.CONFLICT);
+        toDestinationHub(parcelId);
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId, ParcelAssignmentType.DELIVERY);
+        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"OUT_FOR_DELIVERY\"}").getStatusCode())
+                .isEqualTo(HttpStatus.OK);
         // DELIVERED needs proof first (ADR 0006 §5)
         assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"DELIVERED\"}").getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -119,7 +135,9 @@ class CourierFlowIT {
         JsonNode delivered = body(changeStatus(courierA, parcelId, "{\"toStatus\":\"DELIVERED\",\"note\":\"Handed over\"}"),
                 HttpStatus.OK);
         assertThat(delivered.get("status").asString()).isEqualTo("DELIVERED");
-        assertThat(delivered.get("history")).hasSize(5);
+        // CREATED, PICKED_UP, AT_HUB (Colombo), IN_TRANSIT, AT_HUB (Kandy), OUT_FOR_DELIVERY, DELIVERED
+        assertThat(delivered.get("history")).hasSize(7);
+        assertThat(delivered.get("deliveryAttempts").asInt()).isEqualTo(1);
 
         JsonNode receipt = body(get(customer, "/api/v1/parcels/" + parcelId + "/receipt"), HttpStatus.OK);
         assertThat(receipt.get("recipientName").asString()).isEqualTo("Kumari Silva");
@@ -134,7 +152,8 @@ class CourierFlowIT {
         // Public tracking: no login, no personal data
         String tracked = http.get().uri("/api/v1/tracked-parcels/" + trackingNumber.toLowerCase())
                 .retrieve().body(String.class);
-        assertThat(tracked).contains("\"status\":\"DELIVERED\"").doesNotContain("Kumari", "Nimal", "+9477", "Handed");
+        assertThat(tracked).contains("\"status\":\"DELIVERED\"", "Kandy branch")
+                .doesNotContain("Kumari", "Nimal", "+9477", "Handed");
 
         // Finished today, so still on today's list, with no further steps
         JsonNode stillToday = body(get(courierA, "/api/v1/courier/parcels"), HttpStatus.OK);
@@ -142,13 +161,13 @@ class CourierFlowIT {
         assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"FAILED\",\"failureReason\":\"OTHER\"}")
                 .getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM parcel_outbox_events WHERE parcel_id = ?::uuid",
-                Integer.class, parcelId)).isEqualTo(5);
+                Integer.class, parcelId)).isEqualTo(7);
     }
 
     @Test
     void courierCannotSeeOrChangeAnotherCouriersDelivery() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
 
         assertThat(body(get(courierB, "/api/v1/courier/parcels"), HttpStatus.OK)).isEmpty();
         assertThat(get(courierB, "/api/v1/parcels/" + parcelId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -162,33 +181,71 @@ class CourierFlowIT {
     }
 
     @Test
-    void failedDeliveryNeedsAReasonAndTheReceiptShowsIt() {
+    void refusedDeliveryIsReturnedToTheSenderAndTheReceiptShowsIt() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        UUID id = UUID.fromString(parcelId);
+        assignment.assignCourier(id, courierAId, dispatcherId);
         changeStatus(courierA, parcelId, "{\"toStatus\":\"PICKED_UP\"}");
+        toDestinationHub(parcelId);
+        assignment.assignCourier(id, courierAId, dispatcherId, ParcelAssignmentType.DELIVERY);
+        changeStatus(courierA, parcelId, "{\"toStatus\":\"OUT_FOR_DELIVERY\"}");
 
-        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"FAILED\"}").getStatusCode())
+        // A failed attempt needs a reason, and damage is not an attempt reason (ADR 0009 §4)
+        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"DELIVERY_ATTEMPT_FAILED\"}").getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
         assertThat(changeStatus(courierA, parcelId,
-                "{\"toStatus\":\"FAILED\",\"failureReason\":\"DAMAGED\",\"note\":\"Box crushed\"}").getStatusCode())
-                .isEqualTo(HttpStatus.OK);
+                "{\"toStatus\":\"DELIVERY_ATTEMPT_FAILED\",\"failureReason\":\"DAMAGED\"}").getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(changeStatus(courierA, parcelId,
+                "{\"toStatus\":\"DELIVERY_ATTEMPT_FAILED\",\"failureReason\":\"REFUSED\",\"note\":\"Said no\"}")
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Back at the branch; a refusal is returned at once
+        hubOperations.scanAtHub(id, kandyHub(), Staff.dispatcher(dispatcherId));
+        hubOperations.startReturn(id, Staff.dispatcher(dispatcherId));
+        assignment.assignCourier(id, courierAId, dispatcherId, ParcelAssignmentType.RETURN);
+        assertThat(changeStatus(courierA, parcelId, "{\"toStatus\":\"RETURNED\"}").getStatusCode())
+                .as("return needs proof").isEqualTo(HttpStatus.CONFLICT);
+        body(uploadProof(courierA, parcelId, "Nimal Perera", JPEG), HttpStatus.OK);
+        JsonNode returned = body(changeStatus(courierA, parcelId, "{\"toStatus\":\"RETURNED\"}"), HttpStatus.OK);
+        assertThat(returned.get("status").asString()).isEqualTo("RETURNED");
 
         JsonNode receipt = body(get(customer, "/api/v1/parcels/" + parcelId + "/receipt"), HttpStatus.OK);
-        assertThat(receipt.get("failureReason").asString()).isEqualTo("DAMAGED");
-        assertThat(receipt.get("recipientName").isNull()).isTrue();
+        assertThat(receipt.get("returnedAt").isNull()).isFalse();
+        assertThat(receipt.get("failureReason").asString()).isEqualTo("REFUSED");
+        assertThat(receipt.get("recipientName").asString()).isEqualTo("Nimal Perera");
+        assertThat(receipt.get("deliveryAttempts").asInt()).isEqualTo(1);
         // Customers do not see courier notes
-        assertThat(get(customer, "/api/v1/parcels/" + parcelId).getBody()).doesNotContain("Box crushed");
+        assertThat(get(customer, "/api/v1/parcels/" + parcelId).getBody()).doesNotContain("Said no");
+    }
+
+    @Test
+    void customerCancelsBeforePickupButNotAfter() {
+        String first = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
+        assertThat(post(courierA, "/api/v1/parcels/" + first + "/cancellation", "{}").getStatusCode())
+                .as("only customers cancel").isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(post(customer, "/api/v1/parcels/" + first + "/cancellation", "{}").getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(jdbc.queryForObject("SELECT status FROM parcels WHERE id = ?::uuid", String.class, first))
+                .isEqualTo("CANCELLED");
+
+        String second = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
+        assignment.assignCourier(UUID.fromString(second), courierAId, dispatcherId);
+        changeStatus(courierA, second, "{\"toStatus\":\"PICKED_UP\"}");
+        assertThat(post(customer, "/api/v1/parcels/" + second + "/cancellation", "{}").getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
     }
 
     @Test
     void uploadsAreCheckedByContentAndSize() {
         String parcelId = body(post(customer, "/api/v1/parcels", bookingJson()), HttpStatus.CREATED).get("id").asString();
-        assignment.assignCourier(UUID.fromString(parcelId), courierAId, UUID.randomUUID());
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId);
         assertThat(uploadProof(courierA, parcelId, "Kumari", JPEG).getStatusCode())
                 .as("proof before out for delivery").isEqualTo(HttpStatus.CONFLICT);
-        for (String step : new String[] {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"}) {
-            changeStatus(courierA, parcelId, "{\"toStatus\":\"" + step + "\"}");
-        }
+        changeStatus(courierA, parcelId, "{\"toStatus\":\"PICKED_UP\"}");
+        toDestinationHub(parcelId);
+        assignment.assignCourier(UUID.fromString(parcelId), courierAId, dispatcherId, ParcelAssignmentType.DELIVERY);
+        changeStatus(courierA, parcelId, "{\"toStatus\":\"OUT_FOR_DELIVERY\"}");
 
         assertThat(uploadProof(courierA, parcelId, "Kumari", "<html>not a photo</html>".getBytes()).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -199,6 +256,14 @@ class CourierFlowIT {
         assertThat(rejected.getBody()).contains("at most 2 MB");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM delivery_proofs WHERE parcel_id = ?::uuid", Integer.class,
                 parcelId)).isZero();
+    }
+
+    private void toDestinationHub(String parcelId) {
+        TestHubs.toDestinationHub(hubOperations, jdbc, UUID.fromString(parcelId), Staff.dispatcher(dispatcherId));
+    }
+
+    private UUID kandyHub() {
+        return jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'KDY'", UUID.class);
     }
 
     private ResponseEntity<String> get(String token, String path) {
@@ -254,9 +319,9 @@ class CourierFlowIT {
 
     private static String bookingJson() {
         String pickup = "{\"contactName\":\"Nimal Perera\",\"phone\":\"+94771234567\",\"line1\":\"12 Temple Rd\","
-                + "\"city\":\"Colombo\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + TestHubs.COLOMBO_ZONE + "\"}";
         String dropoff = "{\"contactName\":\"Kumari Silva\",\"phone\":\"+94711234567\",\"line1\":\"4 Lake View\","
-                + "\"city\":\"Kandy\",\"zoneId\":\"" + UUID.randomUUID() + "\"}";
+                + "\"city\":\"Kandy\",\"zoneId\":\"" + TestHubs.KANDY_ZONE + "\"}";
         return "{\"pickup\":" + pickup + ",\"dropoff\":" + dropoff + ",\"size\":\"MEDIUM\",\"weightGrams\":2000}";
     }
 }
