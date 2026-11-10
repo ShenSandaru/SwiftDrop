@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.swiftdrop.delivery.api.DispatchAction;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
@@ -219,5 +220,53 @@ class ParcelHubFlowTest {
 
         assertThatThrownBy(() -> parcel.changeStatus(ParcelStatus.IN_TRANSIT, pickupCourier, null, false, NOW))
                 .isInstanceOf(ParcelConflictException.class).hasMessage("Illegal status transition");
+    }
+
+    @Test
+    void dispatcherActionsFollowTheJourney() {
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).containsExactlyInAnyOrder(DispatchAction.ASSIGN_PICKUP,
+                DispatchAction.CANCEL);
+
+        parcel.pickUp(pickupCourier, ROUTE, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .containsExactlyInAnyOrder(DispatchAction.SCAN_AT_HUB, DispatchAction.MARK_FAILED);
+        assertThat(parcel.expectedHubId()).isEqualTo(KANDY);
+
+        parcel.scanAtHub(KANDY, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .containsExactlyInAnyOrder(DispatchAction.SEND_TO_NEXT_HUB, DispatchAction.MARK_FAILED);
+        assertThat(parcel.expectedHubId()).isNull();
+
+        parcel.sendToNextHub(NOW);
+        assertThat(parcel.expectedHubId()).isEqualTo(COLOMBO);
+        parcel.scanAtHub(COLOMBO, NOW);
+        parcel.sendToNextHub(NOW);
+        parcel.scanAtHub(JAFFNA, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .containsExactlyInAnyOrder(DispatchAction.ASSIGN_DELIVERY, DispatchAction.MARK_FAILED);
+
+        parcel.assignDeliveryCourier(deliveryCourier, MAX_ATTEMPTS, NOW);
+        parcel.startDelivery(deliveryCourier, MAX_ATTEMPTS, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).containsExactly(DispatchAction.MARK_FAILED);
+        parcel.failAttempt(deliveryCourier, FailureReason.ADDRESS_NOT_FOUND, NOW);
+        assertThat(parcel.expectedHubId()).isEqualTo(JAFFNA);
+        parcel.scanAtHub(JAFFNA, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .as("an unknown address is returned at once")
+                .containsExactlyInAnyOrder(DispatchAction.START_RETURN, DispatchAction.MARK_FAILED);
+
+        parcel.startReturn(MAX_ATTEMPTS, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .containsExactlyInAnyOrder(DispatchAction.ASSIGN_RETURN, DispatchAction.MARK_FAILED);
+        parcel.markFailed(FailureReason.OTHER, NOW);
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).isEmpty();
+    }
+
+    @Test
+    void legacyParcelsOfferOnlyMarkingFailed() {
+        parcel.pickUp(pickupCourier, null, NOW);
+
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).containsExactly(DispatchAction.MARK_FAILED);
+        assertThat(parcel.expectedHubId()).isNull();
     }
 }
