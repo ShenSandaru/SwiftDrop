@@ -143,6 +143,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611081400",
                                 "identity user profiles and addresses",
-                                "identity/V202611081400__identity_user_profiles_and_addresses.sql"));
+                                "identity/V202611081400__identity_user_profiles_and_addresses.sql"),
+                        tuple(
+                                "202611111330",
+                                "identity user avatar",
+                                "identity/V202611111330__identity_user_avatar.sql"));
     }
 }

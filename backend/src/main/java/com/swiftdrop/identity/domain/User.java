@@ -45,6 +45,15 @@ public class User {
     @Column(name = "phone_number", length = 30)
     private String phoneNumber;
 
+    @Column(name = "avatar_photo")
+    private byte[] avatarPhoto;
+
+    @Column(name = "avatar_content_type", length = 50)
+    private String avatarContentType;
+
+    @Column(name = "avatar_updated_at")
+    private Instant avatarUpdatedAt;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -124,5 +133,33 @@ public class User {
 
     public Set<Role> getRoles() {
         return Collections.unmodifiableSet(roles);
+    }
+
+    public byte[] getAvatarPhoto() {
+        return avatarPhoto == null ? null : avatarPhoto.clone();
+    }
+
+    public String getAvatarContentType() {
+        return avatarContentType;
+    }
+
+    public Instant getAvatarUpdatedAt() {
+        return avatarUpdatedAt;
+    }
+
+    public boolean hasAvatar() {
+        return avatarPhoto != null && avatarPhoto.length > 0;
+    }
+
+    public void updateAvatar(byte[] photo, String contentType) {
+        this.avatarPhoto = photo == null ? null : photo.clone();
+        this.avatarContentType = contentType;
+        this.avatarUpdatedAt = Instant.now();
+    }
+
+    public void removeAvatar() {
+        this.avatarPhoto = null;
+        this.avatarContentType = null;
+        this.avatarUpdatedAt = Instant.now();
     }
 }

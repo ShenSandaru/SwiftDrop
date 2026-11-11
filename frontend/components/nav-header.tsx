@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { cn } from "cn";
 import { useAuth } from "@/lib/auth-context";
+import { getUserAvatarUrl } from "@/lib/api";
 
 const HOVER_OPEN_MS = 150;
 const HOVER_CLOSE_MS = 250;
@@ -225,9 +226,18 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-              {initial}
-            </span>
+            user.hasAvatar ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={getUserAvatarUrl(user.id, user.avatarUpdatedAt)}
+                alt={user.fullName}
+                className="size-9 shrink-0 rounded-full object-cover ring-2 ring-primary/30"
+              />
+            ) : (
+              <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                {initial}
+              </span>
+            )
           )}
           <button
             type="button"

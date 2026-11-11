@@ -19,7 +19,15 @@ export interface UserResponse {
   phoneNumber?: string;
   roles: string[];
   enabled: boolean;
+  hasAvatar?: boolean;
+  avatarUpdatedAt?: string;
   createdAt?: string;
+}
+
+export function getUserAvatarUrl(userId: string, avatarUpdatedAt?: string): string {
+  const baseUrl = getApiBaseUrl().replace(/\/+$/, "");
+  const versionParam = avatarUpdatedAt ? `?v=${encodeURIComponent(avatarUpdatedAt)}` : "";
+  return `${baseUrl}/api/v1/users/${userId}/avatar${versionParam}`;
 }
 
 export interface UpdateProfileRequest {
@@ -203,6 +211,21 @@ export const api = {
   /** Downloads a file (for example a proof photo) with the same token and error handling. */
   blob(endpoint: string, options?: RequestOptions): Promise<Blob> {
     return apiFetch<Blob>(endpoint, { ...options, method: "GET", responseType: "blob" });
+  },
+  uploadAvatar(file: File, options?: RequestOptions): Promise<UserResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch<UserResponse>("/api/v1/users/me/avatar", {
+      ...options,
+      method: "PUT",
+      body: formData,
+    });
+  },
+  deleteAvatar(options?: RequestOptions): Promise<UserResponse> {
+    return apiFetch<UserResponse>("/api/v1/users/me/avatar", {
+      ...options,
+      method: "DELETE",
+    });
   },
 };
 

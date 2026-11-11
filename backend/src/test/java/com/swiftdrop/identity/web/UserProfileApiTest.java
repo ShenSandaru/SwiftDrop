@@ -40,10 +40,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.springframework.mock.web.MockMultipartFile;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -257,5 +261,56 @@ class UserProfileApiTest {
         mvc.perform(get("/api/v1/users/me/addresses")
                         .with(TestPrincipal.dispatcherAdmin(ADMIN_ID).postProcessor()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void uploadAndDownloadAvatar() throws Exception {
+        when(users.findById(CUSTOMER_ID)).thenReturn(Optional.of(customerUser));
+        when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "avatar.png", "image/png", new byte[] { 10, 20, 30 });
+
+        mvc.perform(multipart("/api/v1/users/me/avatar")
+                        .file(file)
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAvatar", is(true)))
+                .andExpect(jsonPath("$.avatarUpdatedAt").isNotEmpty());
+
+        assertThat(customerUser.hasAvatar()).isTrue();
+
+        // Download does not require authentication
+        mvc.perform(get("/api/v1/users/" + CUSTOMER_ID + "/avatar"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/png"))
+                .andExpect(content().bytes(new byte[] { 10, 20, 30 }));
+    }
+
+    @Test
+    void deleteAvatarClearsPhoto() throws Exception {
+        customerUser.updateAvatar(new byte[] { 1, 2, 3 }, "image/jpeg");
+        when(users.findById(CUSTOMER_ID)).thenReturn(Optional.of(customerUser));
+        when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        mvc.perform(delete("/api/v1/users/me/avatar")
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAvatar", is(false)));
+
+        assertThat(customerUser.hasAvatar()).isFalse();
+    }
+
+    @Test
+    void rejectInvalidAvatarContentType() throws Exception {
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "doc.pdf", "application/pdf", new byte[] { 1, 2, 3 });
+
+        mvc.perform(multipart("/api/v1/users/me/avatar")
+                        .file(pdfFile)
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor()))
+                .andExpect(status().isBadRequest());
     }
 }

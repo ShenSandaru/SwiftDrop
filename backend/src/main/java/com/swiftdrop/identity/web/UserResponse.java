@@ -13,18 +13,24 @@ public record UserResponse(
         String phoneNumber,
         List<String> roles,
         boolean enabled,
+        boolean hasAvatar,
+        Instant avatarUpdatedAt,
         Instant createdAt) {
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles) {
-        this(id, email, fullName, null, roles, true, null);
+        this(id, email, fullName, null, roles, true, false, null, null);
     }
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled) {
-        this(id, email, fullName, null, roles, enabled, null);
+        this(id, email, fullName, null, roles, enabled, false, null, null);
     }
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled, Instant createdAt) {
-        this(id, email, fullName, null, roles, enabled, createdAt);
+        this(id, email, fullName, null, roles, enabled, false, null, createdAt);
+    }
+
+    public UserResponse(UUID id, String email, String fullName, String phoneNumber, List<String> roles, boolean enabled, Instant createdAt) {
+        this(id, email, fullName, phoneNumber, roles, enabled, false, null, createdAt);
     }
 
     static UserResponse from(User user) {
@@ -35,6 +41,8 @@ public record UserResponse(
                 user.getPhoneNumber(),
                 user.getRoles().stream().map(Enum::name).sorted().toList(),
                 user.isEnabled(),
+                user.hasAvatar(),
+                user.getAvatarUpdatedAt(),
                 user.getCreatedAt());
     }
 }

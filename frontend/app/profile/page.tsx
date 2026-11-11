@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import {
   api,
   formatApiError,
+  getUserAvatarUrl,
   type UserResponse,
   type UserAddressResponse,
   type CreateAddressRequest,
@@ -34,12 +35,20 @@ import {
   Trash2,
   Star,
   Building,
+  Camera,
+  Upload,
 } from "lucide-react";
 
 export default function ProfilePage() {
   const { user, token, isAuthenticated, isLoading, refreshUser, hasRole } = useAuth();
 
   const isCustomer = hasRole("CUSTOMER");
+
+  // Avatar state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
 
   // Profile edit state
   const [fullName, setFullName] = useState("");
@@ -150,6 +159,55 @@ export default function ProfilePage() {
     : hasRole("CUSTOMER")
     ? "Customer Account Profile"
     : "User Profile";
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarError(null);
+    setAvatarSuccess(null);
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      setAvatarError("Please select a JPEG, PNG, or WebP image.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError("Avatar image must be smaller than 2 MB.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      await api.uploadAvatar(file, { token: token || undefined });
+      await refreshUser();
+      setAvatarSuccess("Profile picture updated successfully.");
+    } catch (err: unknown) {
+      setAvatarError(formatApiError(err));
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!confirm("Are you sure you want to remove your profile picture?")) return;
+    setAvatarError(null);
+    setAvatarSuccess(null);
+    setAvatarUploading(true);
+    try {
+      await api.deleteAvatar({ token: token || undefined });
+      await refreshUser();
+      setAvatarSuccess("Profile picture removed.");
+    } catch (err: unknown) {
+      setAvatarError(formatApiError(err));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,8 +367,29 @@ export default function ProfilePage() {
       <Card className="overflow-hidden border-border bg-gradient-to-r from-card via-card to-accent/20">
         <CardContent className="p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
-            <div className="size-20 sm:size-24 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center text-3xl sm:text-4xl font-extrabold shadow-md shrink-0">
-              {initial}
+            <div className="relative group shrink-0">
+              <div className="size-20 sm:size-24 rounded-2xl overflow-hidden bg-primary text-primary-foreground flex items-center justify-center text-3xl sm:text-4xl font-extrabold shadow-md border-2 border-primary/20">
+                {user.hasAvatar ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={getUserAvatarUrl(user.id, user.avatarUpdatedAt)}
+                    alt={user.fullName}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  initial
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarUploading}
+                aria-label="Upload photo"
+                title="Change profile picture"
+                className="absolute -bottom-2 -right-2 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {avatarUploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+              </button>
             </div>
 
             <div className="space-y-2 flex-1 min-w-0">
@@ -403,7 +482,67 @@ export default function ProfilePage() {
             </div>
             <CardDescription>Update your display name and contact phone number.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* Avatar controls row */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-border/60 bg-muted/20">
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold">Profile Photo</p>
+                <p className="text-[11px] text-muted-foreground">
+                  JPG, PNG, or WebP up to 2 MB.
+                </p>
+                {avatarSuccess && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 pt-1">
+                    <CheckCircle2 className="size-3" /> {avatarSuccess}
+                  </p>
+                )}
+                {avatarError && (
+                  <p className="text-[11px] text-destructive font-medium flex items-center gap-1 pt-1">
+                    <AlertCircle className="size-3" /> {avatarError}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={avatarUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-8 text-xs"
+                >
+                  {avatarUploading ? (
+                    <>
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" /> Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-1.5 size-3.5" /> {user.hasAvatar ? "Change" : "Upload"}
+                    </>
+                  )}
+                </Button>
+                {user.hasAvatar && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={avatarUploading}
+                    onClick={handleAvatarDelete}
+                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                    title="Remove profile picture"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarSelect}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+            />
+
             <form onSubmit={handleProfileSubmit} className="space-y-4">
               {profileSuccess && (
                 <div className="flex items-center gap-2 p-3 text-sm rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
