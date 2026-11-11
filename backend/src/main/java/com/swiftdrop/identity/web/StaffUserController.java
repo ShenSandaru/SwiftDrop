@@ -30,19 +30,19 @@ class StaffUserController {
     }
 
     /**
-     * Creates a staff account (COURIER or DISPATCHER_ADMIN).
+     * Creates a staff account (COURIER or DISPATCHER).
      * Restricted to administrators.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     UserResponse createStaff(@Valid @RequestBody CreateStaffUserRequest request) {
         Role role = Role.COURIER;
         if (request.role() != null && !request.role().isBlank()) {
             try {
                 role = Role.valueOf(request.role().trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
-                throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER_ADMIN");
+                throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER");
             }
         }
         return UserResponse.from(

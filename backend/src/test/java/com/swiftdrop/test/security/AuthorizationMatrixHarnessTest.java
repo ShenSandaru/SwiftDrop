@@ -64,6 +64,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         AuthorizationMatrixHarnessTest.TestSecurityConfig.class})
 @MockitoBean(types = {
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -205,7 +206,7 @@ class AuthorizationMatrixHarnessTest {
         }
 
         @GetMapping("/admin-only")
-        @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+        @PreAuthorize("hasRole('ADMIN')")
         String adminOnly() {
             return "admin-ok";
         }

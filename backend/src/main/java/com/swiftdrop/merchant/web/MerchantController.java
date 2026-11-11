@@ -73,7 +73,7 @@ public class MerchantController {
      * Lists merchant applications for administrators (optionally filtered by status, e.g. PENDING).
      */
     @GetMapping
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<MerchantStatusResponse> listMerchants(
             @RequestParam(required = false) MerchantStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -89,7 +89,7 @@ public class MerchantController {
      * Admin approval or rejection endpoint for a merchant application.
      */
     @PostMapping("/{merchantId}/approval")
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public MerchantStatusResponse reviewApplication(
             @PathVariable UUID merchantId,
             @Valid @RequestBody MerchantApprovalRequest request,

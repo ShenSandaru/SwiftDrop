@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShieldAlert } from "lucide-react";
 
-export type BackendRole = "CUSTOMER" | "MERCHANT" | "COURIER" | "DISPATCHER_ADMIN";
+export type BackendRole = "ADMIN" | "DISPATCHER" | "COURIER" | "MERCHANT" | "CUSTOMER";
 
 export interface RoleGuardProps {
-  requiredRole: BackendRole;
+  requiredRole?: BackendRole;
+  allowedRoles?: BackendRole[];
   roleLabel?: string;
   children: React.ReactNode;
 }
@@ -23,10 +24,14 @@ export interface RoleGuardProps {
  * System security and resource authorization are enforced strictly by the backend REST API
  * (docs/architecture.md §5, ADR 0001).
  */
-export function RoleGuard({ requiredRole, roleLabel, children }: RoleGuardProps) {
+export function RoleGuard({ requiredRole, allowedRoles, roleLabel, children }: RoleGuardProps) {
   const { user, isAuthenticated, isLoading, hasRole, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  const effectiveRoles: BackendRole[] = allowedRoles && allowedRoles.length > 0
+    ? allowedRoles
+    : requiredRole ? [requiredRole] : [];
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -60,7 +65,9 @@ export function RoleGuard({ requiredRole, roleLabel, children }: RoleGuardProps)
   }
 
   // Authenticated but lacks the required role (403 Forbidden UI equivalent)
-  if (!hasRole(requiredRole)) {
+  const isAuthorized = effectiveRoles.some((role) => hasRole(role));
+  if (!isAuthorized) {
+    const requiredDisplay = effectiveRoles.join(" or ");
     return (
       <main className="container mx-auto flex min-h-[60vh] max-w-lg items-center justify-center px-4 py-12">
         <Card className="w-full rounded-xl border-destructive/20 bg-card shadow-sm">
@@ -73,14 +80,14 @@ export function RoleGuard({ requiredRole, roleLabel, children }: RoleGuardProps)
             </div>
             <CardTitle className="text-xl font-bold text-foreground">Access Restricted</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              Your account ({user?.email}) does not have permission to access the {roleLabel || requiredRole} workspace.
+              Your account ({user?.email}) does not have permission to access the {roleLabel || requiredDisplay} workspace.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-xs text-muted-foreground">
             <div className="rounded-md bg-muted p-3 space-y-1">
               <p>
                 <span className="font-semibold text-foreground">Required role:</span>{" "}
-                <code className="text-primary font-mono">{requiredRole}</code>
+                <code className="text-primary font-mono">{requiredDisplay}</code>
               </p>
               <p>
                 <span className="font-semibold text-foreground">Your role(s):</span>{" "}

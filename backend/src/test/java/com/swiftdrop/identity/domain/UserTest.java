@@ -37,7 +37,7 @@ class UserTest {
     void rolesCannotBeChangedThroughTheGetter() {
         User user = new User("dan@example.com", "hash", "Dan", Set.of(Role.COURIER));
 
-        assertThatThrownBy(() -> user.getRoles().add(Role.DISPATCHER_ADMIN))
+        assertThatThrownBy(() -> user.getRoles().add(Role.ADMIN))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 }

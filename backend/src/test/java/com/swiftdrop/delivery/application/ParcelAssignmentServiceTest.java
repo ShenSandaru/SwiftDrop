@@ -46,7 +46,7 @@ class ParcelAssignmentServiceTest {
     void setUp() {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
-        service = new ParcelAssignmentService(parcels, assignments, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
         when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(parcels.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
@@ -134,21 +134,55 @@ class ParcelAssignmentServiceTest {
     }
 
     @Test
-    void assigningAlreadyAssignedParcelToDifferentCourierThrowsConflict() {
-        parcel.assignCourier(COURIER_ID, NOW.minusSeconds(30));
+    void reassigningParcelToDifferentCourierMarksPreviousAsReassigned() {
+        parcel.assignPickupCourier(COURIER_ID, NOW.minusSeconds(30));
         ParcelAssignmentRecord previous = new ParcelAssignmentRecord(
                 PARCEL_ID, COURIER_ID, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
         when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
                 .thenReturn(Optional.of(previous));
         UUID replacementCourierId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.assignCourier(
-                PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP))
-                .isInstanceOf(ParcelConflictException.class)
-                .hasMessage("The parcel is already assigned to another courier");
+        ParcelAssignmentSummary summary = service.assignCourier(
+                PARCEL_ID, replacementCourierId, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
 
-        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
-        assertThat(parcel.getAssignedCourierId()).isEqualTo(COURIER_ID);
+        assertThat(summary.courierId()).isEqualTo(replacementCourierId);
+        assertThat(summary.status()).isEqualTo(ParcelAssignmentStatus.ACTIVE);
+        assertThat(summary.completedAt()).isNull();
+
+        assertThat(previous.getStatus()).isEqualTo(ParcelAssignmentStatus.REASSIGNED);
+        assertThat(previous.toSummary().completedAt()).isEqualTo(NOW);
+        assertThat(parcel.getAssignedCourierId()).isEqualTo(replacementCourierId);
+        assertThat(parcel.getAssignedAt()).isEqualTo(NOW);
+
+        verify(assignments).saveAndFlush(previous);
+        verify(parcels).saveAndFlush(parcel);
+    }
+
+    @Test
+    void reassigningWithMismatchedActiveHistoryThrowsConflict() {
+        parcel.assignPickupCourier(COURIER_ID, NOW.minusSeconds(30));
+        UUID otherCourierId = UUID.randomUUID();
+        ParcelAssignmentRecord previous = new ParcelAssignmentRecord(
+                PARCEL_ID, otherCourierId, ParcelAssignmentType.PICKUP, DISPATCHER_ID, NOW.minusSeconds(30));
+        when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
+                .thenReturn(Optional.of(previous));
+
+        assertThatThrownBy(() -> service.assignCourier(
+                PARCEL_ID, UUID.randomUUID(), DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessage("The current parcel assignment does not match its history");
+    }
+
+    @Test
+    void reassigningWithMissingActiveHistoryThrowsConflict() {
+        parcel.assignPickupCourier(COURIER_ID, NOW.minusSeconds(30));
+        when(assignments.findFirstByParcelIdAndStatus(PARCEL_ID, ParcelAssignmentStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.assignCourier(
+                PARCEL_ID, UUID.randomUUID(), DISPATCHER_ID, ParcelAssignmentType.PICKUP))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessage("The current parcel assignment has no active history record");
     }
 
     @Test

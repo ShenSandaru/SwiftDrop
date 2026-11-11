@@ -1,13 +1,20 @@
+"use client";
+
 import React from "react";
-import { PortalShell, DISPATCHER_ADMIN_NAV } from "@/components/portal/portal-shell";
+import { PortalShell, ADMIN_NAV, DISPATCHER_NAV } from "@/components/portal/portal-shell";
+import { useAuth } from "@/lib/auth-context";
 
 export default function DispatchPortalLayout({ children }: { children: React.ReactNode }) {
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole("ADMIN");
+
   return (
     <PortalShell
-      portalName="Dispatcher & Admin Portal"
-      role="DISPATCHER_ADMIN"
-      workspaceBadge="Dispatcher & Admin Workspace · WS1, WS7 & WS8"
-      navItems={DISPATCHER_ADMIN_NAV}
+      portalName={isAdmin ? "Admin Portal" : "Dispatcher Portal"}
+      role={isAdmin ? "ADMIN" : "DISPATCHER"}
+      allowedRoles={["ADMIN", "DISPATCHER"]}
+      workspaceBadge={isAdmin ? "Admin Workspace · Dispatch Operations" : "Dispatch Workspace · Fleet Operations"}
+      navItems={isAdmin ? ADMIN_NAV : DISPATCHER_NAV}
     >
       {children}
     </PortalShell>
