@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,9 @@ import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.ActorRole;
 import com.swiftdrop.delivery.domain.OutboxEvent;
+import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelRepository;
@@ -57,6 +61,7 @@ class ParcelBookingServiceTest {
     private OutboxEventRepository outbox;
     private FeeCalculator feeCalculator;
     private TrackingNumberGenerator trackingNumbers;
+    private HubRepository hubs;
     private ParcelBookingService service;
 
     @BeforeEach
@@ -66,6 +71,13 @@ class ParcelBookingServiceTest {
         outbox = mock(OutboxEventRepository.class);
         feeCalculator = mock(FeeCalculator.class);
         trackingNumbers = mock(TrackingNumberGenerator.class);
+        // Colombo is the central hub and Colombo's branch; Kandy has a branch (ADR 0009 §1)
+        hubs = mock(HubRepository.class);
+        Hub colombo = new Hub("CMB", "Colombo hub", "Colombo", COLOMBO, true, NOW);
+        when(hubs.findByZoneIdAndActiveTrue(COLOMBO)).thenReturn(Optional.of(colombo));
+        when(hubs.findByZoneIdAndActiveTrue(KANDY))
+                .thenReturn(Optional.of(new Hub("KDY", "Kandy branch", "Kandy", KANDY, false, NOW)));
+        when(hubs.findFirstByCentralTrueAndActiveTrue()).thenReturn(Optional.of(colombo));
         when(trackingNumbers.next()).thenReturn("SD7K3M9Q2XWB");
         when(parcels.saveAndFlush(any())).thenAnswer(call -> {
             Parcel parcel = call.getArgument(0);
@@ -79,8 +91,19 @@ class ParcelBookingServiceTest {
                 new BigDecimal("100.00"), RULE_ID));
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(),
                 mock(ApplicationEventPublisher.class));
-        service = new ParcelBookingService(parcels, feeCalculator, trackingNumbers, recorder,
+        service = new ParcelBookingService(parcels, feeCalculator, new HubNetwork(hubs), trackingNumbers, recorder,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void zoneWithoutAHubIsRefusedBeforePricing() {
+        when(hubs.findByZoneIdAndActiveTrue(KANDY)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.bookForCustomer(CUSTOMER_ID, booking()))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessage("The drop-off zone is not served by a hub");
+        verifyNoInteractions(feeCalculator);
+        verify(parcels, never()).saveAndFlush(any());
     }
 
     @Test

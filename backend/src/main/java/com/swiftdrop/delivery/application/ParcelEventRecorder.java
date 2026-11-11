@@ -50,10 +50,22 @@ public class ParcelEventRecorder {
     @Transactional(propagation = Propagation.MANDATORY)
     public ParcelStatusChanged record(Parcel parcel, ParcelStatus previousStatus, Actor actor, String note,
             FailureReason failureReason, Instant occurredAt) {
+        return record(parcel, previousStatus, actor, note, failureReason, occurredAt, null, null);
+    }
+
+    /**
+     * As above, with the hub reached or left and the delivery attempt of this step (ADR 0009 §7).
+     *
+     * @param hubCode {@code null} unless the step is at or from a hub
+     * @param attempt {@code null} unless the step is a delivery attempt
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ParcelStatusChanged record(Parcel parcel, ParcelStatus previousStatus, Actor actor, String note,
+            FailureReason failureReason, Instant occurredAt, String hubCode, Integer attempt) {
         Objects.requireNonNull(parcel.getId(), "parcel must be persisted first");
         ParcelStatusHistoryEntry entry = history.save(new ParcelStatusHistoryEntry(parcel.getId(),
                 parcel.getLastSequence(), previousStatus, parcel.getStatus(), actor.userId(), actor.role(), note,
-                failureReason, UUID.randomUUID(), occurredAt));
+                failureReason, UUID.randomUUID(), occurredAt, hubCode, attempt));
         ParcelStatusChanged event = eventFor(parcel, entry);
         outbox.save(new OutboxEvent(event.eventId(), parcel.getId(), entry.getSequence(), event.eventType(),
                 serializer.toJson(event), occurredAt));
@@ -79,6 +91,8 @@ public class ParcelEventRecorder {
                 parcel.getCustomerId(),
                 parcel.getMerchantId(),
                 parcel.getMerchantOrderReference(),
-                entry.getFailureReasonCode()));
+                entry.getFailureReasonCode(),
+                entry.getHubCode(),
+                entry.getAttempt()));
     }
 }

@@ -9,9 +9,10 @@ import { StatusBadge } from "@/components/delivery/status-badge";
 import { MiniRoute } from "@/components/delivery/mini-route";
 import { STATUS_LABELS, formatDate, formatWeight, SIZE_LABELS } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
-import { changeStatus, isFinalStatus, listCourierParcels, type CourierParcel, type ParcelStatus } from "@/lib/delivery";
+import { HANDOVERS, SETBACKS, TASK_LABELS, attemptOf, stopOf } from "@/components/delivery/courier-task";
+import { changeStatus, listCourierParcels, type CourierParcel, type ParcelStatus } from "@/lib/delivery";
 
-/** The button text for each forward step; delivering needs proof first, so it opens the parcel. */
+/** The button text for each forward step; handovers need proof first, so they open the parcel. */
 const STEP_ACTIONS: Partial<Record<ParcelStatus, string>> = {
   PICKED_UP: "Mark picked up",
   IN_TRANSIT: "Start transit",
@@ -49,8 +50,9 @@ export default function CourierRunPage() {
     }
   }
 
-  const active = parcels?.filter((parcel) => !isFinalStatus(parcel.status)) ?? [];
-  const finished = parcels?.filter((parcel) => isFinalStatus(parcel.status)) ?? [];
+  // A stop is done when the courier's task is, even if the parcel travels on through the hubs
+  const active = parcels?.filter((parcel) => !parcel.taskDone) ?? [];
+  const finished = parcels?.filter((parcel) => parcel.taskDone) ?? [];
   const total = parcels?.length ?? 0;
   const done = finished.length;
 
@@ -112,8 +114,10 @@ export default function CourierRunPage() {
                 <Link href={`/courier/parcels/${parcel.id}`}
                   className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 opacity-80 transition-opacity hover:opacity-100">
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold capitalize text-foreground">{parcel.dropoff.city}</span>
-                    <span className="font-mono text-[11px] tracking-wider text-muted-foreground">{parcel.trackingNumber}</span>
+                    <span className="block truncate text-sm font-semibold capitalize text-foreground">{stopOf(parcel).place.city}</span>
+                    <span className="font-mono text-[11px] tracking-wider text-muted-foreground">
+                      {TASK_LABELS[parcel.task]} · {parcel.trackingNumber}
+                    </span>
                   </span>
                   <StatusBadge status={parcel.status} />
                 </Link>
@@ -132,10 +136,9 @@ function StopCard({ parcel, stop, busy, onAdvance }: {
   busy: boolean;
   onAdvance: (parcel: CourierParcel, next: ParcelStatus) => void;
 }) {
-  // Before pickup the courier heads to the sender; afterwards to the recipient
-  const heading = parcel.status === "CREATED" ? "Pick up from" : "Deliver to";
-  const place = parcel.status === "CREATED" ? parcel.pickup : parcel.dropoff;
-  const next = parcel.nextStatuses.find((status) => status !== "FAILED");
+  const { heading, place } = stopOf(parcel);
+  const attempt = attemptOf(parcel);
+  const next = parcel.nextStatuses.find((status) => !SETBACKS.includes(status));
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     [place.line1, place.line2, place.city].filter(Boolean).join(", "),
   )}`;
@@ -148,6 +151,9 @@ function StopCard({ parcel, stop, busy, onAdvance }: {
             {stop}
           </span>
           <span className="font-mono text-xs font-semibold tracking-[0.15em] text-primary">{parcel.trackingNumber}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {TASK_LABELS[parcel.task]}{attempt ? ` · attempt ${attempt}` : ""}
+          </span>
         </span>
         <MiniRoute status={parcel.status} />
       </div>
@@ -180,9 +186,12 @@ function StopCard({ parcel, stop, busy, onAdvance }: {
       </div>
 
       <div className="px-4 pb-4">
-        {next === "DELIVERED" ? (
+        {next && HANDOVERS.includes(next) ? (
           <Link href={`/courier/parcels/${parcel.id}`} className={cn(buttonVariants({ size: "lg" }), "h-12 w-full text-base")}>
-            <Camera aria-hidden="true" /> {parcel.proofCaptured ? "Finish delivery" : "Capture proof & deliver"}
+            <Camera aria-hidden="true" />
+            {next === "RETURNED"
+              ? parcel.proofCaptured ? "Finish return" : "Capture proof & return"
+              : parcel.proofCaptured ? "Finish delivery" : "Capture proof & deliver"}
           </Link>
         ) : next ? (
           <Button size="lg" className="h-12 w-full text-base" disabled={busy} onClick={() => onAdvance(parcel, next)}>

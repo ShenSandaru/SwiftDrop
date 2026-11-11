@@ -112,8 +112,15 @@ function LoginForm() {
             router.push("/merchant/status");
             return;
           }
-        } else if (currentUser.roles?.includes("DISPATCHER_ADMIN")) {
+        } else if (currentUser.roles?.includes("ADMIN")) {
           router.push(redirectTarget === "/" ? "/admin" : redirectTarget);
+          return;
+        } else if (currentUser.roles?.includes("DISPATCHER")) {
+          const safeTarget =
+            redirectTarget === "/" || redirectTarget.startsWith("/admin")
+              ? "/dispatch"
+              : redirectTarget;
+          router.push(safeTarget);
           return;
         } else if (currentUser.roles?.includes("COURIER")) {
           router.push(redirectTarget === "/" ? "/courier" : redirectTarget);

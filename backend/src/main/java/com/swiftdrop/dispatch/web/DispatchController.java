@@ -1,5 +1,6 @@
 package com.swiftdrop.dispatch.web;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,13 +26,15 @@ import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.dispatch.application.DispatchService;
+import com.swiftdrop.identity.api.IdentityClaims;
 import com.swiftdrop.shared.web.PageLimit;
 import com.swiftdrop.shared.web.PageResponse;
 
 @RestController
 @RequestMapping("/api/v1/dispatch")
-@PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
 class DispatchController {
 
     private final DispatchService dispatch;
@@ -52,14 +55,6 @@ class DispatchController {
         return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
     }
 
-    @GetMapping("/awaiting-delivery-assignments")
-    PageResponse<DispatchParcelSummary> awaitingDeliveryAssignments(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
-        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.awaitingDeliveryAssignment(request), request);
-    }
-
     @GetMapping("/active-assignments")
     PageResponse<ParcelAssignmentSummary> activeAssignments(
             @RequestParam ParcelAssignmentType type,
@@ -74,6 +69,13 @@ class DispatchController {
         return dispatch.courierWorkloads();
     }
 
+    @GetMapping("/couriers")
+    List<DispatchCourierResponse> couriers() {
+        return dispatch.activeCouriers().stream()
+                .map(DispatchCourierResponse::from)
+                .toList();
+    }
+
     @GetMapping("/parcels/{id}/assignment-history")
     ParcelAssignmentHistory assignmentHistory(@PathVariable UUID id) {
         return dispatch.assignmentHistory(id);
@@ -85,6 +87,52 @@ class DispatchController {
             @Valid @RequestBody DispatchAssignmentRequest request) {
         return dispatch.assign(request.parcelId(), request.courierId(), UUID.fromString(jwt.getSubject()),
                 request.type());
+    }
+
+    // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----
+
+    /** Scans a parcel in at the hub it is expected at. */
+    @PostMapping("/parcels/{id}/hub-scans")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void scanAtHub(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+            @Valid @RequestBody HubScanRequest request) {
+        dispatch.scanAtHub(id, request.hubId(), staff(jwt));
+    }
+
+    /** Sends a parcel from its current hub to the next hub of its route. */
+    @PostMapping("/parcels/{id}/transit")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void sendToNextHub(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        dispatch.sendToNextHub(id, staff(jwt));
+    }
+
+    /** Starts the return to the sender after the last allowed attempt or a refusal. */
+    @PostMapping("/parcels/{id}/return")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void startReturn(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        dispatch.startReturn(id, staff(jwt));
+    }
+
+    /** Ends a parcel as lost or damaged. */
+    @PostMapping("/parcels/{id}/failure")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void markFailed(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+            @Valid @RequestBody ParcelFailureRequest request) {
+        dispatch.markFailed(id, request.reason(), request.note(), staff(jwt));
+    }
+
+    /** Cancels a parcel that has not been picked up. */
+    @PostMapping("/parcels/{id}/cancellation")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        dispatch.cancel(id, staff(jwt));
+    }
+
+    /** The caller as recorded in the parcel history: admin if the token has the role, else dispatcher. */
+    private static Staff staff(Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        List<String> roles = jwt.getClaimAsStringList(IdentityClaims.ROLES);
+        return roles != null && roles.contains("ADMIN") ? Staff.admin(userId) : Staff.dispatcher(userId);
     }
 
     private static com.swiftdrop.delivery.api.PageRequest pageRequest(Integer page, Integer size) {

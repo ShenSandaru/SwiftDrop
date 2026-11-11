@@ -27,7 +27,7 @@ final class Callers {
         if (names != null) {
             for (String name : names) {
                 for (ActorRole role : ActorRole.values()) {
-                    if (role.name().equals(name)) {
+                    if (role.name().equals(name) && role.isActive()) {
                         roles.add(role);
                     }
                 }

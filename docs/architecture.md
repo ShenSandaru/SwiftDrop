@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (connection only; delivery writes outbox rows, no relay yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; no consumers yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -211,19 +211,32 @@ tracking     → delivery
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
-  **No exchanges, queues, producers or consumers exist yet.** A connection smoke test against
-  RabbitMQ 4.3 succeeded in Stage 5.
+  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5. **No queues or consumers
+  exist yet** (`notification`, `merchant`).
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
   `ParcelEvents.eventsBetween` rebuilds past events from history, identical to the outbox payloads.
-  The relay that publishes the outbox to RabbitMQ is not implemented (Member 9).
+- **Implemented (ADR 0004 §3, §4.2, §9; `delivery.infrastructure.outbox`):** `delivery` declares
+  the durable topic exchange `swiftdrop.events` (`ParcelStatusChanged.EXCHANGE`, routing key
+  `parcel.status-changed`). A scheduled relay polls every second in one transaction behind a
+  PostgreSQL advisory lock, publishes unpublished rows in outbox order with the ADR message
+  properties (persistent, `message-id` = event ID), waits for the publisher confirm (correlated
+  confirms, returns, mandatory flag) and marks rows published. Nacks, returns, confirm timeouts and
+  connection failures leave the row unpublished with exponential backoff; a failing or waiting row
+  blocks only its own parcel's later rows; broker-wide failures end the poll. A monitor exposes
+  `swiftdrop.outbox.*` gauges and logs one `ERROR` line (IDs only) when an ADR §9 threshold is
+  crossed and one line when it clears; a daily job deletes published rows older than 7 days.
+  Settings are `swiftdrop.outbox.relay.*` with the ADR defaults; the relay is switched off on the
+  test classpath and on with `swiftdrop.outbox.relay.enabled`. Until a consumer binds a queue,
+  every event is returned as unroutable and waits in the outbox, which the monitor reports.
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
-- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).**
-  **None of it is implemented yet**, and the decision is not an authorization to implement it
-  without an approved task:
+- **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).** The
+  publishing side (outbox, relay, exchange) is implemented as above; **the consumer side
+  (queues, dead-lettering, consumers, webhooks, notifications) is not**, and the decision is not an
+  authorization to implement it without an approved task:
   - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
     Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
   - **Event:** `parcel.status-changed`, a versioned JSON envelope with event ID and per-parcel
@@ -283,6 +296,19 @@ tracking     → delivery
 - **Decided ([ADR 0006](adr/0006-delivery-lifecycle-and-transition-rules.md), Accepted):** the
   transition matrix, `FAILED` from `PICKED_UP` to `OUT_FOR_DELIVERY` with a reason code, proof
   required for `DELIVERED`, assignment only while `CREATED`, no cancellation, retry or override.
+- **Decided ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md), Accepted;
+  supersedes ADR 0006 §1–§3 and the assignment rules of ADR 0008 §4–§5). Implemented; parcels
+  picked up without a route (before the hubs existed) keep the ADR 0006 rules:**
+  - A branch hub per pricing zone plus one central hub (Colombo); the route (origin branch →
+    central → destination branch, shorter when one of them is central or both are the same) is
+    fixed at pickup. Booking for a zone without a hub is rejected.
+  - New statuses `AT_HUB` (records which hub), `DELIVERY_ATTEMPT_FAILED`, `RETURNING`, `RETURNED`
+    and `CANCELLED` (before pickup); `FAILED` becomes an exception state set by a dispatcher.
+  - Up to 3 delivery attempts (configurable 1 to 5); `REFUSED` and `ADDRESS_NOT_FOUND` return at
+    once. Hub scans are done by `DISPATCHER` (and `ADMIN`); courier tasks gain `RETURN`, and pickup
+    reassignment while `CREATED` is allowed.
+  - Events gain optional `hubCode` and `attempt` fields (`schemaVersion` 1). Cash on delivery
+    needs a separate ADR.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
@@ -296,6 +322,15 @@ tracking     → delivery
   - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+  - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
+    (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
+    the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
+    task (`PICKUP`, `DELIVERY`, `RETURN`).
+  - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,
+    `.../return`, `.../failure` and `.../cancellation` (DISPATCHER, ADMIN); the dispatch list
+    offers each parcel's allowed actions. Customer cancellation before pickup:
+    `POST /api/v1/parcels/{id}/cancellation`. The attempt limit is
+    `SWIFTDROP_MAX_DELIVERY_ATTEMPTS` (default 3, 1 to 5).
 - **Open:** rate limiting of the public tracking endpoints; the required reports (ADM-4).
 
 ## 9. Authentication and authorization

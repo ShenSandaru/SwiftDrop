@@ -3,6 +3,7 @@ package com.swiftdrop.delivery.application;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.domain.ActorRole;
 
 /**
@@ -25,6 +26,12 @@ public record Actor(UUID userId, ActorRole role) {
 
     public static Actor courier(UUID userId) {
         return new Actor(Objects.requireNonNull(userId, "userId"), ActorRole.COURIER);
+    }
+
+    /** A dispatcher or admin doing a hub operation (ADR 0009 §6). */
+    public static Actor staff(Staff staff) {
+        Objects.requireNonNull(staff, "staff");
+        return new Actor(staff.userId(), staff.admin() ? ActorRole.ADMIN : ActorRole.DISPATCHER);
     }
 
     public static Actor merchantApi() {

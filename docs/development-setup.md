@@ -165,6 +165,11 @@ this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
 `http://localhost:9000/hook`), and the backend logs a warning at startup. Private addresses stay
 refused. Never enable it outside local development.
 
+Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
+a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the
+admin and create, under **Hub Network**, one central hub (Colombo) and a branch hub for each
+pricing zone you book for.
+
 ### Reset data (deletes everything)
 
 Only when you intend to wipe your local database and broker, for example after changing the

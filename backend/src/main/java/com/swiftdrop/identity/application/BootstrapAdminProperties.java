@@ -3,7 +3,7 @@ package com.swiftdrop.identity.application;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Optional settings to bootstrap the initial {@code DISPATCHER_ADMIN} account on startup.
+ * Optional settings to bootstrap the initial {@code ADMIN} account on startup.
  *
  * @param adminEmail    from {@code SWIFTDROP_BOOTSTRAP_ADMIN_EMAIL}
  * @param adminPassword from {@code SWIFTDROP_BOOTSTRAP_ADMIN_PASSWORD}
