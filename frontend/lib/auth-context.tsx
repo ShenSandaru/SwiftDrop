@@ -13,6 +13,7 @@ export interface AuthContextValue {
   login: (token: string) => Promise<void>;
   logout: () => void;
   hasRole: (role: string) => boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -118,6 +119,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const updated = await api.get<UserResponse>("/api/v1/users/me", { token });
+      setUser(updated);
+    } catch {
+      // Keep existing user on failure
+    }
+  }, [token]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -128,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         hasRole,
+        refreshUser,
       }}
     >
       {children}

@@ -139,6 +139,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611051210",
                                 "delivery add parcel assignment version",
-                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"));
+                                "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"),
+                        tuple(
+                                "202611081400",
+                                "identity user profiles and addresses",
+                                "identity/V202611081400__identity_user_profiles_and_addresses.sql"));
     }
 }

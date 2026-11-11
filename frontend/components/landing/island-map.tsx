@@ -109,20 +109,29 @@ export function IslandMap({ className }: { className?: string }) {
     const trails = trailRefs.current;
     const pin = pinRef.current;
     const host = hostRef.current;
-    if (!pin || !host || legs.some((leg) => !leg)) {
+    if (!pin || !host || legs.length !== LEGS.length || legs.some((leg) => !leg)) {
       return;
     }
-    const lengths = legs.map((leg) => leg!.getTotalLength());
-    trails.forEach((trail, index) => trail?.setAttribute("stroke-dasharray", `${lengths[index]}`));
+    const lengths = legs.map((leg) => (leg ? leg.getTotalLength() : 0));
+    trails.forEach((trail, index) => {
+      if (trail && lengths[index] !== undefined) {
+        trail.setAttribute("stroke-dasharray", `${lengths[index]}`);
+      }
+    });
 
     const place = (legIndex: number, progress: number) => {
-      const point = legs[legIndex]!.getPointAtLength(lengths[legIndex] * progress);
+      const leg = legs[legIndex];
+      if (!leg || !pin) return;
+      const length = lengths[legIndex] ?? leg.getTotalLength();
+      const point = leg.getPointAtLength(length * progress);
       pin.setAttribute("transform", `translate(${point.x} ${point.y})`);
     };
     const drawTrails = (legIndex: number, progress: number) => {
       trails.forEach((trail, index) => {
+        if (!trail) return;
         const done = index < legIndex ? 1 : index === legIndex ? progress : 0;
-        trail?.setAttribute("stroke-dashoffset", `${lengths[index] * (1 - done)}`);
+        const length = lengths[index] ?? 0;
+        trail.setAttribute("stroke-dashoffset", `${length * (1 - done)}`);
       });
     };
 
@@ -138,6 +147,7 @@ export function IslandMap({ className }: { className?: string }) {
     let elapsed = 0;
     let last = performance.now();
     let shownSegment = -1;
+    let cancelled = false;
 
     const observer = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting;
@@ -145,6 +155,7 @@ export function IslandMap({ className }: { className?: string }) {
     observer.observe(host);
 
     const tick = (now: number) => {
+      if (cancelled) return;
       const delta = Math.min(now - last, 100);
       last = now;
       if (visible) {
@@ -175,6 +186,7 @@ export function IslandMap({ className }: { className?: string }) {
     frame = requestAnimationFrame(tick);
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
     };

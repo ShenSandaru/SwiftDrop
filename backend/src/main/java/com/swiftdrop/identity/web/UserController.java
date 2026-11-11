@@ -113,4 +113,25 @@ class UserController {
         }
         return UserResponse.from(user);
     }
+
+    /** Updates the authenticated user's personal profile (full name and phone number). */
+    @PatchMapping("/me")
+    UserResponse updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        return UserResponse.from(accounts.updateProfile(currentUserId, request.fullName(), request.phoneNumber()));
+    }
+
+    /** Changes the authenticated user's password. */
+    @PostMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        accounts.changePassword(currentUserId, request.currentPassword(), request.newPassword());
+    }
 }

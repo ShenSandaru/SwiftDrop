@@ -134,6 +134,56 @@ public class AccountService implements UserDirectory {
         return users.saveAndFlush(user);
     }
 
+    /** Updates the personal profile (full name) of a user. */
+    public User updateProfile(UUID userId, String fullName) {
+        return updateProfile(userId, fullName, null);
+    }
+
+    /** Updates the personal profile (full name and phone number) of a user. */
+    public User updateProfile(UUID userId, String fullName, String phoneNumber) {
+        if (fullName == null || fullName.trim().isBlank()) {
+            throw new IllegalArgumentException("Full name cannot be blank");
+        }
+        String trimmed = fullName.trim();
+        if (trimmed.length() > 200) {
+            throw new IllegalArgumentException("Full name must be at most 200 characters");
+        }
+        if (phoneNumber != null && phoneNumber.trim().length() > 30) {
+            throw new IllegalArgumentException("Phone number must be at most 30 characters");
+        }
+        User user = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is disabled");
+        }
+        user.setFullName(trimmed);
+        user.setPhoneNumber(phoneNumber);
+        return users.saveAndFlush(user);
+    }
+
+    /** Changes the password for an existing account. */
+    public void changePassword(UUID userId, String currentPassword, String newPassword) {
+        if (tooLong(newPassword)) {
+            throw new InvalidPasswordException("Password must be at most " + MAX_PASSWORD_BYTES + " bytes");
+        }
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new InvalidPasswordException("New password must be at least 8 characters");
+        }
+        User user = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is disabled");
+        }
+        if (user.getPasswordHash() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Account uses external Google authentication and does not have a local password");
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new InvalidCredentialsException("Current password does not match");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        users.saveAndFlush(user);
+    }
+
     @Override
     public Optional<UserSummary> findUser(UUID id) {
         return users.findById(id).map(AccountService::toSummary);

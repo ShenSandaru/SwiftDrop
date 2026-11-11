@@ -42,6 +42,9 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
+    @Column(name = "phone_number", length = 30)
+    private String phoneNumber;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -89,6 +92,22 @@ public class User {
 
     public String getFullName() {
         return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = Objects.requireNonNull(fullName, "fullName").trim();
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber != null && !phoneNumber.isBlank() ? phoneNumber.trim() : null;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public boolean isEnabled() {

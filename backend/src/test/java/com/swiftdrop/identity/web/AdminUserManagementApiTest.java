@@ -71,6 +71,9 @@ class AdminUserManagementApiTest {
     private UserRepository users;
 
     @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
+
+    @MockitoBean
     private ExternalIdentityRepository identities;
 
     @MockitoBean

@@ -16,8 +16,53 @@ export interface UserResponse {
   id: string;
   email: string;
   fullName: string;
+  phoneNumber?: string;
   roles: string[];
   enabled: boolean;
+  createdAt?: string;
+}
+
+export interface UpdateProfileRequest {
+  fullName: string;
+  phoneNumber?: string;
+}
+
+export interface UserAddressResponse {
+  id: string;
+  userId: string;
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface CreateAddressRequest {
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault?: boolean;
+}
+
+export interface UpdateAddressRequest {
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault?: boolean;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface PageResponse<T> {
