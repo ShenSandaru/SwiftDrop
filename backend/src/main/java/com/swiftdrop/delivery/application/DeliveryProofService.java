@@ -17,6 +17,7 @@ import com.swiftdrop.delivery.domain.ActorRole;
 import com.swiftdrop.delivery.domain.DeliveryProof;
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
 import com.swiftdrop.delivery.domain.Parcel;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.PhotoType;
 
@@ -30,16 +31,20 @@ public class DeliveryProofService {
 
     private final ParcelRepository parcels;
     private final DeliveryProofRepository proofs;
+    private final ParcelAssignmentRepository assignments;
     private final Clock clock;
 
     @Autowired
-    public DeliveryProofService(ParcelRepository parcels, DeliveryProofRepository proofs) {
-        this(parcels, proofs, Clock.systemUTC());
+    public DeliveryProofService(ParcelRepository parcels, DeliveryProofRepository proofs,
+            ParcelAssignmentRepository assignments) {
+        this(parcels, proofs, assignments, Clock.systemUTC());
     }
 
-    DeliveryProofService(ParcelRepository parcels, DeliveryProofRepository proofs, Clock clock) {
+    DeliveryProofService(ParcelRepository parcels, DeliveryProofRepository proofs,
+            ParcelAssignmentRepository assignments, Clock clock) {
         this.parcels = parcels;
         this.proofs = proofs;
+        this.assignments = assignments;
         this.clock = clock;
     }
 
@@ -69,8 +74,10 @@ public class DeliveryProofService {
         Parcel parcel = parcels.findByIdForUpdate(parcelId)
                 .filter(found -> courier.userId().equals(found.getAssignedCourierId()))
                 .orElseThrow(ParcelNotFoundException::new);
-        if (parcel.getStatus() != ParcelStatus.OUT_FOR_DELIVERY) {
-            throw new ParcelConflictException("Proof can only be captured while the parcel is out for delivery");
+        // Proof of delivery to the recipient, or of the handover back to the sender (ADR 0009 §3)
+        if (parcel.getStatus() != ParcelStatus.OUT_FOR_DELIVERY && parcel.getStatus() != ParcelStatus.RETURNING) {
+            throw new ParcelConflictException(
+                    "Proof can only be captured while the parcel is out for delivery or being returned");
         }
         byte[] image = photo == null || photo.length == 0 ? null : photo;
         String contentType = image == null ? null
@@ -93,7 +100,9 @@ public class DeliveryProofService {
     @Transactional(readOnly = true)
     public Optional<Photo> photo(UUID parcelId, Viewer viewer) {
         Objects.requireNonNull(viewer, "viewer");
-        parcels.findById(parcelId).filter(viewer::canView).orElseThrow(ParcelNotFoundException::new);
+        boolean heldTask = viewer.isCourier() && assignments.existsByParcelIdAndCourierId(parcelId, viewer.userId());
+        parcels.findById(parcelId).filter(found -> viewer.canView(found, heldTask))
+                .orElseThrow(ParcelNotFoundException::new);
         return proofs.findByParcelId(parcelId)
                 .filter(DeliveryProof::hasPhoto)
                 .map(proof -> new Photo(proof.getPhoto(), proof.getPhotoContentType()));

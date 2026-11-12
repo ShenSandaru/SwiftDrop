@@ -1,19 +1,28 @@
 package com.swiftdrop.config;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -22,17 +31,27 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.swiftdrop.identity.api.IdentityClaims;
+import com.swiftdrop.identity.api.UserDirectory;
+import com.swiftdrop.identity.api.UserSummary;
 import com.swiftdrop.merchant.api.AuthenticatedMerchant;
 import com.swiftdrop.merchant.api.MerchantAuthentication;
 
 /**
- * Stateless bearer-token security for the REST API. The {@code JwtDecoder} comes from the identity
- * module. Roles become {@code ROLE_<name>} authorities from the token's roles claim, for URL rules
- * here or {@code @PreAuthorize} on endpoints.
+ * Bearer-token security for the REST API. The {@code JwtDecoder} comes from the identity module.
+ * Active tokens are validated for cryptographic integrity, expiration, and user account status
+ * (SEC-01) via the public {@link UserDirectory} facade before granting access. Roles become
+ * {@code ROLE_<name>} authorities from the token's roles claim, for URL rules here or
+ * {@code @PreAuthorize} on endpoints.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 class SecurityConfiguration {
+
+    private final UserDirectory userDirectory;
+
+    SecurityConfiguration(UserDirectory userDirectory) {
+        this.userDirectory = userDirectory;
+    }
 
     /**
      * Merchant systems calling with an API key (ADR 0008 §5). Covers only the merchant order API and
@@ -94,12 +113,37 @@ class SecurityConfiguration {
         return source;
     }
 
-    private static JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-        authorities.setAuthoritiesClaimName(IdentityClaims.ROLES);
-        authorities.setAuthorityPrefix("ROLE_");
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authorities);
-        return converter;
+    private Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName(IdentityClaims.ROLES);
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        return jwt -> {
+            String subject = jwt.getSubject();
+            if (subject == null || subject.isBlank()) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "Token subject is missing", null));
+            }
+
+            UUID userId;
+            try {
+                userId = UUID.fromString(subject);
+            } catch (IllegalArgumentException e) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "Invalid user ID in token subject", null));
+            }
+
+            UserSummary user = userDirectory.findUser(userId)
+                    .orElseThrow(() -> new OAuth2AuthenticationException(
+                            new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "User account not found", null)));
+
+            if (!user.enabled()) {
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "User account is disabled", null));
+            }
+
+            Collection<GrantedAuthority> authorities = authoritiesConverter.convert(jwt);
+            return new JwtAuthenticationToken(jwt, authorities, subject);
+        };
     }
 }

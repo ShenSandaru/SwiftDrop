@@ -30,13 +30,16 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelCreation;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.application.Actor;
 import com.swiftdrop.delivery.application.ParcelStatusService;
 import com.swiftdrop.delivery.application.StatusChange;
@@ -70,6 +73,8 @@ class LiveTrackingIT {
     @Autowired
     private ParcelStatusService statuses;
     @Autowired
+    private ParcelHubOperations hubOperations;
+    @Autowired
     private JdbcTemplate jdbc;
 
     @MockitoBean
@@ -77,21 +82,28 @@ class LiveTrackingIT {
 
     private final HttpClient client = HttpClient.newHttpClient();
     private UUID courierId;
+    private UUID dispatcherId;
 
     @BeforeEach
     void setUp() {
+        // Booking needs served zones (ADR 0009 §1)
+        TestHubs.install(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("650.00"), "LKR", new BigDecimal("400.00"), new BigDecimal("100.00"),
                 new BigDecimal("150.00"), UUID.randomUUID()));
         courierId = UUID.randomUUID();
         jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Courier', TRUE, now())",
                 courierId, "courier-" + courierId + "@example.com");
+        // Assignments name a real dispatcher (ADR 0008; foreign key to users)
+        dispatcherId = UUID.randomUUID();
+        jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Dispatcher', TRUE, now())",
+                dispatcherId, "dispatcher-" + dispatcherId + "@example.com");
     }
 
     @Test
     void streamDeliversSnapshotThenLiveChangesAndEndsAfterTheFinalStatus() throws Exception {
         CreatedParcel parcel = merchantParcel();
-        assignment.assignCourier(parcel.parcelId(), courierId, UUID.randomUUID());
+        assignment.assignCourier(parcel.parcelId(), courierId, dispatcherId);
         BlockingQueue<String> lines = new LinkedBlockingQueue<>();
         CompletableFuture<HttpResponse<Stream<String>>> response = open(parcel.trackingNumber().toLowerCase(), lines);
 
@@ -100,7 +112,9 @@ class LiveTrackingIT {
         change(parcel, ParcelStatus.PICKED_UP, null);
         assertThat(nextEvent(lines)).contains("event:status", "id:2", "\"status\":\"PICKED_UP\"", "\"sequence\":2");
 
-        change(parcel, ParcelStatus.FAILED, FailureReason.ADDRESS_NOT_FOUND);
+        // After pickup the courier's task has ended; a dispatcher ends a parcel that cannot go on (ADR 0009 §3)
+        hubOperations.markFailed(parcel.parcelId(), FailureReason.ADDRESS_NOT_FOUND, "Call Nimal at +94771234567",
+                Staff.dispatcher(dispatcherId));
         String last = nextEvent(lines);
         assertThat(last).contains("\"status\":\"FAILED\"", "\"sequence\":3")
                 .doesNotContain("ADDRESS_NOT_FOUND", "Nimal", "+9477", courierId.toString());
@@ -170,7 +184,7 @@ class LiveTrackingIT {
 
     private CreatedParcel merchantParcel() {
         DeliveryContact contact = new DeliveryContact("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
-                UUID.randomUUID(), null);
+                TestHubs.COLOMBO_ZONE, null);
         return creation.createMerchantParcel(new NewMerchantParcel(UUID.randomUUID(), "ORD-" + UUID.randomUUID(),
                 contact, contact, ParcelSize.SMALL, 1000, null));
     }

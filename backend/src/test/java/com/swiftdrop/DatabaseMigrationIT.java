@@ -53,7 +53,9 @@ import com.swiftdrop.pricing.api.FeeCalculator;
  */
 @SpringBootTest(properties = {
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
-        "swiftdrop.security.google.client-id="
+        "swiftdrop.security.google.client-id=",
+        "swiftdrop.identity.bootstrap.admin-email=",
+        "swiftdrop.identity.bootstrap.admin-password="
 })
 @Testcontainers
 class DatabaseMigrationIT {
@@ -100,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(15);
+        assertThat(rows).hasSize(19);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -153,12 +155,32 @@ class DatabaseMigrationIT {
                         tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true),
                         tuple("merchant/V202611081000__merchant_create_merchant_api_keys.sql", true));
 
+        assertThat(rows.subList(15, 17))
+                .extracting(row -> row.get("script"), row -> row.get("success"))
+                .containsExactly(
+                        tuple("identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql", true),
+                        tuple("delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql", true));
+
+        assertThat(rows.get(17))
+                .containsEntry("script", "delivery/V202611111000__delivery_create_hubs.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(18))
+                .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
+                .containsEntry("success", true);
+
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         assertThat(usersCount).isNotNull();
 
         Integer rolesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
-        assertThat(rolesCount).isNotNull().isEqualTo(4);
+        assertThat(rolesCount).isNotNull().isEqualTo(5);
+
+        List<String> roleNames = jdbcTemplate.queryForList("SELECT name FROM roles ORDER BY name", String.class);
+        assertThat(roleNames).containsExactlyInAnyOrder("CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER", "ADMIN");
+
+        Integer singleAdminIndexCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'uq_user_roles_single_admin'", Integer.class);
+        assertThat(singleAdminIndexCount).isEqualTo(1);
 
         Integer zonesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM zones", Integer.class);
         assertThat(zonesCount).isNotNull();
@@ -177,6 +199,9 @@ class DatabaseMigrationIT {
 
         Integer endpointEventsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoint_events", Integer.class);
         assertThat(endpointEventsCount).isNotNull();
+
+        Integer apiKeysCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_api_keys", Integer.class);
+        assertThat(apiKeysCount).isNotNull().isEqualTo(0);
 
         // Assert Hibernate EntityManager is active and connected
         assertThat(entityManager.isOpen()).isTrue();

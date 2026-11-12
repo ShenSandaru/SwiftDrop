@@ -30,7 +30,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class})
 class SwiftdropBackendApplicationTests {
 
     @MockitoBean

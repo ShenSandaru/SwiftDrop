@@ -1,5 +1,6 @@
 package com.swiftdrop.identity.web;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -15,6 +16,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,6 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @MockitoBean(types = {
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -72,6 +79,9 @@ class AdminUserManagementApiTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtEncoder encoder;
 
     @MockitoBean
     private UserRepository users;
@@ -108,7 +118,7 @@ class AdminUserManagementApiTest {
 
     @BeforeEach
     void setUp() {
-        adminUser = withId(new User("admin@swiftdrop.com", passwordEncoder.encode("admin-pass"), "Admin Dave", Set.of(Role.DISPATCHER_ADMIN)), ADMIN_ID);
+        adminUser = withId(new User("admin@swiftdrop.com", passwordEncoder.encode("admin-pass"), "Admin Dave", Set.of(Role.ADMIN)), ADMIN_ID);
         targetUser = withId(new User("target@swiftdrop.com", passwordEncoder.encode("target-pass"), "Target Alice", Set.of(Role.CUSTOMER)), TARGET_USER_ID);
 
         when(users.findById(ADMIN_ID)).thenReturn(Optional.of(adminUser));
@@ -199,23 +209,57 @@ class AdminUserManagementApiTest {
     }
 
     @Test
-    void createStaffDispatcherAdminReturns201Created() throws Exception {
-        when(users.findByEmail("newadmin@swiftdrop.com")).thenReturn(Optional.empty());
+    void createStaffDispatcherReturns201Created() throws Exception {
+        when(users.findByEmail("newdispatcher@swiftdrop.com")).thenReturn(Optional.empty());
 
         mvc.perform(post("/api/v1/staff-users")
-                        .with(TestPrincipal.dispatcherAdmin(ADMIN_ID).postProcessor())
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "fullName": "Admin Sarah",
+                                  "fullName": "Dispatcher Sarah",
+                                  "email": "newdispatcher@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "DISPATCHER"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("newdispatcher@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("DISPATCHER")));
+    }
+
+    @Test
+    void createStaffRejectsAdminRole() throws Exception {
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "New Admin",
                                   "email": "newadmin@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "ADMIN"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Staff account role must be COURIER or DISPATCHER"));
+    }
+
+    @Test
+    void createStaffRejectsLegacyDispatcherAdminRole() throws Exception {
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Legacy Staff",
+                                  "email": "legacy@swiftdrop.com",
                                   "password": "secure-pass-123",
                                   "role": "DISPATCHER_ADMIN"
                                 }
                                 """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("newadmin@swiftdrop.com"))
-                .andExpect(jsonPath("$.roles", contains("DISPATCHER_ADMIN")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Staff account role must be COURIER or DISPATCHER"));
     }
 
     @Test
@@ -345,6 +389,76 @@ class AdminUserManagementApiTest {
         mvc.perform(get("/api/v1/users/me")
                         .with(TestPrincipal.customer(TARGET_USER_ID).postProcessor()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void disabledAdminCannotReenableOwnAccount() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + ADMIN_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": true}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(adminUser.isEnabled()).isFalse();
+    }
+
+    @Test
+    void disabledAdminCannotDisableAnotherUser() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + TARGET_USER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": false}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(targetUser.isEnabled()).isTrue();
+    }
+
+    @Test
+    void disabledAdminCannotCreateStaffAccounts() throws Exception {
+        adminUser.setEnabled(false);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(post("/api/v1/users/staff")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName": "New Staff", "email": "newstaff@swiftdrop.com", "password": "staff-password-123"}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void activeAdminCanPerformLegitimateOperations() throws Exception {
+        adminUser.setEnabled(true);
+        String token = adminBearerToken(ADMIN_ID);
+
+        mvc.perform(patch("/api/v1/users/" + TARGET_USER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false));
+
+        assertThat(targetUser.isEnabled()).isFalse();
+    }
+
+    private String adminBearerToken(UUID adminId) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("swiftdrop")
+                .subject(adminId.toString())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(900))
+                .claim("roles", List.of("ADMIN"))
+                .build();
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
     }
 
     private static User withId(User user, UUID id) {

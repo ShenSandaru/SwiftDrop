@@ -17,6 +17,8 @@ public interface MerchantWebhookEndpointRepository extends JpaRepository<Merchan
 
     List<MerchantWebhookEndpoint> findByMerchantIdAndDeletedAtIsNull(UUID merchantId);
 
+    long countByMerchantIdAndDeletedAtIsNull(UUID merchantId);
+
     Optional<MerchantWebhookEndpoint> findByIdAndMerchantIdAndDeletedAtIsNull(UUID id, UUID merchantId);
 
     Optional<MerchantWebhookEndpoint> findByIdAndDeletedAtIsNull(UUID id);

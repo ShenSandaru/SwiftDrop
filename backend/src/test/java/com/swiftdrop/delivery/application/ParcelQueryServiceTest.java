@@ -26,19 +26,20 @@ import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
+import com.swiftdrop.delivery.api.PageRequest;
+import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
-import com.swiftdrop.delivery.api.PageRequest;
-import com.swiftdrop.delivery.api.PageResult;
-import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
-import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelSummary;
 import com.swiftdrop.delivery.api.PublicTrackingView;
 import com.swiftdrop.delivery.domain.ActorRole;
+import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
@@ -61,7 +62,8 @@ class ParcelQueryServiceTest {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
-        service = new ParcelQueryService(parcels, assignments, history);
+        service = new ParcelQueryService(parcels, assignments, history, mock(HubRepository.class),
+                DeliveryPolicy.defaults());
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
                         "00500"),
@@ -100,7 +102,9 @@ class ParcelQueryServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<ParcelStatus>> terminal = ArgumentCaptor.forClass(Collection.class);
         verify(parcels).countActiveByCourier(terminal.capture());
-        assertThat(terminal.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.FAILED);
+        // The final statuses of ADR 0009 §2
+        assertThat(terminal.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.RETURNED,
+                ParcelStatus.CANCELLED, ParcelStatus.FAILED);
     }
 
     @Test

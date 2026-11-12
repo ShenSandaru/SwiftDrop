@@ -45,6 +45,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
+import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
@@ -81,10 +82,10 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = {UserRepository.class, ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
+@MockitoBean(types = {ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
         ZoneRepository.class, PricingRuleRepository.class, ParcelRepository.class, ParcelStatusHistoryRepository.class,
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
-        MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class})
+        HubRepository.class, MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class})
 class MerchantApiKeyApiTest {
 
     private static final String KEYS = "/api/v1/merchants/me/api-keys";
@@ -100,6 +101,9 @@ class MerchantApiKeyApiTest {
 
     @Autowired
     private AccessTokenIssuer tokens;
+
+    @MockitoBean
+    private UserRepository users;
 
     @MockitoBean
     private MerchantRepository merchants;
@@ -294,6 +298,7 @@ class MerchantApiKeyApiTest {
     void realBearerTokenRejectedOnOrderApi() throws Exception {
         User user = new User("merchant@example.com", "hash", "Merchant", Set.of(Role.MERCHANT));
         ReflectionTestUtils.setField(user, "id", USER_ID);
+        when(users.findById(USER_ID)).thenReturn(Optional.of(user));
         String token = tokens.issue(user).value();
 
         mvc.perform(get(KEYS).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

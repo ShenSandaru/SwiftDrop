@@ -33,6 +33,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
@@ -66,6 +67,8 @@ class ParcelStatusChangeIT {
 
     @Autowired
     private ParcelStatusService service;
+    @Autowired
+    private ParcelAssignment assignment;
     @Autowired
     private ParcelEventRecorder recorder;
     @Autowired
@@ -101,8 +104,8 @@ class ParcelStatusChangeIT {
             recorder.record(parcel, null, Actor.customer(customerId), null, null, Instant.now());
             return parcel.getId();
         });
-        // Assignment arrives with ParcelAssignment (Phase 5)
-        jdbc.update("UPDATE parcels SET assigned_courier_id = ?, assigned_at = now() WHERE id = ?", courierId, parcelId);
+        // A real pickup assignment with its history record, as dispatch creates it (ADR 0008)
+        assignment.assignCourier(parcelId, courierId, insertUser("dispatcher"));
         committedEvents.clear();
     }
 

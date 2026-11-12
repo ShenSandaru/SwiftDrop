@@ -97,13 +97,24 @@ public class MerchantWebhookEndpoint {
     }
 
     public void update(String url, String description, Set<ParcelStatus> events) {
+        update(url, description, null, events);
+    }
+
+    public void update(String url, String description, Boolean enabled, Set<ParcelStatus> events) {
         if (isDeleted()) {
             throw new IllegalStateException("Cannot update a deleted webhook endpoint");
         }
-        this.url = Objects.requireNonNull(url, "url must not be null").trim();
-        this.description = description != null && !description.isBlank() ? description.trim() : null;
-        this.events.clear();
+        if (url != null && !url.isBlank()) {
+            this.url = url.trim();
+        }
+        if (description != null) {
+            this.description = description.isBlank() ? null : description.trim();
+        }
+        if (enabled != null) {
+            this.enabled = enabled;
+        }
         if (events != null) {
+            this.events.clear();
             this.events.addAll(events);
         }
         this.updatedAt = Instant.now();
