@@ -47,8 +47,10 @@ export function NavHeader() {
   if (hasRole("CUSTOMER")) links.push({ href: "/customer", label: "My Deliveries" });
   if (hasRole("MERCHANT")) links.push({ href: "/merchant", label: "Merchant Portal" });
   if (hasRole("COURIER")) links.push({ href: "/courier", label: "Courier Tasks" });
-  if (hasRole("DISPATCHER_ADMIN")) {
-    links.push({ href: "/dispatch", label: "Dispatch" }, { href: "/admin", label: "Admin" });
+  if (hasRole("ADMIN")) {
+    links.push({ href: "/admin", label: "Admin" }, { href: "/dispatch", label: "Dispatch" });
+  } else if (hasRole("DISPATCHER")) {
+    links.push({ href: "/dispatch", label: "Dispatch" });
   }
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const current = links.find((link) => isActive(link.href));

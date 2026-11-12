@@ -24,6 +24,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import jakarta.persistence.EntityManager;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.pricing.api.FeeCalculator;
@@ -167,8 +168,13 @@ class DeliveryPersistenceIT {
     void databaseRejectsInvalidParcelStates() {
         Parcel parcel = parcels.saveAndFlush(customerParcel(trackingNumbers.next()));
 
-        // Past CREATED without a courier (ADR 0006 §1)
-        assertViolation("UPDATE parcels SET status = 'PICKED_UP' WHERE id = ?", parcel.getId());
+        // At a hub without saying which (ADR 0009 §2); a courier between tasks is allowed (ADR 0008 §3)
+        assertViolation("UPDATE parcels SET status = 'AT_HUB' WHERE id = ?", parcel.getId());
+        // Half a route: an origin hub without a destination hub (a real hub, so only the route rule applies)
+        TestHubs.install(jdbc);
+        assertViolation("UPDATE parcels SET origin_hub_id = (SELECT id FROM hubs WHERE code = 'CMB') WHERE id = ?",
+                parcel.getId());
+        assertViolation("UPDATE parcels SET delivery_attempts = -1 WHERE id = ?", parcel.getId());
         // A customer parcel with a merchant owner as well
         assertViolation("UPDATE parcels SET merchant_id = gen_random_uuid() WHERE id = ?", parcel.getId());
         // Malformed tracking number

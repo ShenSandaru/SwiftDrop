@@ -1,6 +1,5 @@
 package com.swiftdrop.delivery.domain;
 
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -73,20 +72,6 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);
 
     Page<Parcel> findByMerchantIdAndStatus(UUID merchantId, ParcelStatus status, Pageable pageable);
-
-    /**
-     * A courier's deliveries for the day (COU-2, D-09): every unfinished parcel assigned to them, plus
-     * the ones they finished since {@code since}. A finished parcel's {@code updatedAt} is the time of
-     * its final status.
-     */
-    @Query("""
-            SELECT p FROM Parcel p
-            WHERE p.assignedCourierId = :courierId
-              AND (p.status NOT IN :terminal OR p.updatedAt >= :since)
-            ORDER BY p.assignedAt ASC
-            """)
-    List<Parcel> findCourierDay(@Param("courierId") UUID courierId,
-            @Param("terminal") Collection<ParcelStatus> terminal, @Param("since") Instant since);
 
     /** Non-terminal parcels per assigned courier (ADM-2), as rows of {@code [courierId, count]}. */
     @Query("""

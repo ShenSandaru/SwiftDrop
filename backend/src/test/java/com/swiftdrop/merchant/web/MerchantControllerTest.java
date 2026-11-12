@@ -51,7 +51,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class})
 class MerchantControllerTest {
 
     @Autowired
@@ -258,14 +258,17 @@ class MerchantControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/merchants requires DISPATCHER_ADMIN")
+    @DisplayName("GET /api/v1/merchants requires ADMIN")
     void listMerchantsRequiresAdmin() throws Exception {
         when(approvalService.findMerchants(any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.dispatcherAdmin().postProcessor()))
+        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray());
+
+        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isForbidden());
 
         mvc.perform(get("/api/v1/merchants").with(TestPrincipal.merchant().postProcessor()))
                 .andExpect(status().isForbidden());
@@ -368,7 +371,7 @@ class MerchantControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/merchants/{id}/approval requires DISPATCHER_ADMIN")
+    @DisplayName("POST /api/v1/merchants/{id}/approval requires ADMIN")
     void approvalRequiresAdmin() throws Exception {
         UUID merchantId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
@@ -385,11 +388,17 @@ class MerchantControllerTest {
                 """;
 
         mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
-                        .with(TestPrincipal.dispatcherAdmin(adminId).postProcessor())
+                        .with(TestPrincipal.admin(adminId).postProcessor())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
+
+        mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
+                        .with(TestPrincipal.dispatcher().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
                         .with(TestPrincipal.merchant().postProcessor())

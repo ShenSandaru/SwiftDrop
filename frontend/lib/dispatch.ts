@@ -1,8 +1,19 @@
-import { api, type PageResponse, type UserResponse } from "@/lib/api";
-import type { ParcelDetail, ParcelStatus, ParcelSize } from "@/lib/delivery";
+import { api, type PageResponse } from "@/lib/api";
+import type { FailureReason, ParcelDetail, ParcelStatus, ParcelSize } from "@/lib/delivery";
 
-export type DispatchAssignmentType = "PICKUP" | "DELIVERY";
-export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED";
+export type DispatchAssignmentType = "PICKUP" | "DELIVERY" | "RETURN";
+export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "CANCELLED";
+
+/** What a dispatcher may do next with a parcel; the backend works it out (ADR 0009). */
+export type DispatchAction =
+  | "ASSIGN_PICKUP"
+  | "CANCEL"
+  | "SCAN_AT_HUB"
+  | "SEND_TO_NEXT_HUB"
+  | "ASSIGN_DELIVERY"
+  | "START_RETURN"
+  | "ASSIGN_RETURN"
+  | "MARK_FAILED";
 
 export interface DispatchParcelItem {
   id: string;
@@ -17,6 +28,19 @@ export interface DispatchParcelItem {
   dropoffCity: string;
   createdAt: string;
   updatedAt: string;
+  /** Route hubs (ADR 0009); null before pickup and for parcels picked up before the hub network. */
+  originHubCode: string | null;
+  /** The central hub when the route passes through it. */
+  viaHubCode: string | null;
+  destinationHubCode: string | null;
+  currentHubCode: string | null;
+  nextHubCode: string | null;
+  /** The hub to scan the parcel in at next, when SCAN_AT_HUB is offered. */
+  expectedHubId: string | null;
+  expectedHubCode: string | null;
+  deliveryAttempts: number;
+  lastFailureReason: FailureReason | null;
+  actions: DispatchAction[];
 }
 
 export interface DispatchAssignment {
@@ -33,6 +57,11 @@ export interface DispatchAssignment {
 export interface DispatchAssignmentHistory {
   parcelId: string;
   assignments: DispatchAssignment[];
+}
+
+export interface DispatchCourier {
+  id: string;
+  fullName: string;
 }
 
 export interface DispatchParcelPageRequest {
@@ -73,33 +102,12 @@ export async function countDispatchParcels(status?: ParcelStatus): Promise<numbe
   return page.totalItems;
 }
 
-export function listDispatchCouriers(page: number, size: number): Promise<PageResponse<UserResponse>> {
-  const query = new URLSearchParams({ page: String(page), size: String(size), role: "COURIER" });
-  return api.get<PageResponse<UserResponse>>(`/api/v1/users?${query.toString()}`);
+export function listDispatchCouriers(): Promise<DispatchCourier[]> {
+  return api.get<DispatchCourier[]>("/api/v1/dispatch/couriers");
 }
 
-export async function listAllDispatchCouriers(): Promise<UserResponse[]> {
-  const firstPage = await listDispatchCouriers(0, 100);
-  if (firstPage.totalPages < 2) {
-    return firstPage.items;
-  }
-
-  const remaining = await Promise.all(
-    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      listDispatchCouriers(index + 1, 100),
-    ),
-  );
-  return [...firstPage.items, ...remaining.flatMap((page) => page.items)];
-}
-
-export function listAwaitingDeliveryAssignments(
-  page: number,
-  size: number,
-): Promise<PageResponse<DispatchParcelItem>> {
-  const query = new URLSearchParams({ page: String(page), size: String(size) });
-  return api.get<PageResponse<DispatchParcelItem>>(
-    `/api/v1/dispatch/awaiting-delivery-assignments?${query.toString()}`,
-  );
+export async function listAllDispatchCouriers(): Promise<DispatchCourier[]> {
+  return listDispatchCouriers();
 }
 
 export function listActiveDispatchAssignments(
@@ -153,4 +161,26 @@ export function getDispatchAssignmentHistory(id: string): Promise<DispatchAssign
 
 export function getDispatchParcelDetails(id: string): Promise<ParcelDetail> {
   return api.get<ParcelDetail>(`/api/v1/parcels/${encodeURIComponent(id)}`);
+}
+
+// ---- Hub network steps (ADR 0009 §3); each answers 204, or 409 when the rules do not allow it ----
+
+export function scanParcelAtHub(parcelId: string, hubId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-scans`, { hubId });
+}
+
+export function sendParcelToNextHub(parcelId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/transit`);
+}
+
+export function startParcelReturn(parcelId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/return`);
+}
+
+export function markParcelFailed(parcelId: string, reason: FailureReason, note?: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/failure`, { reason, note });
+}
+
+export function cancelDispatchParcel(parcelId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/cancellation`);
 }

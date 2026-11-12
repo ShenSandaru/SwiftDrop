@@ -92,7 +92,7 @@ public class MerchantController {
      * Lists merchant applications for administrators (optionally filtered by status, e.g. PENDING).
      */
     @GetMapping
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<MerchantStatusResponse> listMerchants(
             @RequestParam(required = false) MerchantStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -130,7 +130,7 @@ public class MerchantController {
      * Backward-compatible endpoint for existing approval actions (Phase 2 review modal).
      */
     @PostMapping("/{merchantId}/approval")
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public MerchantStatusResponse reviewApplication(
             @PathVariable UUID merchantId,
             @Valid @RequestBody MerchantApprovalRequest request,

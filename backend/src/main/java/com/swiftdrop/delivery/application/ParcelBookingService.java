@@ -20,8 +20,9 @@ import com.swiftdrop.pricing.api.FeeQuote;
 
 /**
  * Creates parcels for customers (CUS-2) and merchants (MER-2) with the same rules: validated
- * addresses, a fee recalculated by pricing (never taken from the client), a fresh tracking number,
- * and the {@code CREATED} history entry and outbox event in the same transaction.
+ * addresses, both zones served by a hub (ADR 0009 §1), a fee recalculated by pricing (never taken
+ * from the client), a fresh tracking number, and the {@code CREATED} history entry and outbox event
+ * in the same transaction.
  */
 @Service
 public class ParcelBookingService {
@@ -30,20 +31,22 @@ public class ParcelBookingService {
 
     private final ParcelRepository parcels;
     private final FeeCalculator feeCalculator;
+    private final HubNetwork hubNetwork;
     private final TrackingNumberGenerator trackingNumbers;
     private final ParcelEventRecorder recorder;
     private final Clock clock;
 
     @Autowired
-    public ParcelBookingService(ParcelRepository parcels, FeeCalculator feeCalculator,
+    public ParcelBookingService(ParcelRepository parcels, FeeCalculator feeCalculator, HubNetwork hubNetwork,
             TrackingNumberGenerator trackingNumbers, ParcelEventRecorder recorder) {
-        this(parcels, feeCalculator, trackingNumbers, recorder, Clock.systemUTC());
+        this(parcels, feeCalculator, hubNetwork, trackingNumbers, recorder, Clock.systemUTC());
     }
 
-    ParcelBookingService(ParcelRepository parcels, FeeCalculator feeCalculator, TrackingNumberGenerator trackingNumbers,
-            ParcelEventRecorder recorder, Clock clock) {
+    ParcelBookingService(ParcelRepository parcels, FeeCalculator feeCalculator, HubNetwork hubNetwork,
+            TrackingNumberGenerator trackingNumbers, ParcelEventRecorder recorder, Clock clock) {
         this.parcels = parcels;
         this.feeCalculator = feeCalculator;
+        this.hubNetwork = hubNetwork;
         this.trackingNumbers = trackingNumbers;
         this.recorder = recorder;
         this.clock = clock;
@@ -53,6 +56,7 @@ public class ParcelBookingService {
      * Books a delivery for a customer, who becomes its owner.
      *
      * @throws IllegalArgumentException if the booking is invalid
+     * @throws com.swiftdrop.delivery.api.ParcelConflictException if a zone is not served by a hub
      */
     @Transactional
     public Parcel bookForCustomer(UUID customerId, Booking booking) {
@@ -69,6 +73,7 @@ public class ParcelBookingService {
      * reference; {@link MerchantParcelCreation} does, and the unique constraint catches races.
      *
      * @throws IllegalArgumentException if the order is invalid
+     * @throws com.swiftdrop.delivery.api.ParcelConflictException if a zone is not served by a hub
      * @throws org.springframework.dao.DataIntegrityViolationException if the order reference exists
      */
     @Transactional
@@ -104,7 +109,9 @@ public class ParcelBookingService {
                 contact.city(), contact.zoneId(), contact.postalCode());
     }
 
+    /** Hubs before pricing: a route the network cannot carry needs no fee. */
     private Parcel.Fee fee(Checked checked, Booking booking) {
+        hubNetwork.requireServed(checked.pickup().getZoneId(), checked.dropoff().getZoneId());
         FeeQuote quote = feeCalculator.calculateFee(checked.pickup().getZoneId(), checked.dropoff().getZoneId(),
                 booking.size(), booking.weightGrams());
         return new Parcel.Fee(quote.totalFee(), quote.currency(), quote.pricingRuleId());

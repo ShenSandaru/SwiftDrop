@@ -53,12 +53,12 @@ class AccountServiceTest {
     }
 
     @Test
-    void bootstrapAdminCreatesDispatcherAdminUser() {
+    void bootstrapAdminCreatesAdminUser() {
         User user = service.bootstrapAdmin(" Admin@Example.COM ", "secret-admin-pass");
 
         assertThat(user.getEmail()).isEqualTo("admin@example.com");
         assertThat(user.getFullName()).isEqualTo("System Administrator");
-        assertThat(user.getRoles()).containsExactly(Role.DISPATCHER_ADMIN);
+        assertThat(user.getRoles()).containsExactly(Role.ADMIN);
         assertThat(user.getPasswordHash()).doesNotContain("secret-admin-pass").startsWith("{bcrypt}");
         assertThat(encoder.matches("secret-admin-pass", user.getPasswordHash())).isTrue();
         verify(users).findByEmail("admin@example.com");
@@ -229,23 +229,27 @@ class AccountServiceTest {
     }
 
     @Test
-    void registerStaffAllowsCourierAndDispatcherAdmin() {
+    void registerStaffAllowsCourierAndDispatcher() {
         User courier = service.registerStaff("Courier Bob", "courier@example.com", "password123", Role.COURIER);
         assertThat(courier.getRoles()).containsExactly(Role.COURIER);
 
-        User admin = service.registerStaff("Admin Dave", "admin2@example.com", "password123", Role.DISPATCHER_ADMIN);
-        assertThat(admin.getRoles()).containsExactly(Role.DISPATCHER_ADMIN);
+        User dispatcher = service.registerStaff("Dispatcher Dave", "disp2@example.com", "password123", Role.DISPATCHER);
+        assertThat(dispatcher.getRoles()).containsExactly(Role.DISPATCHER);
     }
 
     @Test
-    void registerStaffRejectsCustomerAndMerchantRoles() {
+    void registerStaffRejectsCustomerMerchantAndAdminRoles() {
         assertThatThrownBy(() -> service.registerStaff("Cust", "cust@example.com", "password123", Role.CUSTOMER))
                 .isInstanceOf(InvalidRoleException.class)
-                .hasMessage("Staff account role must be COURIER or DISPATCHER_ADMIN");
+                .hasMessage("Staff account role must be COURIER or DISPATCHER");
 
         assertThatThrownBy(() -> service.registerStaff("Merch", "merch@example.com", "password123", Role.MERCHANT))
                 .isInstanceOf(InvalidRoleException.class)
-                .hasMessage("Staff account role must be COURIER or DISPATCHER_ADMIN");
+                .hasMessage("Staff account role must be COURIER or DISPATCHER");
+
+        assertThatThrownBy(() -> service.registerStaff("Admin", "admin@example.com", "password123", Role.ADMIN))
+                .isInstanceOf(InvalidRoleException.class)
+                .hasMessage("Staff account role must be COURIER or DISPATCHER");
     }
 
     @Test
@@ -264,17 +268,23 @@ class AccountServiceTest {
     }
 
     @Test
-    void updateUserStatusRejectsAdminDisablingThemself() {
+    void updateUserStatusRejectsAdminDisablingThemselfOrAdminAccount() {
         UUID adminId = UUID.randomUUID();
-        User adminUser = withId(new User("admin@example.com", "hash", "Admin", Set.of(Role.DISPATCHER_ADMIN)));
+        User adminUser = withId(new User("admin@example.com", "hash", "Admin", Set.of(Role.ADMIN)));
         ReflectionTestUtils.setField(adminUser, "id", adminId);
 
         assertThatThrownBy(() -> service.updateUserStatus(adminId, false, adminId))
                 .isInstanceOf(SelfDisablingException.class)
                 .hasMessage("An administrator cannot disable their own account");
 
-        // Enabling oneself or keeping enabled is permitted
+        // Reject disabling an Admin account even by another ID
+        UUID anotherCallerId = UUID.randomUUID();
         when(users.findById(adminId)).thenReturn(Optional.of(adminUser));
+        assertThatThrownBy(() -> service.updateUserStatus(adminId, false, anotherCallerId))
+                .isInstanceOf(SelfDisablingException.class)
+                .hasMessage("The system Administrator account cannot be disabled");
+
+        // Enabling oneself or keeping enabled is permitted
         User result = service.updateUserStatus(adminId, true, adminId);
         assertThat(result.isEnabled()).isTrue();
     }
@@ -303,6 +313,20 @@ class AccountServiceTest {
         org.springframework.data.domain.Page<User> courierPage = service.findUsers(0, 20, Role.COURIER);
         assertThat(courierPage.getContent()).hasSize(1);
         verify(users).findByRole(any(Role.class), any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void findEnabledCouriersReturnsOnlyActiveCouriers() {
+        User courier = withId(new User("courier@example.com", "hash", "Kasun Perera", Set.of(Role.COURIER)));
+        when(users.findByRoleAndEnabledTrue(Role.COURIER)).thenReturn(List.of(courier));
+
+        List<UserSummary> result = service.findEnabledCouriers();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().fullName()).isEqualTo("Kasun Perera");
+        assertThat(result.getFirst().roles()).containsExactly("COURIER");
+        assertThat(result.getFirst().enabled()).isTrue();
+        verify(users).findByRoleAndEnabledTrue(Role.COURIER);
     }
 
     private static User existing(String passwordHash) {

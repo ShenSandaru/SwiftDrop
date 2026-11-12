@@ -180,7 +180,7 @@ public class LiveTracking {
     }
 
     private static boolean isFinal(ParcelStatus status) {
-        return status == ParcelStatus.DELIVERED || status == ParcelStatus.FAILED;
+        return status.isFinal();
     }
 
     @PreDestroy

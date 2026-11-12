@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, MapPinned, PackageSearch, Search, XCircle } from "lucide-react";
+import { JourneyNotice, attemptsIn, lastHubName } from "@/components/delivery/journey-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RouteHeading } from "@/components/delivery/route-heading";
@@ -14,7 +15,7 @@ import { useLiveTracking, type LiveConnection } from "@/lib/use-live-tracking";
 
 /**
  * Public parcel tracking (CUS-6): anyone with a tracking number, no login. Shows only what the
- * public API returns (status, cities, times) and updates live over SSE (ADR 0007).
+ * public API returns (status, cities, hub names, attempts, times) and updates live over SSE (ADR 0007).
  */
 export default function TrackPage() {
   return (
@@ -132,6 +133,7 @@ function Result({ code, connection, view }: {
           </div>
         </div>
         <RouteProgress status={view.status} history={view.history} live={connection === "live"} />
+        <JourneyNotice status={view.status} attempts={attemptsIn(view.history)} hubName={lastHubName(view.history)} />
       </section>
 
       {view.status === "DELIVERED" && last && (
