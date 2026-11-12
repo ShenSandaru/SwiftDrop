@@ -59,7 +59,7 @@ class UserController {
     /** Staff account creation by an administrator (compatibility endpoint). Creates a courier account. */
     @PostMapping("/staff")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     UserResponse createStaff(@Valid @RequestBody RegisterUserRequest request) {
         return UserResponse.from(
                 accounts.registerCourier(request.fullName(), request.email(), request.password()));
@@ -70,7 +70,7 @@ class UserController {
      * When page, size, and role are omitted, returns an unpaged list for backwards compatibility.
      */
     @GetMapping
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     ResponseEntity<?> listUsers(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -101,7 +101,7 @@ class UserController {
      * An administrator cannot disable their own account.
      */
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     UserResponse updateUserStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserStatusRequest request,

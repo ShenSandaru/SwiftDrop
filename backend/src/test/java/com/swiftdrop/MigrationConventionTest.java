@@ -133,6 +133,22 @@ class MigrationConventionTest {
                                 "delivery create parcel outbox events",
                                 "delivery/V202611031030__delivery_create_parcel_outbox_events.sql"),
                         tuple(
+                                "202611041000",
+                                "merchant create merchants",
+                                "merchant/V202611041000__merchant_create_merchants.sql"),
+                        tuple(
+                                "202611041010",
+                                "merchant create merchant status history",
+                                "merchant/V202611041010__merchant_create_merchant_status_history.sql"),
+                        tuple(
+                                "202611041020",
+                                "merchant create merchant webhook endpoints",
+                                "merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql"),
+                        tuple(
+                                "202611041030",
+                                "merchant create merchant webhook endpoint events",
+                                "merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql"),
+                        tuple(
                                 "202611041200",
                                 "delivery add dispatch assignment history",
                                 "delivery/V202611041200__delivery_add_dispatch_assignment_history.sql"),
@@ -147,6 +163,22 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111330",
                                 "identity user avatar",
-                                "identity/V202611111330__identity_user_avatar.sql"));
+                                "identity/V202611111330__identity_user_avatar.sql"),
+                        tuple(
+                                "202611101200",
+                                "identity replace dispatcher admin with admin and dispatcher",
+                                "identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql"),
+                        tuple(
+                                "202611101210",
+                                "delivery update actor role for admin and dispatcher",
+                                "delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql"),
+                        tuple(
+                                "202611111000",
+                                "delivery create hubs",
+                                "delivery/V202611111000__delivery_create_hubs.sql"),
+                        tuple(
+                                "202611111010",
+                                "delivery add hub lifecycle",
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
     }
 }

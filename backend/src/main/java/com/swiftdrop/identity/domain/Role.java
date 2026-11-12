@@ -1,11 +1,14 @@
 package com.swiftdrop.identity.domain;
 
 /**
- * The roles of SYS-2. The names are stored in the {@code roles} table and must match it.
+ * System roles for authorization and access control.
+ * Exactly five active roles are stored in the {@code roles} table:
+ * {@link #ADMIN}, {@link #DISPATCHER}, {@link #COURIER}, {@link #MERCHANT}, {@link #CUSTOMER}.
  */
 public enum Role {
     CUSTOMER,
     MERCHANT,
     COURIER,
-    DISPATCHER_ADMIN
+    DISPATCHER,
+    ADMIN
 }

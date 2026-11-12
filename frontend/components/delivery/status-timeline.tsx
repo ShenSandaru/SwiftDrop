@@ -1,33 +1,40 @@
-import { Check, Circle, X } from "lucide-react";
+import { Check, Circle, RotateCcw, X } from "lucide-react";
 import { cn } from "cn";
 import type { FailureReason, ParcelStatus } from "@/lib/delivery";
 import { FAILURE_REASON_LABELS, STATUS_LABELS, formatDateTime } from "./format";
+import { STAGES, furthestStage, isProblem, journeyEnd } from "./journey";
 
 export interface TimelineEntry {
   status: ParcelStatus;
   occurredAt: string;
   failureReason?: FailureReason | null;
   note?: string | null;
+  /** The hub of a hub step (ADR 0009), shown after the status. */
+  hubName?: string | null;
+  /** The delivery attempt of the step. */
+  attempt?: number | null;
 }
 
-const NORMAL_PATH: ParcelStatus[] = ["CREATED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"];
-
 /**
- * The parcel's journey: completed steps with their times, then the steps still ahead (greyed). A
- * failed parcel ends at the failure, with its reason.
+ * The parcel's journey: every step with its time, hub and attempt, then the stages still ahead
+ * (greyed). A cancelled or failed parcel ends at that step with its reason; a parcel on its way
+ * back has only the return ahead.
  */
 export function StatusTimeline({ entries }: { entries: TimelineEntry[] }) {
-  const failed = entries.some((entry) => entry.status === "FAILED");
-  const reached = new Set(entries.map((entry) => entry.status));
-  const upcoming = failed ? [] : NORMAL_PATH.filter((status) => !reached.has(status));
+  const last = entries.at(-1)?.status;
+  const end = last ? journeyEnd(last) : null;
+  const upcoming: ParcelStatus[] = end
+    ? last === "RETURNING" ? ["RETURNED"] : []
+    : STAGES.slice(furthestStage(entries) + 1);
 
   return (
     <ol className="space-y-0" aria-label="Delivery progress">
       {entries.map((entry, index) => {
-        const isFailure = entry.status === "FAILED";
+        const isFailure = isProblem(entry.status);
+        const isReturn = entry.status === "RETURNING" || entry.status === "RETURNED";
         const isLast = index === entries.length - 1 && upcoming.length === 0;
         return (
-          <li key={`${entry.status}-${entry.occurredAt}`} className="relative flex gap-3 pb-5 last:pb-0">
+          <li key={index} className="relative flex gap-3 pb-5 last:pb-0">
             {!isLast && <span className="absolute left-[11px] top-6 h-full w-px bg-primary/40" aria-hidden="true" />}
             <span
               className={cn(
@@ -35,11 +42,15 @@ export function StatusTimeline({ entries }: { entries: TimelineEntry[] }) {
                 isFailure ? "bg-destructive text-white" : "bg-primary text-primary-foreground",
               )}
             >
-              {isFailure ? <X className="size-3.5" aria-hidden="true" /> : <Check className="size-3.5" aria-hidden="true" />}
+              {isFailure ? <X className="size-3.5" aria-hidden="true" />
+                : isReturn ? <RotateCcw className="size-3" aria-hidden="true" />
+                  : <Check className="size-3.5" aria-hidden="true" />}
             </span>
             <div className="min-w-0 space-y-0.5">
               <p className={cn("text-sm font-semibold", isFailure ? "text-destructive" : "text-foreground")}>
                 {STATUS_LABELS[entry.status]}
+                {entry.hubName && <span className="font-normal text-muted-foreground"> · {entry.hubName}</span>}
+                {entry.attempt && <span className="font-normal text-muted-foreground"> · attempt {entry.attempt}</span>}
               </p>
               <p className="text-xs text-muted-foreground">{formatDateTime(entry.occurredAt)}</p>
               {entry.failureReason && (
