@@ -1,17 +1,22 @@
 package com.swiftdrop.pricing.web;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -83,6 +88,169 @@ class ZoneApiTest {
     @Test
     void anonymousCallerIsRejected() throws Exception {
         mvc.perform(get("/api/v1/zones")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminCanListAllZonesIncludingInactive() throws Exception {
+        Zone activeZone = zone("CMB", "Colombo");
+        Zone inactiveZone = zone("JFN", "Jaffna");
+        inactiveZone.setActive(false);
+        when(zones.findAllByOrderByNameAsc()).thenReturn(List.of(activeZone, inactiveZone));
+
+        mvc.perform(get("/api/v1/zones?all=true").with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("CMB"))
+                .andExpect(jsonPath("$[0].active").value(true))
+                .andExpect(jsonPath("$[1].code").value("JFN"))
+                .andExpect(jsonPath("$[1].active").value(false));
+    }
+
+    @Test
+    void nonAdminCannotListAllZones() throws Exception {
+        mvc.perform(get("/api/v1/zones?all=true").with(TestPrincipal.customer().postProcessor()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanCreateZone() throws Exception {
+        when(zones.existsByCodeIgnoreCase("GAL")).thenReturn(false);
+        when(zones.existsByNameIgnoreCase("Galle")).thenReturn(false);
+        when(zones.saveAndFlush(any(Zone.class))).thenAnswer(inv -> {
+            Zone z = inv.getArgument(0);
+            ReflectionTestUtils.setField(z, "id", UUID.randomUUID());
+            return z;
+        });
+
+        String payload = """
+                {
+                    "code": "GAL",
+                    "name": "Galle"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/zones")
+                        .with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("GAL"))
+                .andExpect(jsonPath("$.name").value("Galle"))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    @Test
+    void duplicateCodeReturns409() throws Exception {
+        when(zones.existsByCodeIgnoreCase("CMB")).thenReturn(true);
+
+        String payload = """
+                {
+                    "code": "CMB",
+                    "name": "Another Colombo"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/zones")
+                        .with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("A zone with code 'CMB' already exists"));
+    }
+
+    @Test
+    void duplicateNameReturns409() throws Exception {
+        when(zones.existsByCodeIgnoreCase("CMB2")).thenReturn(false);
+        when(zones.existsByNameIgnoreCase("Colombo")).thenReturn(true);
+
+        String payload = """
+                {
+                    "code": "CMB2",
+                    "name": "Colombo"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/zones")
+                        .with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("A zone with name 'Colombo' already exists"));
+    }
+
+    @Test
+    void adminCanUpdateZone() throws Exception {
+        UUID id = UUID.randomUUID();
+        Zone existing = zone("CMB", "Colombo");
+        ReflectionTestUtils.setField(existing, "id", id);
+        ReflectionTestUtils.setField(existing, "version", 0L);
+
+        when(zones.findById(id)).thenReturn(Optional.of(existing));
+        when(zones.saveAndFlush(any(Zone.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String payload = """
+                {
+                    "code": "CMB",
+                    "name": "Greater Colombo",
+                    "active": false,
+                    "version": 0
+                }
+                """;
+
+        mvc.perform(put("/api/v1/zones/" + id)
+                        .with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Greater Colombo"))
+                .andExpect(jsonPath("$.active").value(false));
+    }
+
+    @Test
+    void versionConflictReturns409() throws Exception {
+        UUID id = UUID.randomUUID();
+        Zone existing = zone("CMB", "Colombo");
+        ReflectionTestUtils.setField(existing, "id", id);
+        ReflectionTestUtils.setField(existing, "version", 2L);
+
+        when(zones.findById(id)).thenReturn(Optional.of(existing));
+
+        String payload = """
+                {
+                    "code": "CMB",
+                    "name": "Greater Colombo",
+                    "active": true,
+                    "version": 1
+                }
+                """;
+
+        mvc.perform(put("/api/v1/zones/" + id)
+                        .with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Zone has been modified by another transaction. Please reload."));
+    }
+
+    @Test
+    void nonAdminCannotCreateOrUpdate() throws Exception {
+        String payload = """
+                {
+                    "code": "GAL",
+                    "name": "Galle"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/zones")
+                        .with(TestPrincipal.customer().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/v1/zones/" + UUID.randomUUID())
+                        .with(TestPrincipal.courier().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
     }
 
     private static Zone zone(String code, String name) {
