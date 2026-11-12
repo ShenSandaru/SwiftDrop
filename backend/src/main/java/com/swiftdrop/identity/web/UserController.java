@@ -158,6 +158,16 @@ class UserController {
         return UserResponse.from(updated);
     }
 
+    /** Retrieves the authenticated user's avatar image. */
+    @GetMapping("/me/avatar")
+    ResponseEntity<byte[]> getMyAvatar(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in required");
+        }
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        return getAvatar(currentUserId);
+    }
+
     /** Retrieves a user's avatar image, cached for 1 hour. */
     @GetMapping("/{id}/avatar")
     ResponseEntity<byte[]> getAvatar(@PathVariable UUID id) {
