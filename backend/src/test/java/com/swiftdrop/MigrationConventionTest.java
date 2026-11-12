@@ -157,6 +157,10 @@ class MigrationConventionTest {
                                 "delivery add parcel assignment version",
                                 "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"),
                         tuple(
+                                "202611081000",
+                                "merchant create merchant api keys",
+                                "merchant/V202611081000__merchant_create_merchant_api_keys.sql"),
+                        tuple(
                                 "202611101200",
                                 "identity replace dispatcher admin with admin and dispatcher",
                                 "identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql"),

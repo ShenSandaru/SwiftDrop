@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +27,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.merchant.api.MerchantStatus;
 import com.swiftdrop.merchant.domain.Merchant;
+import com.swiftdrop.merchant.domain.MerchantApiKey;
+import com.swiftdrop.merchant.domain.MerchantApiKeyRepository;
 import com.swiftdrop.merchant.domain.MerchantRepository;
 import com.swiftdrop.merchant.domain.MerchantStatusHistory;
 import com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository;
@@ -82,6 +85,9 @@ class DatabaseMigrationIT {
     @Autowired
     private MerchantWebhookEndpointRepository merchantWebhookEndpointRepository;
 
+    @Autowired
+    private MerchantApiKeyRepository merchantApiKeyRepository;
+
     // Delivery's booking needs pricing, which may not be on the classpath yet
     @MockitoBean
     private FeeCalculator feeCalculator;
@@ -96,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(18);
+        assertThat(rows).hasSize(19);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -142,22 +148,23 @@ class DatabaseMigrationIT {
                         tuple("merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql", true),
                         tuple("merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql", true));
 
-        assertThat(rows.subList(12, 14))
+        assertThat(rows.subList(12, 15))
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
-                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true));
+                        tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true),
+                        tuple("merchant/V202611081000__merchant_create_merchant_api_keys.sql", true));
 
-        assertThat(rows.subList(14, 16))
+        assertThat(rows.subList(15, 17))
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql", true),
                         tuple("delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql", true));
 
-        assertThat(rows.get(16))
+        assertThat(rows.get(17))
                 .containsEntry("script", "delivery/V202611111000__delivery_create_hubs.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(17))
+        assertThat(rows.get(18))
                 .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
                 .containsEntry("success", true);
 
@@ -192,6 +199,9 @@ class DatabaseMigrationIT {
 
         Integer endpointEventsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_webhook_endpoint_events", Integer.class);
         assertThat(endpointEventsCount).isNotNull();
+
+        Integer apiKeysCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM merchant_api_keys", Integer.class);
+        assertThat(apiKeysCount).isNotNull().isEqualTo(0);
 
         // Assert Hibernate EntityManager is active and connected
         assertThat(entityManager.isOpen()).isTrue();
@@ -415,5 +425,54 @@ class DatabaseMigrationIT {
         List<MerchantWebhookEndpoint> afterDelete = merchantWebhookEndpointRepository
                 .findActiveForMerchantAndEvent(merchant.getId(), ParcelStatus.CREATED);
         assertThat(afterDelete).isEmpty();
+    }
+
+    @Test
+    @DisplayName("MerchantApiKey persists prefix and hash only, enforces a unique prefix and throttles last_used_at")
+    void merchantApiKeyPersistence() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                userId, "merchant" + userId + "@example.com", "hash", "Merchant User", true);
+        Merchant merchant = merchantRepository.saveAndFlush(new Merchant(
+                userId, "Key Store", "Retail", "REG-KEY-" + userId, "+94771234567", "Key Way", null, null));
+
+        String prefix = "k" + UUID.randomUUID().toString().replace("-", "").substring(0, 11);
+        String hash = "a".repeat(64);
+        Instant created = Instant.parse("2026-11-08T10:00:00Z");
+        MerchantApiKey saved = merchantApiKeyRepository.saveAndFlush(
+                new MerchantApiKey(merchant.getId(), prefix, hash, "  Production  ", userId, created));
+
+        assertThat(merchantApiKeyRepository.findByKeyPrefix(prefix)).get()
+                .satisfies(key -> {
+                    assertThat(key.getId()).isEqualTo(saved.getId());
+                    assertThat(key.getKeyHash()).isEqualTo(hash);
+                    assertThat(key.getLabel()).isEqualTo("Production");
+                    assertThat(key.isActive()).isTrue();
+                });
+        assertThat(merchantApiKeyRepository.countByMerchantIdAndRevokedAtIsNull(merchant.getId())).isEqualTo(1);
+
+        // last_used_at is written once, then not again within the interval
+        Instant firstUse = created.plusSeconds(60);
+        assertThat(merchantApiKeyRepository.recordUse(saved.getId(), firstUse, firstUse.minusSeconds(60))).isEqualTo(1);
+        Instant soonAfter = firstUse.plusSeconds(30);
+        assertThat(merchantApiKeyRepository.recordUse(saved.getId(), soonAfter, soonAfter.minusSeconds(60))).isZero();
+        Instant later = firstUse.plusSeconds(61);
+        assertThat(merchantApiKeyRepository.recordUse(saved.getId(), later, later.minusSeconds(60))).isEqualTo(1);
+
+        // The prefix is unique, and the database rejects malformed prefixes and hashes
+        assertThatThrownBy(() -> merchantApiKeyRepository.saveAndFlush(
+                new MerchantApiKey(merchant.getId(), prefix, "b".repeat(64), "Copy", userId, created)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO merchant_api_keys (id, merchant_id, key_prefix, key_hash, label, created_by_user_id, created_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                UUID.randomUUID(), merchant.getId(), "UPPERCASE123", "c".repeat(64), "Bad", userId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO merchant_api_keys (id, merchant_id, key_prefix, key_hash, label, created_by_user_id, created_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, NOW())",
+                UUID.randomUUID(), merchant.getId(), "abcdefabcdef", "not-a-hash", "Bad", userId))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

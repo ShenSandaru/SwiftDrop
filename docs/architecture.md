@@ -375,11 +375,20 @@ tracking     → delivery
 - **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
   application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
   security filter chain.
+- **Decided ([ADR 0008](adr/0008-merchant-api-key-authentication.md), Accepted):** merchant systems
+  use API keys `sdk_<prefix>_<secret>` in `X-Api-Key`, stored as SHA-256 and checked in constant
+  time, with the merchant `APPROVED` on every request; no OAuth client credentials (resolves D-03).
+- **Implemented (SD-403, SD-404):** table `merchant_api_keys`; an approved merchant creates (full key
+  shown once, `Cache-Control: no-store`), lists and revokes keys at `/api/v1/merchants/me/api-keys`,
+  at most 5 active. `config` has a second, stateless filter chain for `/api/v1/merchant-orders/**`
+  that accepts only `X-Api-Key` through `merchant.api.MerchantAuthentication` and answers every
+  failure with the same `401` (`WWW-Authenticate: ApiKey`); its principal
+  (`AuthenticatedMerchant`) carries only the merchant and key IDs with the authority
+  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute. The order endpoints
+  themselves (SD-405) are not implemented yet. Webhook signing is decided in
+  [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
-  - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
-    (needs an authorization server); key format and rotation. Webhook signing is decided in
-    [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
   - How courier and dispatcher/admin accounts are created.
 
 ## 10. Security and personal data

@@ -66,7 +66,8 @@ import static org.mockito.Mockito.when;
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class
 })
 class IdentityAuthorizationMatrixTest {
 
