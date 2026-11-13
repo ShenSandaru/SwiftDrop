@@ -14,6 +14,7 @@ import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFacto
 import org.springframework.amqp.rabbit.config.StatelessRetryOperationsInterceptor;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.CannotAcquireLockException;
@@ -30,6 +31,7 @@ import com.swiftdrop.notification.application.EventParsingException;
  * stateless retry backoff, and DLQ recovery.
  */
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(name = "swiftdrop.notification.consumer.enabled", havingValue = "true", matchIfMissing = true)
 public class NotificationAmqpConfiguration {
 
     public static final String NOTIFICATION_QUEUE = "notification.parcel-status-changed";

@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ import com.swiftdrop.notification.domain.NotificationRecordRepository;
  * and recipient-aware in-app notification creation via {@link NotificationTemplateResolver}.
  */
 @Service
+@ConditionalOnProperty(name = "swiftdrop.notification.consumer.enabled", havingValue = "true", matchIfMissing = true)
 public class NotificationEventProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventProcessor.class);

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
@@ -19,6 +20,7 @@ import com.swiftdrop.notification.infrastructure.NotificationAmqpConfiguration;
  * delegates transactional domain processing to {@link NotificationEventProcessor}.
  */
 @Component
+@ConditionalOnProperty(name = "swiftdrop.notification.consumer.enabled", havingValue = "true", matchIfMissing = true)
 public class NotificationEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventListener.class);

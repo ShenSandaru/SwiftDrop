@@ -2,8 +2,8 @@ package com.swiftdrop.notification.infrastructure;
 
 import java.time.Clock;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,7 +18,7 @@ import com.swiftdrop.notification.application.NotificationReconciliationService;
  * On by default; {@code swiftdrop.notification.reconciliation.enabled=false} switches it off.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(name = "swiftdrop.notification.reconciliation.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnExpression("${swiftdrop.notification.consumer.enabled:true} and ${swiftdrop.notification.reconciliation.enabled:true}")
 @EnableScheduling
 @EnableConfigurationProperties(NotificationReconciliationProperties.class)
 public class NotificationReconciliationConfiguration {
