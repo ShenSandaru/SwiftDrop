@@ -173,6 +173,10 @@ class MigrationConventionTest {
                                 "delivery add hub lifecycle",
                                 "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
                         tuple(
+                                "202611131000",
+                                "notification create tables",
+                                "notification/V202611131000__notification_create_tables.sql"),
+                        tuple(
                                 "202611131900",
                                 "identity add phone number to users",
                                 "identity/V202611131900__identity_add_phone_number_to_users.sql"));
