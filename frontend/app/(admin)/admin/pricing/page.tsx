@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -9,6 +8,7 @@ import {
   Box,
   Calculator,
   CalendarDays,
+  Check,
   CheckCircle2,
   Coins,
   Compass,
@@ -18,13 +18,10 @@ import {
   MapPin,
   Package,
   RotateCcw,
-  Save,
   Scale,
   ShieldCheck,
   Sliders,
-  Sparkles,
   Truck,
-  Warehouse,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,7 +74,6 @@ export default function AdminPricingPage() {
   const [simSize, setSimSize] = useState<ParcelSize>("MEDIUM");
   const [simWeightGrams, setSimWeightGrams] = useState(1500);
   const [quote, setQuote] = useState<PriceQuote | null>(null);
-  const [simulating, setSimulating] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
 
   const today = useMemo(
@@ -289,7 +285,7 @@ export default function AdminPricingPage() {
 
   function handleResetConfig() {
     setConfigForm(DEFAULT_CONFIG_FORM);
-    setSuccess("Reset to recommended standard defaults. Click 'Save Tariff Parameters' to apply.");
+    setSuccess("Reset to recommended standard defaults. Click 'Save Tariff Rates' to apply.");
   }
 
   // Swap origin and destination in simulator
@@ -303,7 +299,6 @@ export default function AdminPricingPage() {
   async function handleSimulate(e: FormEvent) {
     e.preventDefault();
     if (!simPickup || !simDropoff) return;
-    setSimulating(true);
     setSimError(null);
     try {
       const result = await getQuote(simPickup, simDropoff, simSize, simWeightGrams);
@@ -311,8 +306,6 @@ export default function AdminPricingPage() {
     } catch (failure) {
       setSimError(formatApiError(failure));
       setQuote(null);
-    } finally {
-      setSimulating(false);
     }
   }
 
@@ -321,79 +314,99 @@ export default function AdminPricingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header - Control Tower Styling */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-              <Coins className="size-6 text-primary" />
-              Automated Pricing & Tariff Engine
-            </h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live distance engine
+      {/* Top Operations Header Bar */}
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 font-bold text-primary">
+              <Coins className="size-3.5" aria-hidden="true" />
+              Rate &amp; Pricing Control Tower
+            </span>
+            <span aria-hidden="true">&middot;</span>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="size-3.5" aria-hidden="true" />
+              <time suppressHydrationWarning>{today}</time>
+            </span>
+            <span aria-hidden="true">&middot;</span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              Automated Distance Engine
             </span>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Dynamic fair delivery pricing for Sri Lanka: 30 km local radius allowance, per-km line-haul, and island maximum ceiling.
+          <p className="text-sm text-muted-foreground">
+            Coordinate island-wide automated fair distance delivery pricing, local allowances, and extra distance tariffs.
           </p>
         </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 self-start sm:self-center">
+          <span className="relative flex size-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-mono text-[11px] text-muted-foreground">Live synced</span>
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-            <CalendarDays className="size-3.5" />
-            <span>{today}</span>
-          </div>
-          <Link href="/admin/hubs">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              <Warehouse className="size-3.5" />
-              Hubs & Service Zones
+      {/* Island Pricing & Tariff Hero Banner (Matches Hubs & Dispatch Control) */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary/95 to-primary/90 px-6 py-7 text-primary-foreground sm:px-8 sm:py-8 shadow-sm">
+        <svg
+          className="pointer-events-none absolute -right-12 -top-10 h-64 w-96 opacity-20"
+          viewBox="0 0 320 220"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M10 190 C 80 120, 120 200, 180 120 S 260 40, 310 20"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeDasharray="10 10"
+            strokeLinecap="round"
+          />
+          <circle cx="10" cy="190" r="7" fill="currentColor" />
+          <circle cx="180" cy="120" r="6" fill="currentColor" />
+          <circle cx="310" cy="20" r="8" fill="currentColor" />
+        </svg>
+        <div className="relative max-w-4xl space-y-3">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] opacity-85">
+            <Coins className="size-4" aria-hidden="true" /> Island-Wide Distance Tariff Command
+          </p>
+          <h2 className="text-2xl font-extrabold leading-tight sm:text-3xl">
+            Dynamic Distance Pricing &amp; Tariff Control
+          </h2>
+          <p className="text-sm opacity-90 sm:text-base leading-relaxed max-w-2xl">
+            All 25 districts across Sri Lanka calculate automatically based on physical road distance. Local deliveries under 30 km incur zero mileage surcharge, while cross-island deliveries are protected by a maximum delivery fee cap.
+          </p>
+          <div className="flex flex-wrap items-center gap-2.5 pt-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setTab("config")}
+              className={cn(
+                "rounded-full font-semibold transition-colors px-3.5",
+                tab === "config"
+                  ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90 shadow-xs"
+                  : "border border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20",
+              )}
+            >
+              <Sliders className="size-4 mr-1.5" /> Tariff Parameters
             </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Dispatch Hero Banner with Route Transit Graphic */}
-      <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-r from-teal-950/40 via-background to-teal-950/20 p-5 md:p-6 shadow-sm">
-        {/* Background Transit SVG Graphic */}
-        <div className="pointer-events-none absolute inset-0 opacity-15 overflow-hidden">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 800 200">
-            <path d="M 0 100 Q 200 20, 400 100 T 800 100" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="6 6" className="text-primary" />
-            <path d="M 0 140 Q 300 180, 600 60 T 800 120" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary/60" />
-            <circle cx="200" cy="60" r="5" className="fill-primary" />
-            <circle cx="400" cy="100" r="7" className="fill-primary" />
-            <circle cx="600" cy="60" r="5" className="fill-primary" />
-          </svg>
-        </div>
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary uppercase tracking-wider">
-                Automated Fair Formula
-              </span>
-              <span className="text-xs text-muted-foreground font-mono">
-                No manual route rules needed
-              </span>
-            </div>
-            <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
-              Universal Dynamic Distance Tariff Engine
-            </h2>
-            <p className="text-xs md:text-sm text-muted-foreground max-w-2xl">
-              All 25 districts across Sri Lanka calculate automatically based on physical road distance. Local deliveries under 30 km incur zero mileage surcharge, while cross-island deliveries are protected by a maximum delivery fee cap.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shrink-0">
-            <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3.5 py-2 text-xs font-mono text-primary shadow-sm">
-              <Zap className="size-4 shrink-0 text-primary" />
-              <span>
-                Model: {configForm.freeKmAllowance}km Base · LKR {configForm.ratePerKm}/km · Max LKR {configForm.maxCap} Cap
-              </span>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setTab("simulator")}
+              className={cn(
+                "rounded-full font-semibold transition-colors px-3.5",
+                tab === "simulator"
+                  ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90 shadow-xs"
+                  : "border border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20",
+              )}
+            >
+              <Calculator className="size-4 mr-1.5" /> Rate Simulator
+            </Button>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/30 bg-primary-foreground/10 px-3.5 py-1.5 text-xs font-medium text-primary-foreground whitespace-nowrap">
+              <Zap className="size-3.5" /> Model: {configForm.freeKmAllowance}km Base &middot; LKR {configForm.ratePerKm}/km &middot; Max LKR {configForm.maxCap} Cap
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Alerts */}
       {error && (
@@ -409,95 +422,119 @@ export default function AdminPricingPage() {
         </div>
       )}
 
-      {/* KPI Metric Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="rounded-xl border border-border/80 bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Local Base Rate</span>
-            <MapPin className="size-4 text-primary" />
+      {/* Quick Metrics Cards (matching Hubs & Dispatch Fleet Control) */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex h-full flex-col justify-between gap-3 rounded-lg border border-border bg-card p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted-foreground">Local base rate</p>
+              <p className="mt-1 font-mono text-xl font-bold text-foreground whitespace-nowrap sm:text-2xl">
+                LKR {parseFloat(configForm.standardBaseFee).toFixed(2)}
+              </p>
+            </div>
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
+              <MapPin className="size-4" aria-hidden="true" />
+            </span>
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            LKR {parseFloat(configForm.standardBaseFee).toFixed(2)}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Covers urban radius up to {configForm.freeKmAllowance} km
           </p>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Extra Line-Haul Rate</span>
-            <Truck className="size-4 text-primary" />
+        <div className="flex h-full flex-col justify-between gap-3 rounded-lg border border-border bg-card p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted-foreground">Extra distance rate</p>
+              <p className="mt-1 font-mono text-xl font-bold text-foreground whitespace-nowrap sm:text-2xl">
+                LKR {parseFloat(configForm.ratePerKm).toFixed(2)}
+                <span className="text-xs font-normal text-muted-foreground whitespace-nowrap"> / km</span>
+              </p>
+            </div>
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
+              <Truck className="size-4" aria-hidden="true" />
+            </span>
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            LKR {parseFloat(configForm.ratePerKm).toFixed(2)}
-            <span className="text-xs font-normal text-muted-foreground"> / km</span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Billable per km beyond {configForm.freeKmAllowance} km
           </p>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Island Maximum Cap</span>
-            <ShieldCheck className="size-4 text-emerald-500" />
+        <div className="flex h-full flex-col justify-between gap-3 rounded-lg border border-border bg-card p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted-foreground">Island maximum cap</p>
+              <p className="mt-1 font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap sm:text-2xl">
+                LKR {parseFloat(configForm.maxCap).toFixed(2)}
+              </p>
+            </div>
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="size-4" aria-hidden="true" />
+            </span>
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-            LKR {parseFloat(configForm.maxCap).toFixed(2)}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Guaranteed maximum delivery ceiling
           </p>
         </div>
 
-        <div className="rounded-xl border border-border/80 bg-card p-4 shadow-xs">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Base Weight Rate</span>
-            <Scale className="size-4 text-primary" />
+        <div className="flex h-full flex-col justify-between gap-3 rounded-lg border border-border bg-card p-4 shadow-2xs">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted-foreground">Base weight rate</p>
+              <p className="mt-1 font-mono text-xl font-bold text-foreground whitespace-nowrap sm:text-2xl">
+                LKR {parseFloat(configForm.perKgFee).toFixed(2)}
+                <span className="text-xs font-normal text-muted-foreground whitespace-nowrap"> / kg</span>
+              </p>
+            </div>
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
+              <Scale className="size-4" aria-hidden="true" />
+            </span>
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            LKR {parseFloat(configForm.perKgFee).toFixed(2)}
-            <span className="text-xs font-normal text-muted-foreground"> / kg</span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Every started kg (1.2 kg billed as 2 kg)
           </p>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-border">
+      {/* Section Header */}
+      <div className="space-y-1 pt-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+          DISTANCE TARIFF &amp; RATE MATRIX
+        </p>
+        <h3 className="text-xl font-bold tracking-tight text-foreground">
+          Tariff Configuration &amp; Interactive Simulator
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Manage dynamic distance pricing rules, adjust volumetric surcharges, and simulate quotes.
+        </p>
+      </div>
+
+      {/* Pill Tabs (matches Hubs tabs exactly) */}
+      <div className="flex items-center gap-2 border-b border-border pb-3">
         <button
           type="button"
           onClick={() => setTab("config")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors cursor-pointer",
+            "inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer",
             tab === "config"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
           )}
         >
-          <Sliders className="size-4" />
-          Tariff Parameters & Pricing Rules
+          <Sliders className="size-3.5" />
+          Tariff Parameters
         </button>
         <button
           type="button"
           onClick={() => setTab("simulator")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors cursor-pointer",
+            "inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer",
             tab === "simulator"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
           )}
         >
-          <Calculator className="size-4" />
-          Interactive Rate Simulator
-          {simDistanceResult && (
-            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] text-primary">
-              {simDistanceResult.distanceKm} km
-            </span>
-          )}
+          <Calculator className="size-3.5" />
+          Rate Simulator
         </button>
       </div>
 
@@ -506,141 +543,167 @@ export default function AdminPricingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Tariff Parameter Editor */}
           <div className="lg:col-span-7 space-y-6">
-            <form onSubmit={handleSaveConfig} className="rounded-xl border border-border/80 bg-card p-5 md:p-6 shadow-xs space-y-6">
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <div>
-                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                    <Sliders className="size-4 text-primary" />
-                    Global Tariff Parameters
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Modifying these values instantly recalibrates delivery rates for all 25 districts across the island.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleResetConfig}
-                  className="text-xs text-muted-foreground hover:text-foreground gap-1"
-                  title="Reset to recommended defaults"
-                >
-                  <RotateCcw className="size-3.5" />
-                  Defaults
-                </Button>
+            <form onSubmit={handleSaveConfig} className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xs space-y-6">
+              <div className="border-b border-border pb-4">
+                <h3 className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
+                  <Sliders className="size-4 text-primary" />
+                  Tariff Engine Configuration
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure island-wide base rates, extra distance thresholds, and parcel handling surcharges.
+                </p>
               </div>
 
-              {/* Group 1: Distance & Base Parameters */}
-              <div className="space-y-3.5">
+              {/* Section 1: Distance & Road Transit */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
                   <Truck className="size-3.5" />
-                  <span>1. Distance & Line-Haul Parameters</span>
+                  <span>Base &amp; Extra Distance Tariff</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Standard Base Fee */}
                   <div className="space-y-1.5">
                     <Label htmlFor="standardBaseFee" className="text-xs font-medium text-foreground">
-                      Standard Base Fee (LKR)
+                      Standard Base Fee
                     </Label>
-                    <Input
-                      id="standardBaseFee"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.standardBaseFee}
-                      onChange={(e) => updateBaseFee(e.target.value)}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[11px] text-muted-foreground">Minimum fee for local urban transport.</p>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        LKR
+                      </span>
+                      <Input
+                        id="standardBaseFee"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.standardBaseFee}
+                        onChange={(e) => updateBaseFee(e.target.value)}
+                        required
+                        className="font-mono text-sm pl-11"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Local urban base transport fee.</p>
                   </div>
 
+                  {/* Free Distance Allowance */}
                   <div className="space-y-1.5">
                     <Label htmlFor="freeKmAllowance" className="text-xs font-medium text-foreground">
-                      Free Distance Allowance (km)
+                      Local Free Radius Allowance
                     </Label>
-                    <Input
-                      id="freeKmAllowance"
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={configForm.freeKmAllowance}
-                      onChange={(e) => updateFreeKm(e.target.value)}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[11px] text-muted-foreground">Deliveries under this radius pay 0 km surcharge.</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="ratePerKm" className="text-xs font-medium text-foreground">
-                        Extra Line-Haul Rate (LKR / km)
-                      </Label>
-                      <span className="rounded bg-primary/10 px-1.5 py-0.2 text-[10px] font-mono text-primary font-medium">
-                        ⚡ Auto-scaled
+                    <div className="relative">
+                      <Input
+                        id="freeKmAllowance"
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={configForm.freeKmAllowance}
+                        onChange={(e) => updateFreeKm(e.target.value)}
+                        required
+                        className="font-mono text-sm pr-9"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        km
                       </span>
                     </div>
-                    <Input
-                      id="ratePerKm"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.ratePerKm}
-                      onChange={(e) => setConfigForm({ ...configForm, ratePerKm: e.target.value })}
-                      required
-                      className="font-mono text-sm bg-muted/20"
-                    />
+                    <p className="text-[11px] text-muted-foreground">Deliveries within this radius pay 0 km extra surcharge.</p>
+                  </div>
+
+                  {/* Island Maximum Cap */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="maxCap" className="text-xs font-medium text-foreground">
+                      Island Maximum Delivery Cap
+                    </Label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        LKR
+                      </span>
+                      <Input
+                        id="maxCap"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.maxCap}
+                        onChange={(e) => updateMaxCap(e.target.value)}
+                        required
+                        className="font-mono text-sm pl-11 text-emerald-600 dark:text-emerald-400 font-semibold"
+                      />
+                    </div>
                     <p className="text-[11px] text-muted-foreground">
-                      (Max Cap - Base Fee) / ({MAX_ISLAND_DISTANCE_KM}km - {configForm.freeKmAllowance}km) = LKR {configForm.ratePerKm}/km
+                      Ceiling reached at furthest island distance ({MAX_ISLAND_DISTANCE_KM} km).
                     </p>
                   </div>
 
+                  {/* Calculated Extra Distance Rate */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="maxCap" className="text-xs font-medium text-foreground">
-                      Island Maximum Delivery Cap (LKR)
-                    </Label>
-                    <Input
-                      id="maxCap"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.maxCap}
-                      onChange={(e) => updateMaxCap(e.target.value)}
-                      required
-                      className="font-mono text-sm text-emerald-600 dark:text-emerald-400 font-semibold"
-                    />
-                    <p className="text-[11px] text-muted-foreground">Reached only at furthest island distance ({MAX_ISLAND_DISTANCE_KM} km).</p>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="ratePerKm" className="text-xs font-medium text-foreground">
+                        Extra Distance Rate
+                      </Label>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary font-medium">
+                        Auto-calibrated
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        LKR
+                      </span>
+                      <Input
+                        id="ratePerKm"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.ratePerKm}
+                        onChange={(e) => setConfigForm({ ...configForm, ratePerKm: e.target.value })}
+                        required
+                        className="font-mono text-sm pl-11 pr-12 bg-muted/20"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        / km
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Prorated over remaining ({MAX_ISLAND_DISTANCE_KM - Number(configForm.freeKmAllowance || 30)} km) island corridor.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Group 2: Weight Rate */}
-              <div className="space-y-3.5 border-t border-border pt-4">
+              {/* Section 2: Weight Rate Parameters */}
+              <div className="space-y-4 border-t border-border pt-5">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
                   <Scale className="size-3.5" />
-                  <span>2. Weight Rate Parameters</span>
+                  <span>Weight Tariff &amp; Currency</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="perKgFee" className="text-xs font-medium text-foreground">
-                      Cost Per Started Kilogram (LKR / kg)
+                      Cost Per Started Kilogram
                     </Label>
-                    <Input
-                      id="perKgFee"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.perKgFee}
-                      onChange={(e) => setConfigForm({ ...configForm, perKgFee: e.target.value })}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[11px] text-muted-foreground">Rounded up: 1.2 kg billed as 2 kg.</p>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        LKR
+                      </span>
+                      <Input
+                        id="perKgFee"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.perKgFee}
+                        onChange={(e) => setConfigForm({ ...configForm, perKgFee: e.target.value })}
+                        required
+                        className="font-mono text-sm pl-11 pr-12"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        / kg
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Rounded up to next whole kg (1.2 kg billed as 2 kg).</p>
                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="currency" className="text-xs font-medium text-foreground">
-                      Currency Code
+                      System Billing Currency
                     </Label>
                     <Input
                       id="currency"
@@ -649,184 +712,238 @@ export default function AdminPricingPage() {
                       value={configForm.currency}
                       onChange={(e) => setConfigForm({ ...configForm, currency: e.target.value.toUpperCase() })}
                       required
-                      className="font-mono text-sm uppercase"
+                      className="font-mono text-sm uppercase bg-muted/20"
                     />
-                    <p className="text-[11px] text-muted-foreground">Standard 3-letter currency (LKR).</p>
+                    <p className="text-[11px] text-muted-foreground">Standard 3-letter currency code (ISO 4217).</p>
                   </div>
                 </div>
               </div>
 
-              {/* Group 3: Physical Parcel Size Surcharges */}
-              <div className="space-y-3.5 border-t border-border pt-4">
+              {/* Section 3: Volumetric & Parcel Size Surcharges */}
+              <div className="space-y-4 border-t border-border pt-5">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
                   <Package className="size-3.5" />
-                  <span>3. Volumetric & Parcel Size Surcharges</span>
+                  <span>Volumetric &amp; Parcel Size Surcharges</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="smallSizeSurcharge" className="text-xs font-medium text-foreground">
-                      Small Surcharge (LKR)
+                      Small Surcharge
                     </Label>
-                    <Input
-                      id="smallSizeSurcharge"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.smallSizeSurcharge}
-                      onChange={(e) => setConfigForm({ ...configForm, smallSizeSurcharge: e.target.value })}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[10px] text-muted-foreground">Envelopes & documents</p>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        +LKR
+                      </span>
+                      <Input
+                        id="smallSizeSurcharge"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.smallSizeSurcharge}
+                        onChange={(e) => setConfigForm({ ...configForm, smallSizeSurcharge: e.target.value })}
+                        required
+                        className="font-mono text-sm pl-12"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Envelopes &amp; documents</p>
                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="mediumSizeSurcharge" className="text-xs font-medium text-foreground">
-                      Medium Surcharge (LKR)
+                      Medium Surcharge
                     </Label>
-                    <Input
-                      id="mediumSizeSurcharge"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.mediumSizeSurcharge}
-                      onChange={(e) => setConfigForm({ ...configForm, mediumSizeSurcharge: e.target.value })}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[10px] text-muted-foreground">Standard shoebox / carton</p>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        +LKR
+                      </span>
+                      <Input
+                        id="mediumSizeSurcharge"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.mediumSizeSurcharge}
+                        onChange={(e) => setConfigForm({ ...configForm, mediumSizeSurcharge: e.target.value })}
+                        required
+                        className="font-mono text-sm pl-12"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Shoeboxes &amp; standard</p>
                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="largeSizeSurcharge" className="text-xs font-medium text-foreground">
-                      Large Surcharge (LKR)
+                      Large Surcharge
                     </Label>
-                    <Input
-                      id="largeSizeSurcharge"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={configForm.largeSizeSurcharge}
-                      onChange={(e) => setConfigForm({ ...configForm, largeSizeSurcharge: e.target.value })}
-                      required
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-[10px] text-muted-foreground">Heavy bulky freight</p>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
+                        +LKR
+                      </span>
+                      <Input
+                        id="largeSizeSurcharge"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={configForm.largeSizeSurcharge}
+                        onChange={(e) => setConfigForm({ ...configForm, largeSizeSurcharge: e.target.value })}
+                        required
+                        className="font-mono text-sm pl-12"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Heavy bulky cartons</p>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end">
-                <Button type="submit" disabled={savingConfig} className="gap-2 text-sm px-6">
-                  {savingConfig ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  Save Tariff Parameters
-                </Button>
+              {/* Form Action Toolbar */}
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                  <span>Live synchronized with 25-district distance engine</span>
+                </div>
+                <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetConfig}
+                    disabled={savingConfig}
+                    className="text-xs gap-1.5 h-8 font-medium cursor-pointer border-border hover:bg-muted/50"
+                  >
+                    <RotateCcw className="size-3.5" />
+                    Reset Defaults
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={savingConfig}
+                    className="text-xs font-semibold gap-1.5 h-8 px-4 cursor-pointer shadow-xs"
+                  >
+                    {savingConfig ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Check className="size-3.5" />
+                    )}
+                    Save Tariff Rates
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
 
-          {/* Right Column: Pricing Formula & Charging Conditions */}
-          <div className="lg:col-span-5 space-y-5">
-            <div className="rounded-xl border border-border/80 bg-card p-5 md:p-6 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 border-b border-border pb-3">
+          {/* Right Column: Pricing Formula & Charging Specifications */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-border pb-3.5">
                 <Compass className="size-4 text-primary" />
-                <h3 className="text-base font-semibold text-foreground">
-                  Charging Conditions & Rules
-                </h3>
+                <div>
+                  <h3 className="text-base font-semibold tracking-tight text-foreground">
+                    Tariff Model &amp; Specifications
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Automated island-wide road distance calculation rules.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                How SwiftDrop computes fair prices automatically without requiring manual route entries:
-              </p>
 
-              <div className="space-y-3.5 text-xs">
-                {/* Condition 1 */}
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground flex items-center gap-1.5">
-                      <span className="flex size-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-                        1
-                      </span>
-                      Local Urban Allowance (≤ {configForm.freeKmAllowance} km)
-                    </span>
-                    <span className="font-mono text-primary font-medium">Base Fee Only</span>
-                  </div>
-                  <p className="text-muted-foreground text-[11px] leading-relaxed">
-                    Deliveries within the same district or neighboring zones under {configForm.freeKmAllowance} km incur zero extra distance fee. The customer pays only the flat base fee (LKR {parseFloat(configForm.standardBaseFee).toFixed(2)}).
-                  </p>
+              {/* Mathematical Formula Card */}
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Universal Fare Model
+                </span>
+                <div className="rounded bg-background px-2.5 py-1.5 font-mono text-[11px] text-foreground border border-border/60 tracking-tight">
+                  Delivery Fee = Base + (Extra km &times; LKR {configForm.ratePerKm})
                 </div>
+                <p className="text-[11px] text-muted-foreground tracking-tight">
+                  Total = Delivery Fee + (⌈kg⌉ &times; LKR {configForm.perKgFee}) + Size Fee
+                </p>
+              </div>
 
-                {/* Condition 2 */}
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground flex items-center gap-1.5">
-                      <span className="flex size-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-                        2
-                      </span>
-                      Proportional Line-Haul (&gt; {configForm.freeKmAllowance} km)
-                    </span>
-                    <span className="font-mono text-primary font-medium">+ LKR {configForm.ratePerKm}/km</span>
-                  </div>
-                  <p className="text-muted-foreground text-[11px] leading-relaxed">
-                    The line-haul rate is dynamically proportional. Changing the base fee or max cap instantly updates the per-km rate so routes scale smoothly across the island without premature clamping.
-                  </p>
-                  <div className="rounded bg-background/80 p-2 font-mono text-[11px] text-foreground/80">
-                    Rate/km = (Max Cap - Base) / ({MAX_ISLAND_DISTANCE_KM}km - {configForm.freeKmAllowance}km)
+              {/* Policy Specifications List */}
+              <div className="space-y-3 text-xs">
+                {/* Rule 1: Urban Radius */}
+                <div className="flex items-start gap-3 rounded-lg border border-border/70 p-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
+                    <MapPin className="size-3.5" />
+                  </span>
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">Urban Radius Allowance</span>
+                      <span className="font-mono text-primary font-medium">Flat Base Only</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Deliveries under {configForm.freeKmAllowance} km incur zero extra mileage surcharge; customer pays only the flat base fee (LKR {parseFloat(configForm.standardBaseFee).toFixed(2)}).
+                    </p>
                   </div>
                 </div>
 
-                {/* Condition 3 */}
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3.5 space-y-1.5 text-emerald-800 dark:text-emerald-300">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold flex items-center gap-1.5">
-                      <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        3
-                      </span>
-                      Island Maximum Ceiling Protection
-                    </span>
-                    <span className="font-mono font-bold">Max LKR {configForm.maxCap}</span>
+                {/* Rule 2: Extra Distance Rate */}
+                <div className="flex items-start gap-3 rounded-lg border border-border/70 p-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
+                    <Truck className="size-3.5" />
+                  </span>
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">Extra Distance Rate</span>
+                      <span className="font-mono text-primary font-medium">LKR {configForm.ratePerKm} / km</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Distances beyond {configForm.freeKmAllowance} km scale at the extra distance rate across the island, avoiding sharp step functions.
+                    </p>
                   </div>
-                  <p className="text-[11px] leading-relaxed opacity-90">
-                    The maximum delivery cap of LKR {parseFloat(configForm.maxCap).toFixed(2)} is calibrated to the longest hub corridor in Sri Lanka (Matara &harr; Jaffna ~{MAX_ISLAND_DISTANCE_KM} km). Every route under {MAX_ISLAND_DISTANCE_KM} km scales proportionally below this cap.
-                  </p>
                 </div>
 
-                {/* Condition 4 */}
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground flex items-center gap-1.5">
-                      <span className="flex size-5 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-                        4
+                {/* Rule 3: Maximum Island Ceiling */}
+                <div className="flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    <ShieldCheck className="size-3.5" />
+                  </span>
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">Island Maximum Ceiling</span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        Max LKR {parseFloat(configForm.maxCap).toFixed(2)}
                       </span>
-                      Weight & Volumetric Surcharge
-                    </span>
-                    <span className="font-mono text-primary font-medium">+ Surcharges</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Calibrated to the longest corridor in Sri Lanka ({MAX_ISLAND_DISTANCE_KM} km). Guarantees reliable consumer pricing.
+                    </p>
                   </div>
-                  <p className="text-muted-foreground text-[11px] leading-relaxed">
-                    Every started kilogram is billed at LKR {configForm.perKgFee}/kg, and the physical package size tier adds its fixed handling fee.
-                  </p>
-                  <div className="rounded bg-background/80 p-2 font-mono text-[11px] text-foreground/80">
-                    Total = Delivery Fee + (⌈kg⌉ × {configForm.perKgFee}) + Size Fee
+                </div>
+
+                {/* Rule 4: Surcharges */}
+                <div className="flex items-start gap-3 rounded-lg border border-border/70 p-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
+                    <Scale className="size-3.5" />
+                  </span>
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">Weight &amp; Volumetric Handling</span>
+                      <span className="font-mono text-primary font-medium">+ Surcharges</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Billed per started kilogram (LKR {configForm.perKgFee}/kg) plus fixed handling surcharge for selected physical package tier.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Quick Link to Simulator */}
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between gap-3">
+            <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3 shadow-2xs">
               <div className="space-y-0.5">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="size-3.5 text-primary" />
-                  Want to verify these rates?
+                  <Calculator className="size-3.5 text-primary" />
+                  Verify Rates with Simulator
                 </span>
                 <p className="text-[11px] text-muted-foreground">
-                  Switch to the Rate Simulator to test live quotes between any two zones in Sri Lanka.
+                  Test quotes between any two zones in Sri Lanka using these parameters.
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setTab("simulator")}
-                className="shrink-0 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                className="shrink-0 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer h-8"
               >
                 Open Simulator
                 <ArrowRight className="size-3" />
@@ -841,33 +958,21 @@ export default function AdminPricingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Shipment Parameters Form */}
           <div className="lg:col-span-7 space-y-6">
-            <form onSubmit={handleSimulate} className="rounded-xl border border-border/80 bg-card p-5 md:p-6 shadow-xs space-y-5">
-              <div className="flex items-center justify-between border-b border-border pb-3.5">
-                <div>
-                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                    <Calculator className="size-4 text-primary" />
-                    Shipment Route & Package Parameters
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Select origin, destination, weight, and size to simulate customer booking quotes in real time.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSwapSimulatorRoute}
-                  className="gap-1.5 text-xs"
-                  title="Swap pickup and dropoff routes"
-                >
-                  <ArrowLeftRight className="size-3.5" />
-                  Swap
-                </Button>
+            <form onSubmit={handleSimulate} className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xs space-y-5">
+              <div className="border-b border-border pb-3.5">
+                <h3 className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
+                  <Calculator className="size-4 text-primary" />
+                  Route &amp; Package Simulator
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure shipment route and package parameters for real-time quotation.
+                </p>
               </div>
 
-              {/* Origin & Destination Selectors */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              {/* Origin & Destination Selectors with Swap Button in the middle (strictly horizontal: left -> middle -> right) */}
+              <div className="flex items-start gap-2 sm:gap-3 w-full">
+                {/* Left Side: Pickup Zone (Origin) */}
+                <div className="flex-1 min-w-0 space-y-1.5">
                   <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <MapPin className="size-3.5 text-primary" />
                     Pickup Zone (Origin)
@@ -882,13 +987,29 @@ export default function AdminPricingPage() {
                     placeholder="Select pickup zone"
                   />
                   {pickupZone && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground truncate">
                       District code: <span className="font-mono font-medium text-foreground">{pickupZone.code}</span>
                     </p>
                   )}
                 </div>
 
-                <div className="space-y-1.5">
+                {/* Middle: Swap Button */}
+                <div className="pt-[22px] shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={handleSwapSimulatorRoute}
+                    className="size-9 rounded-full border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground hover:border-primary/40 shadow-2xs transition-colors cursor-pointer"
+                    title="Swap pickup and dropoff routes"
+                    aria-label="Swap pickup and dropoff routes"
+                  >
+                    <ArrowLeftRight className="size-4" />
+                  </Button>
+                </div>
+
+                {/* Right Side: Dropoff Zone (Destination) */}
+                <div className="flex-1 min-w-0 space-y-1.5">
                   <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <MapPin className="size-3.5 text-emerald-500" />
                     Dropoff Zone (Destination)
@@ -903,62 +1024,20 @@ export default function AdminPricingPage() {
                     placeholder="Select dropoff zone"
                   />
                   {dropoffZone && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground truncate">
                       District code: <span className="font-mono font-medium text-foreground">{dropoffZone.code}</span>
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Road Transit Telemetry Chip */}
-              {simDistanceResult && (
-                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Truck className="size-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-foreground flex items-center gap-2">
-                        <span>Road Transit: {simDistanceResult.distanceKm} km</span>
-                        <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] text-primary">
-                          {simDistanceResult.distanceKm <= 30
-                            ? "Local Radius (0 km extra)"
-                            : `${simDistanceResult.billableKm} km Line-Haul`}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {simDistanceResult.isCapped
-                          ? "Long-haul distance exceeds cap: Island Max Ceiling (LKR 1,000) will apply."
-                          : simDistanceResult.billableKm === 0
-                          ? "Within local 30 km allowance: standard base fee applies."
-                          : `Base fee + ${simDistanceResult.billableKm} km @ LKR ${configForm.ratePerKm}/km.`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3.5 shrink-0">
-                    <div className="text-right">
-                      <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Route Distance Fee</span>
-                      <div className="text-xs font-mono text-muted-foreground font-medium">
-                        LKR {simDistanceResult.totalSuggestedBaseFee.toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="text-right sm:border-l sm:border-primary/20 sm:pl-3.5">
-                      <span className="text-[10px] text-primary uppercase font-bold block">Total Delivery Fee</span>
-                      <div className="text-base font-bold font-mono text-primary">
-                        LKR {displayQuote ? displayQuote.totalAmount : simDistanceResult.totalSuggestedBaseFee.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Parcel Size Cards */}
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Package className="size-3.5 text-primary" />
-                  Parcel Physical Size
+                  Parcel Size Tier
                 </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   {(
                     [
                       {
@@ -995,15 +1074,15 @@ export default function AdminPricingPage() {
                           setQuote(null);
                         }}
                         className={cn(
-                          "flex flex-col text-left p-3.5 rounded-lg border transition-all cursor-pointer",
+                          "flex flex-col text-left p-3 rounded-lg border transition-colors cursor-pointer",
                           isSelected
-                            ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
-                            : "border-border/80 bg-card hover:bg-muted/30 hover:border-border",
+                            ? "border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/30"
+                            : "border-border bg-card hover:bg-muted/40",
                         )}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                            <Icon className="size-3.5 text-primary" />
+                            <Icon className={cn("size-3.5", isSelected ? "text-primary" : "text-muted-foreground")} />
                             {item.label}
                           </span>
                           <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
@@ -1018,31 +1097,39 @@ export default function AdminPricingPage() {
               </div>
 
               {/* Weight Selector */}
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="simWeight" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <Scale className="size-3.5 text-primary" />
-                    Parcel Weight: {(simWeightGrams / 1000).toFixed(2)} kg ({simWeightGrams} grams)
+                    Parcel Weight
                   </Label>
-                  <span className="text-[11px] font-mono text-primary font-medium">
-                    Billable: {Math.max(1, Math.ceil(simWeightGrams / 1000))} kg
+                  <span className="text-xs text-muted-foreground">
+                    {(simWeightGrams / 1000).toFixed(2)} kg &middot;{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      Billable: {Math.max(1, Math.ceil(simWeightGrams / 1000))} kg
+                    </span>
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="simWeight"
-                    type="number"
-                    min={1}
-                    max={30000}
-                    step="any"
-                    value={simWeightGrams}
-                    onChange={(e) => {
-                      setSimWeightGrams(Math.max(1, Math.min(30000, parseInt(e.target.value) || 1)));
-                      setQuote(null);
-                    }}
-                    className="font-mono text-sm max-w-[140px]"
-                  />
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                  <div className="relative w-36 shrink-0">
+                    <Input
+                      id="simWeight"
+                      type="number"
+                      min={1}
+                      max={30000}
+                      step="any"
+                      value={simWeightGrams}
+                      onChange={(e) => {
+                        setSimWeightGrams(Math.max(1, Math.min(30000, parseInt(e.target.value) || 1)));
+                        setQuote(null);
+                      }}
+                      className="font-mono text-sm pr-7"
+                    />
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      g
+                    </span>
+                  </div>
                   {/* Preset Pills */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     {[
@@ -1061,7 +1148,10 @@ export default function AdminPricingPage() {
                           setSimWeightGrams(pill.val);
                           setQuote(null);
                         }}
-                        className="h-8 text-xs font-mono px-2.5"
+                        className={cn(
+                          "h-8 text-xs font-mono px-2.5 cursor-pointer",
+                          simWeightGrams === pill.val && "shadow-xs",
+                        )}
                       >
                         {pill.label}
                       </Button>
@@ -1070,15 +1160,13 @@ export default function AdminPricingPage() {
                 </div>
               </div>
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  disabled={simulating || !simPickup || !simDropoff}
-                  className="w-full gap-2 text-sm font-semibold py-2.5"
-                >
-                  {simulating ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-                  Calculate Delivery Quote
-                </Button>
+              {/* Clean Footer Notice */}
+              <div className="flex items-center justify-between border-t border-border pt-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                  Live quotation active
+                </span>
+                <span className="font-mono">Real-time simulation</span>
               </div>
             </form>
           </div>
@@ -1129,11 +1217,11 @@ export default function AdminPricingPage() {
                   </div>
 
                   {/* Itemized Receipt Breakdown */}
-                  <div className="space-y-2 border-t border-border pt-3">
+                  <div className="space-y-3 border-t border-border pt-3">
                     <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Itemized Breakdown</p>
-                    <div className="divide-y divide-border/60 text-xs">
+                    <div className="space-y-2.5 text-xs">
                       {/* Base Distance Fee */}
-                      <div className="flex justify-between py-2">
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Route Distance Fee {simDistanceResult && simDistanceResult.distanceKm <= 30 ? "(Local ≤30km)" : ""}
                         </span>
@@ -1143,7 +1231,7 @@ export default function AdminPricingPage() {
                       </div>
 
                       {/* Weight Fee */}
-                      <div className="flex justify-between py-2">
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Weight Charge ({Math.max(1, Math.ceil(simWeightGrams / 1000))} kg billable @ {displayQuote.currency} {configForm.perKgFee}/kg)
                         </span>
@@ -1153,7 +1241,7 @@ export default function AdminPricingPage() {
                       </div>
 
                       {/* Size Surcharge */}
-                      <div className="flex justify-between py-2">
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Size Surcharge ({simSize.toLowerCase()} package)
                         </span>
@@ -1162,8 +1250,8 @@ export default function AdminPricingPage() {
                         </span>
                       </div>
 
-                      {/* Total Quote */}
-                      <div className="flex justify-between py-3 font-bold text-base border-t border-border mt-1">
+                      {/* Total Quote (Single clean border line) */}
+                      <div className="flex items-center justify-between border-t border-border pt-3 mt-3 font-bold text-base">
                         <span className="text-foreground">Total Delivery Fee</span>
                         <span className="font-mono text-primary text-xl">
                           {displayQuote.currency} {displayQuote.totalAmount}
@@ -1183,7 +1271,7 @@ export default function AdminPricingPage() {
                   {simDistanceResult && simDistanceResult.billableKm === 0 && (
                     <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 p-2.5 text-xs text-primary">
                       <CheckCircle2 className="size-4 shrink-0" />
-                      <span>Local Radius Benefit: Distance is under {configForm.freeKmAllowance} km. Zero line-haul surcharge applied.</span>
+                      <span>Local Radius Benefit: Distance is under {configForm.freeKmAllowance} km. Zero extra distance surcharge applied.</span>
                     </div>
                   )}
 
@@ -1198,7 +1286,7 @@ export default function AdminPricingPage() {
                     <Calculator className="size-6" />
                   </div>
                   <p className="max-w-[240px] mx-auto">
-                    Select pickup and dropoff zones, choose package dimensions, and click <span className="font-medium text-foreground">&ldquo;Calculate Delivery Quote&rdquo;</span>.
+                    Select pickup and dropoff zones to simulate live delivery rates and inspect customer quotes in real time.
                   </p>
                 </div>
               ) : null}
