@@ -149,8 +149,12 @@ On startup Flyway connects, applies the migrations under
 then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
-configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
-(see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
+configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` and
+`SWIFTDROP_WEBHOOK_SECRET_KEY` (the key that encrypts merchant webhook signing secrets) each hold at
+least 32 bytes (see `.env.example`). If you created webhook endpoints before the key became required,
+set it to the old built-in value `swiftdrop-local-dev-webhook-secret-key-32bytes!` to keep their
+secrets readable, or rotate their secrets after choosing a new key.
+`.\mvnw.cmd clean verify` does not need the containers.
 
 Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
 create a Google OAuth client of type "Web application" with the authorized redirect URI
@@ -166,9 +170,11 @@ this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
 refused. Never enable it outside local development.
 
 The merchant event consumer turns every merchant parcel's status change into webhook delivery records
-(`merchant_webhook_deliveries`, status `PENDING` until the sender exists). It is on by default; set
+(`merchant_webhook_deliveries`), and the webhook sender signs and sends them (attempts in
+`merchant_webhook_attempts`). Both are on by default; set
 `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED=false` to leave events waiting in the
-`merchant.parcel-status-changed` queue (visible in the RabbitMQ management UI).
+`merchant.parcel-status-changed` queue (visible in the RabbitMQ management UI), or
+`SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED=false` to leave the records `PENDING`.
 
 Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
 a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the

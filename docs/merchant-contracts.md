@@ -327,3 +327,46 @@ To avoid collisions:
   UPDATE merchant_pending_events SET reconcile_attempts = 0, next_reconcile_at = now() WHERE parcel_id = '<id>';
   UPDATE merchant_event_states SET stuck = FALSE WHERE parcel_id = '<id>';
   ```
+
+### 4.9 Webhook Sender (SD-411)
+- `merchant.infrastructure.webhook.WebhookSender` polls every 5 s, claims up to 20 due records
+  (`PENDING` and due, or `IN_PROGRESS` with an expired lease) with `FOR UPDATE SKIP LOCKED` and a fresh
+  `lease_token` valid for 2 minutes, and sends them without holding a transaction. The outcome is stored
+  only while the record is still `IN_PROGRESS` with that token and an unexpired lease; a sender that lost
+  its lease writes nothing. A crash mid-send means the record is sent again after the lease (receivers
+  deduplicate by event ID). Switch: `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED` (default `true`); tuning
+  `swiftdrop.merchant.webhooks.*` (ADR 0004 §9 defaults).
+- **Request:** `POST` to the endpoint URL through the SSRF-safe client (ADR 0004 §7.3), body = the record's
+  payload as UTF-8 bytes, `Content-Type: application/json`, headers `X-SwiftDrop-Event-Id`,
+  `X-SwiftDrop-Event-Type: parcel.status-changed`, `X-SwiftDrop-Timestamp` (Unix seconds, fresh per attempt)
+  and `X-SwiftDrop-Signature: v1=<lowercase hex HMAC-SHA256 of "<timestamp>." + raw body>`. The HMAC key is
+  the UTF-8 bytes of the signing secret **exactly as shown to the merchant**, including `whsec_`.
+  `WebhookSignature.verify` is the reference verifier (constant time, 5 minute tolerance).
+- **Send-time checks, before any request:** the endpoint must exist, be enabled, not deleted and belong to the
+  record's merchant (else `ENDPOINT_INACTIVE`); the merchant must exist (`MERCHANT_NOT_FOUND`) and be
+  `APPROVED` (`MERCHANT_NOT_APPROVED`). These end the record as `FAILED`; Stage 9 redelivery can resend.
+
+| Outcome | Attempt row | Counts as attempt | Record |
+|---|---|---|---|
+| 2xx | yes | yes | `SUCCEEDED` |
+| timeout, network error, 5xx, 408, 429 | yes | yes | `PENDING` again after the backoff, `FAILED` after the 8th attempt |
+| 3xx, other 4xx, refused destination | yes | yes | `FAILED` |
+| endpoint inactive, merchant not approved or missing | yes | yes | `FAILED` |
+| secret cannot be decrypted | no | no | `SECRET_UNAVAILABLE` |
+
+- **Backoff:** 30 s × 2^(attempt − 1), ±20 % jitter, capped at 1 hour. `Retry-After` of a 429 or 503 (seconds
+  or HTTP-date) is honored when longer than the backoff, never beyond 1 hour; invalid or past values are ignored.
+- **Attempts** (`merchant_webhook_attempts`, migration `V202611151000`): number, time, outcome
+  (`SUCCEEDED`, `HTTP_ERROR`, `TIMEOUT`, `NETWORK_ERROR`, `REFUSED_DESTINATION`, `ENDPOINT_INACTIVE`,
+  `MERCHANT_NOT_APPROVED`, `MERCHANT_NOT_FOUND`), HTTP status, duration. No bodies, headers, signatures or
+  secrets. The record keeps `last_outcome` and `last_http_status` for the history view (SD-412).
+- **`SECRET_UNAVAILABLE` recovery:** the sender does not pick these records up again. After the key problem
+  is fixed (or the endpoint's secret rotated), re-queue them; Stage 9 adds an admin action, until then:
+  ```sql
+  UPDATE merchant_webhook_deliveries SET status = 'PENDING', next_attempt_at = now()
+  WHERE status = 'SECRET_UNAVAILABLE' AND endpoint_id = '<id>';
+  ```
+- **Encryption key:** `SWIFTDROP_WEBHOOK_SECRET_KEY` has no default; the backend refuses to start without a key
+  of at least 32 bytes. Changing it makes existing secrets undecryptable (their records become
+  `SECRET_UNAVAILABLE`); rotate those endpoints' secrets. ADR 0004 §7.4's key ring with key ID as additional
+  authenticated data is not implemented yet (single key, no AAD).

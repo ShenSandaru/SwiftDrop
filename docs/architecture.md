@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant consumer creates webhook delivery records; webhook sending not yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant consumer creates webhook delivery records; webhook sender signs, sends and retries them) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -228,8 +228,17 @@ tracking     → delivery
   `APPROVED` when the event is processed. Listener retries: 3 attempts in total, invalid messages to
   the `.dlq` at once. A reconciler closes gaps after 60 s from `ParcelEvents.eventsBetween` (contiguous
   sequences only, `SKIP LOCKED` per parcel) and marks a parcel stuck after 5 failed attempts; processed
-  IDs are deleted after 30 days. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`. **Webhook sending
-  (SD-411) is not implemented**, so records stay `PENDING`. Details: `docs/merchant-contracts.md` §4.8.
+  IDs are deleted after 30 days. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`. Details:
+  `docs/merchant-contracts.md` §4.8.
+- **Implemented (SD-411, ADR 0004 §7.1, §7.2):** the webhook sender claims due records every 5 s with
+  `SKIP LOCKED` and a per-claim lease token (2 min), checks endpoint and merchant at send time, decrypts the
+  signing secret, signs `"<timestamp>.<body>"` with HMAC-SHA256 (`X-SwiftDrop-Signature: v1=…`) and posts
+  the stored payload through the SSRF-safe client. 2xx succeeds; timeouts, network errors, 5xx, 408 and
+  429 are retried (30 s × 2, ±20 % jitter, 1 h cap, `Retry-After` honored, 8 attempts); other outcomes
+  fail. Every attempt is stored in `merchant_webhook_attempts` without bodies or secrets; an
+  undecryptable secret parks the record as `SECRET_UNAVAILABLE`. Switch:
+  `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED`. Delivery history, manual redelivery and the demo receiver
+  (SD-412, SD-413) are not implemented. Details: `docs/merchant-contracts.md` §4.9.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
