@@ -96,6 +96,7 @@ class GoogleLoginResponses implements AuthenticationSuccessHandler, Authenticati
         String errorCode = switch (reason) {
             case EMAIL_NOT_VERIFIED -> "unverified_email";
             case EMAIL_ALREADY_REGISTERED -> "conflict_email_exists";
+            case ROLE_NOT_PERMITTED -> "role_not_permitted";
             case ACCOUNT_UNAVAILABLE -> "account_disabled";
             case CONFLICT, INVALID_IDENTITY -> "oauth_failed";
         };

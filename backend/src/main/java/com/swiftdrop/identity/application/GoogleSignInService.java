@@ -50,9 +50,13 @@ public class GoogleSignInService {
 
         Optional<ExternalIdentity> link = identities.findByProviderAndSubject(IdentityProvider.GOOGLE, subject);
         if (link.isPresent()) {
-            return users.findById(link.get().getUserId())
+            User existingUser = users.findById(link.get().getUserId())
                     .filter(User::isEnabled)
                     .orElseThrow(() -> new GoogleSignInRejectedException(Reason.ACCOUNT_UNAVAILABLE));
+            if (!EnumSet.of(Role.CUSTOMER).equals(existingUser.getRoles())) {
+                throw new GoogleSignInRejectedException(Reason.ROLE_NOT_PERMITTED);
+            }
+            return existingUser;
         }
 
         if (!identity.emailVerified()) {
