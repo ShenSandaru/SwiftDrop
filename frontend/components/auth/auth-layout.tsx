@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { usePathname } from "next/navigation";
 
 export interface AuthLayoutProps {
   /** Visual branding panel rendered on the left (desktop) or top (mobile). */
@@ -11,9 +14,12 @@ export interface AuthLayoutProps {
  * Shared split-screen layout for authentication pages.
  * - Desktop (>= 1024px): 2-column split with left visual branding panel and right form panel.
  * - Tablet & Mobile (< 1024px): Single-column stacked layout with compact branding at top.
- * Sized with min-h-[calc(100vh-3.5rem)] to complement the sticky 3.5rem NavHeader without overflow.
+ * - Right panel incorporates softly blurred Island Teal background gradients and remounts
+ *   entrance animations on client-side route transitions using the current pathname as key.
  */
 export function AuthLayout({ branding, children }: AuthLayoutProps) {
+  const pathname = usePathname();
+
   return (
     <main className="flex-1 flex flex-col lg:grid lg:grid-cols-12 min-h-screen">
       {/* Left/Top Branding Panel */}
@@ -22,8 +28,24 @@ export function AuthLayout({ branding, children }: AuthLayoutProps) {
       </aside>
 
       {/* Right Form Panel */}
-      <section className="lg:col-span-7 xl:col-span-7 flex-1 flex items-center justify-center px-3 py-6 sm:px-6 md:px-8 lg:py-12 bg-background">
-        <div className="w-full max-w-md mx-auto">{children}</div>
+      <section className="lg:col-span-7 xl:col-span-7 flex-1 flex items-center justify-center px-4 py-8 sm:px-6 md:px-8 lg:py-12 bg-background relative overflow-hidden">
+        {/* Softly blurred Island Teal radial background gradients */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 -right-20 size-[28rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(15,118,110,0.16),transparent_65%)] blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 -left-24 -translate-y-1/2 size-[32rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(45,212,191,0.18),transparent_65%)] blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-24 right-1/4 size-[26rem] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(15,118,110,0.14),transparent_65%)] blur-3xl"
+        />
+
+        <div key={pathname} className="w-full max-w-md mx-auto relative z-10 auth-card-rise">
+          {children}
+        </div>
       </section>
     </main>
   );

@@ -171,7 +171,7 @@ export default function SignupPage() {
                 disabled={isLoading}
                 maxLength={200}
                 required
-                className="h-10 text-sm bg-background"
+                className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
               />
             </div>
 
@@ -187,7 +187,7 @@ export default function SignupPage() {
                 disabled={isLoading}
                 maxLength={320}
                 required
-                className="h-10 text-sm bg-background"
+                className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
               />
             </div>
 
@@ -223,7 +223,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-10 font-semibold shadow-xs mt-2"
+              className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-[#0c5f59] hover:shadow-[0_8px_20px_-4px_rgba(15,118,110,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none cursor-pointer mt-2"
             >
               {isLoading ? "Creating account..." : "Create customer account"}
             </Button>

@@ -49,7 +49,7 @@ export function SocialLoginButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "w-full h-10 font-medium border-border/80 hover:bg-muted/60 transition-all flex items-center justify-center gap-2.5 text-foreground shadow-2xs",
+        "w-full h-11 rounded-xl font-medium border border-border/80 bg-background hover:bg-muted/80 hover:border-foreground/30 hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ease-out flex items-center justify-center gap-2.5 text-foreground shadow-2xs cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none",
         className
       )}
     >

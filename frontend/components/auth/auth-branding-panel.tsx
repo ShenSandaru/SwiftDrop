@@ -22,7 +22,7 @@ function PinMark({ className }: { className?: string }) {
 export function AuthBrandingPanel({
   badgeText,
   headline = "From your door to anywhere on the island.",
-  description = "Sign in to track live parcel dispatches, manage courier schedules, and access your delivery workspaces.",
+  description = "Book in a minute. Track every stop. Delivered with proof.",
   imageSrc = "/images/auth-delivery.png",
   imageAlt = "Professional courier delivering parcel box at doorstep",
 }: AuthBrandingPanelProps) {

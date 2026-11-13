@@ -166,7 +166,7 @@ function LoginForm() {
       branding={
         <AuthBrandingPanel
           headline="From your door to anywhere on the island."
-          description="Sign in to track live parcel dispatches, manage courier schedules, and access your delivery workspaces."
+          description="Book in a minute. Track every stop. Delivered with proof."
         />
       }
     >
@@ -216,7 +216,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               required
-              className="h-10 text-sm bg-background"
+              className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
             />
           </div>
 
@@ -238,7 +238,7 @@ function LoginForm() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-10 font-semibold shadow-xs mt-2"
+            className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-[#0c5f59] hover:shadow-[0_8px_20px_-4px_rgba(15,118,110,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none cursor-pointer mt-2"
           >
             {isLoading ? "Signing in..." : "Sign in"}
           </Button>
