@@ -11,10 +11,40 @@ export interface AssistantTurn {
   text: string;
 }
 
+/** Public tracking data found by the `track_parcel` tool. */
+export interface TrackCardData {
+  found: true;
+  trackingNumber: string;
+  status: string;
+  from: string | null;
+  to: string | null;
+  history: { status: string; at: string; hub?: string; attempt?: number }[];
+}
+
+/** A fee estimate found by the `estimate_fee` tool; amounts are decimal strings. */
+export interface FeeCardData {
+  from: string;
+  to: string;
+  size: "SMALL" | "MEDIUM" | "LARGE";
+  chargedKg: number;
+  totalFee: string;
+  currency: string;
+  baseFee: string;
+  weightFee: string;
+  sizeFee: string;
+}
+
+export type AssistantCard =
+  | { tool: "track_parcel"; data: TrackCardData }
+  | { tool: "estimate_fee"; data: FeeCardData }
+  | { tool: "list_service_areas"; data: { areas: string[] } };
+
 export interface AssistantAnswer {
   reply: string;
   /** True when the model could not answer and `reply` is the fixed fallback text. */
   unavailable: boolean;
+  /** What the tools found, shown as cards under the reply. */
+  cards?: AssistantCard[];
 }
 
 /** An error whose message is safe to show to the visitor. */
