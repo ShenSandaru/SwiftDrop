@@ -77,7 +77,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class
 })
 class AuthenticationApiTest {
 
