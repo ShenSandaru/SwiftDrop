@@ -129,6 +129,21 @@ class AssistantApiTest {
     }
 
     @Test
+    void anonymousVisitorsMayUseTheAssistant() throws Exception {
+        when(rateLimiter.tryAcquire(any())).thenReturn(true);
+        when(assistant.reply(any(), any())).thenReturn(new AssistantAnswer("ok", false));
+
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hi\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void otherAssistantPathsStayProtected() throws Exception {
+        mvc.perform(post("/api/v1/assistant/other").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void answers429WithRetryAfterWhenTheClientSendsTooMuch() throws Exception {
         when(rateLimiter.tryAcquire(any())).thenReturn(false);
 
