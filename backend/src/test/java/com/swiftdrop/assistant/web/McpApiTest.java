@@ -150,6 +150,21 @@ class McpApiTest {
     }
 
     @Test
+    void mcpClientsNeedNoLogin() throws Exception {
+        mvc.perform(post("/mcp").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.capabilities.tools").exists());
+        mvc.perform(get("/mcp")).andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void pathsNextToMcpStayProtected() throws Exception {
+        mvc.perform(post("/mcp/other").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void getAndDeleteAreNotAllowed() throws Exception {
         mvc.perform(get("/mcp").with(TestPrincipal.customer().postProcessor()))
                 .andExpect(status().isMethodNotAllowed())
