@@ -237,8 +237,14 @@ tracking     → delivery
   429 are retried (30 s × 2, ±20 % jitter, 1 h cap, `Retry-After` honored, 8 attempts); other outcomes
   fail. Every attempt is stored in `merchant_webhook_attempts` without bodies or secrets; an
   undecryptable secret parks the record as `SECRET_UNAVAILABLE`. Switch:
-  `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED`. Delivery history, manual redelivery and the demo receiver
-  (SD-412, SD-413) are not implemented. Details: `docs/merchant-contracts.md` §4.9.
+  `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED`. Details: `docs/merchant-contracts.md` §4.9.
+- **Implemented (SD-412, SD-413, ADR 0004 §7.5):** merchants list and inspect their own webhook
+  deliveries (`/api/v1/merchants/me/webhook-deliveries`, attempts grouped by series, no payloads or
+  secrets) and redeliver `FAILED` or `SECRET_UNAVAILABLE` records up to 3 times, each a new series of up
+  to 8 attempts; admins (`ADMIN`) do the same for all merchants at `/api/v1/webhook-deliveries`. Every
+  redelivery is audited in `merchant_webhook_redeliveries`. The portal screens are Member A's; the demo
+  receiver is `tools/webhook-receiver` and the merchant guide `docs/merchant-integration-guide.md`.
+  Details: `docs/merchant-contracts.md` §4.10.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.

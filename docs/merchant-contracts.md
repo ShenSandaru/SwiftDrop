@@ -168,6 +168,8 @@ startup fail, and `@ConditionalOnMissingBean` is not reliable on component-scann
 
 ### 3.2 `WebhookDeliveryQuery` (Owner: Member B)
 Used by Member A to display the webhook delivery history screen in the merchant portal.
+*Implemented by `merchant.application.WebhookDeliveryHistoryService` (SD-412); the portal can also call the
+REST endpoints in §4.10, which add the status filter and the per-series detail.*
 
 ```java
 package com.swiftdrop.merchant.api;
@@ -370,3 +372,32 @@ To avoid collisions:
   of at least 32 bytes. Changing it makes existing secrets undecryptable (their records become
   `SECRET_UNAVAILABLE`); rotate those endpoints' secrets. ADR 0004 §7.4's key ring with key ID as additional
   authenticated data is not implemented yet (single key, no AAD).
+
+### 4.10 Webhook Delivery Management (SD-412, SD-413)
+- **Merchant** (role `MERCHANT`, merchant `APPROVED`, scoped to the caller's merchant; another merchant's record
+  answers `404`):
+  - `GET /api/v1/merchants/me/webhook-deliveries?endpointId=&status=&page=&size=` – `PageResponse` of
+    `WebhookDeliveryView`, ordered `created_at DESC, id DESC` (stable on equal timestamps).
+  - `GET /api/v1/merchants/me/webhook-deliveries/{id}` – `WebhookDeliveryDetail`: summary, redeliveries used and
+    remaining, `redeliverable`, and `series[]` (0 = automatic; 1–3 = manual with `requestedBy`,
+    `requestedByRole`, `requestedAt`, `previousStatus`), each with its attempts (number, time, outcome, HTTP
+    status, duration).
+  - `POST /api/v1/merchants/me/webhook-deliveries/{id}/redeliveries` – `202` with `{deliveryId, series, status}`.
+- **Admin** (role `ADMIN`; `DISPATCHER` gets `403`): `GET /api/v1/webhook-deliveries?merchantId=&endpointId=&status=`,
+  `GET /api/v1/webhook-deliveries/{id}`, `POST /api/v1/webhook-deliveries/{id}/redeliveries` for every merchant.
+- **Never exposed:** the payload, request headers, signatures, secrets, secret hints, lease data.
+- **Redelivery rules** (ADR 0004 §7.5): only `FAILED` or `SECRET_UNAVAILABLE`; `409` while `PENDING`/`IN_PROGRESS`,
+  for `SUCCEEDED`, when the endpoint is disabled, deleted or not the merchant's, or the merchant is not
+  `APPROVED`. The record is locked, so concurrent requests start one series. Accepting it sets the record
+  `PENDING`, due now, clears `completed_at` and any old lease (the sender's next claim issues a fresh token; an old
+  token cannot store an outcome), increments `manual_redeliveries`, and starts a new series.
+- **Limits:** series 0 has up to 8 automatic attempts; each of up to **3** manual redeliveries starts a new series
+  of up to 8 attempts (limit and backoff restart per series); a 4th redelivery is `409`. Attempt numbers keep
+  increasing across series. The same body and event ID are sent with a fresh timestamp and the current secret.
+- **Audit:** `merchant_webhook_redeliveries` (migration `V202611161000`) – delivery, series, requesting user and
+  role, previous status, time; `ON DELETE RESTRICT`, never updated. Attempts carry `series` and, for manual series,
+  `triggered_by_user_id`.
+- **Demo receiver and guide (SD-413):** `tools/webhook-receiver/WebhookReceiver.java` (single Java file; verifies,
+  deduplicates, applies the highest sequence, `--fail-first N` before recording) and
+  `docs/merchant-integration-guide.md`. Local demo settings `SWIFTDROP_MERCHANT_WEBHOOK_BACKOFF_BASE` and
+  `SWIFTDROP_MERCHANT_WEBHOOK_MAX_ATTEMPTS` shorten retries; never for shared or production systems.

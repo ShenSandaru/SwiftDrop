@@ -171,7 +171,8 @@ user (JWT), `MKEY` merchant API key, `COU` Courier, `ADM` Dispatcher/Admin, `PUB
 | `GET /api/v1/merchant-orders/{merchantOrderReference}` | merchant | MKEY | Order status | MER-2 |
 | `GET /api/v1/merchants/me/orders` | merchant | MER | Dashboard list (paged, status filter) | MER-4 |
 | `PUT /api/v1/merchants/me/webhook-endpoint` | merchant | approved MER | Register/replace endpoint; secret shown once (**D-17**) | MER-3 |
-| `GET /api/v1/merchants/me/webhook-deliveries`, `POST .../{id}/redeliveries` | merchant | MER (own); ADM (all) | History and manual redelivery | MER-3 |
+| `GET /api/v1/merchants/me/webhook-deliveries`, `GET .../{id}`, `POST .../{id}/redeliveries` | merchant | MER (own) | History and manual redelivery (implemented, `merchant-contracts.md` §4.10) | MER-3 |
+| `GET /api/v1/webhook-deliveries`, `GET .../{id}`, `POST .../{id}/redeliveries` | merchant | ADM (all) | Admin view and redelivery (implemented) | MER-3 |
 | `GET /api/v1/notifications` | notification | CUS (own) | Mock SMS inbox | SYS-5, DEM-4 |
 
 ### 4.3 Request and response examples (Proposed)
