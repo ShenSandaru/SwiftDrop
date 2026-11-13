@@ -78,6 +78,8 @@ class SwiftdropBackendApplicationTests {
     private com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository merchantEventAnomalies;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
 
     @Autowired
     private ApplicationContext context;

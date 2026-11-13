@@ -183,6 +183,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611141000",
                                 "merchant create event consumer tables",
-                                "merchant/V202611141000__merchant_create_event_consumer_tables.sql"));
+                                "merchant/V202611141000__merchant_create_event_consumer_tables.sql"),
+                        tuple(
+                                "202611151000",
+                                "merchant create webhook attempts",
+                                "merchant/V202611151000__merchant_create_webhook_attempts.sql"));
     }
 }

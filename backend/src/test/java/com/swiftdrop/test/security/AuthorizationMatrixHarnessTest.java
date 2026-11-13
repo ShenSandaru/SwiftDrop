@@ -73,7 +73,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
         com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
         com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class
 })
 class AuthorizationMatrixHarnessTest {
 

@@ -66,6 +66,19 @@ public class MerchantWebhookDelivery {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_outcome", length = 30)
+    private WebhookAttemptOutcome lastOutcome;
+
+    @Column(name = "last_http_status")
+    private Integer lastHttpStatus;
+
+    @Column(name = "lease_token")
+    private UUID leaseToken;
+
+    @Column(name = "lease_expires_at")
+    private Instant leaseExpiresAt;
+
     protected MerchantWebhookDelivery() {
         // for JPA
     }
@@ -124,5 +137,21 @@ public class MerchantWebhookDelivery {
 
     public Instant getCompletedAt() {
         return completedAt;
+    }
+
+    public WebhookAttemptOutcome getLastOutcome() {
+        return lastOutcome;
+    }
+
+    public Integer getLastHttpStatus() {
+        return lastHttpStatus;
+    }
+
+    public UUID getLeaseToken() {
+        return leaseToken;
+    }
+
+    public Instant getLeaseExpiresAt() {
+        return leaseExpiresAt;
     }
 }
