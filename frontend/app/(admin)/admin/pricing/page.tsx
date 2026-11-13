@@ -11,31 +11,25 @@ import {
   Loader2,
   MapPin,
   Plus,
-  RefreshCw,
-  Trash2,
-  Warehouse,
+  Scale,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ThemedSelect } from "@/components/ui/select";
 import { formatApiError } from "@/lib/api";
-import { listHubs, type Hub } from "@/lib/hubs";
 import { getQuote, type ParcelSize, PARCEL_SIZES, type PriceQuote } from "@/lib/delivery";
 import {
   createPricingRule,
-  createZone,
-  deleteZone,
   listAdminZones,
   listPricingRules,
   updatePricingRule,
-  updateZone,
   type PricingRuleAdmin,
   type ZoneAdmin,
 } from "@/lib/pricing";
-import { listDistricts, type District } from "@/lib/districts";
+import { cn } from "cn";
 
-const EMPTY_ZONE_FORM = { code: "", name: "" };
 const EMPTY_RULE_FORM = {
   originZoneId: "",
   destinationZoneId: "",
@@ -48,23 +42,12 @@ const EMPTY_RULE_FORM = {
 };
 
 export default function AdminPricingPage() {
-  const [tab, setTab] = useState<"zones" | "rules" | "simulator">("zones");
+  const [tab, setTab] = useState<"rules" | "simulator">("rules");
   const [zones, setZones] = useState<ZoneAdmin[] | null>(null);
   const [rules, setRules] = useState<PricingRuleAdmin[] | null>(null);
-  const [hubs, setHubs] = useState<Hub[] | null>(null);
-  const [districts, setDistricts] = useState<District[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  // Zone form states
-  const [zoneForm, setZoneForm] = useState(EMPTY_ZONE_FORM);
-  const [selectedHubId, setSelectedHubId] = useState("");
-  const [selectedSubZoneName, setSelectedSubZoneName] = useState("");
-  const [savingZone, setSavingZone] = useState(false);
-  const [editingZone, setEditingZone] = useState<ZoneAdmin | null>(null);
-  const [zoneToDelete, setZoneToDelete] = useState<ZoneAdmin | null>(null);
-  const [deletingZone, setDeletingZone] = useState(false);
 
   // Pricing rule form states
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE_FORM);
@@ -81,12 +64,10 @@ export default function AdminPricingPage() {
   const [simError, setSimError] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
-    Promise.all([listAdminZones(), listPricingRules(), listHubs(), listDistricts()])
-      .then(([loadedZones, loadedRules, loadedHubs, loadedDistricts]) => {
+    Promise.all([listAdminZones(), listPricingRules()])
+      .then(([loadedZones, loadedRules]) => {
         setZones(loadedZones);
         setRules(loadedRules);
-        setHubs(loadedHubs);
-        setDistricts(loadedDistricts);
         setError(null);
         if (loadedZones.length > 0) {
           setSimPickup((prev) => prev || loadedZones[0].id);
@@ -98,153 +79,56 @@ export default function AdminPricingPage() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      loadData();
+    }, 10000);
+
+    function onFocus() {
+      loadData();
+    }
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [loadData]);
 
-  const servedZoneMap = useMemo(() => {
-    const map = new Map<string, Hub>();
-    (hubs ?? []).forEach((h) => {
-      if (h.active && h.zoneId) {
-        map.set(h.zoneId, h);
-      }
-    });
-    return map;
-  }, [hubs]);
+  // Options for ThemedSelect
+  const zoneSelectOptions = useMemo(() => {
+    return (zones ?? []).map((z) => ({
+      value: z.id,
+      label: `${z.name} (${z.code})`,
+      badge: z.code,
+      disabled: !z.active,
+      description: z.active ? "Active delivery area" : "Inactive zone",
+    }));
+  }, [zones]);
 
-  const existingZoneCodes = useMemo(
-    () => new Set((zones ?? []).map((z) => z.code.trim().toUpperCase())),
-    [zones],
-  );
-
-  const existingZoneNames = useMemo(
-    () => new Set((zones ?? []).map((z) => z.name.trim().toLowerCase())),
-    [zones],
-  );
-
-  const selectedHub = useMemo(
-    () => (hubs ?? []).find((h) => h.id === selectedHubId),
-    [hubs, selectedHubId],
-  );
-
-  const currentDistrict = useMemo(() => {
-    if (!selectedHub) return undefined;
-    const hubCity = selectedHub.city.trim().toLowerCase();
-    const hubCode = selectedHub.code.trim().toLowerCase();
-    return districts.find(
-      (d) => d.name.toLowerCase() === hubCity || d.code.toLowerCase() === hubCode
-    );
-  }, [selectedHub, districts]);
-
-  const availableSubZones = useMemo(() => {
-    if (!currentDistrict) return [];
-    return currentDistrict.zones;
-  }, [currentDistrict]);
-
-  function handleHubChange(hubId: string) {
-    setSelectedHubId(hubId);
-    setSelectedSubZoneName("");
-    setZoneForm(EMPTY_ZONE_FORM);
-  }
-
-  function handleSubZoneChange(subZoneName: string) {
-    setSelectedSubZoneName(subZoneName);
-    const matched = availableSubZones.find((sz) => sz.name === subZoneName);
-    if (matched) {
-      setZoneForm({
-        name: matched.name,
-        code: matched.code,
-      });
-    } else {
-      setZoneForm((prev) => ({
-        ...prev,
-        name: subZoneName,
+  const activeZoneSelectOptions = useMemo(() => {
+    return (zones ?? [])
+      .filter((z) => z.active)
+      .map((z) => ({
+        value: z.id,
+        label: `${z.name} (${z.code})`,
+        badge: z.code,
+        description: "Active delivery zone",
       }));
-    }
-  }
+  }, [zones]);
 
-  // Zone actions
-  async function handleCreateZone(e: FormEvent) {
-    e.preventDefault();
-    if (existingZoneCodes.has(zoneForm.code.trim().toUpperCase())) {
-      setError(`Zone code "${zoneForm.code}" already exists.`);
-      return;
-    }
-    if (existingZoneNames.has(zoneForm.name.trim().toLowerCase())) {
-      setError(`Zone "${zoneForm.name}" already exists.`);
-      return;
-    }
-    setSavingZone(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await createZone({ ...zoneForm, hubId: selectedHubId || null });
-      setZoneForm(EMPTY_ZONE_FORM);
-      setSelectedSubZoneName("");
-      setSuccess(`Zone ${zoneForm.code} (${zoneForm.name}) added and assigned to hub successfully.`);
-      loadData();
-    } catch (failure) {
-      setError(formatApiError(failure));
-    } finally {
-      setSavingZone(false);
-    }
-  }
-
-  async function handleUpdateZone(e: FormEvent) {
-    e.preventDefault();
-    if (!editingZone) return;
-    setSavingZone(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await updateZone(editingZone.id, {
-        code: editingZone.code,
-        name: editingZone.name,
-        active: editingZone.active,
-        version: editingZone.version,
-      });
-      setSuccess(`Zone ${editingZone.code} updated.`);
-      setEditingZone(null);
-      loadData();
-    } catch (failure) {
-      setError(formatApiError(failure));
-    } finally {
-      setSavingZone(false);
-    }
-  }
-
-  async function toggleZoneActive(zone: ZoneAdmin) {
-    setError(null);
-    setSuccess(null);
-    try {
-      await updateZone(zone.id, {
-        code: zone.code,
-        name: zone.name,
-        active: !zone.active,
-        version: zone.version,
-      });
-      setSuccess(`Zone ${zone.code} is now ${!zone.active ? "active" : "inactive"}.`);
-      loadData();
-    } catch (failure) {
-      setError(formatApiError(failure));
-    }
-  }
-
-  async function confirmDeleteZone() {
-    if (!zoneToDelete) return;
-    setDeletingZone(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await deleteZone(zoneToDelete.id);
-      setSuccess(`Zone ${zoneToDelete.code} (${zoneToDelete.name}) has been deleted.`);
-      setZones((prev) => (prev ? prev.filter((z) => z.id !== zoneToDelete.id) : prev));
-      setZoneToDelete(null);
-      loadData();
-    } catch (failure) {
-      setError(formatApiError(failure));
-    } finally {
-      setDeletingZone(false);
-    }
-  }
+  const parcelSizeOptions = useMemo(() => {
+    return PARCEL_SIZES.map((sz) => ({
+      value: sz,
+      label: `${sz.charAt(0) + sz.slice(1).toLowerCase()} Parcel`,
+      badge: sz,
+      description:
+        sz === "SMALL"
+          ? "Documents, small envelopes up to 1kg"
+          : sz === "MEDIUM"
+          ? "Shoeboxes, standard packages up to 5kg"
+          : "Large cartons, bulkier cargo up to 30kg",
+    }));
+  }, []);
 
   // Rule actions
   async function handleCreateRule(e: FormEvent) {
@@ -264,8 +148,8 @@ export default function AdminPricingPage() {
         currency: ruleForm.currency,
         active: true,
       });
-      setSuccess("Pricing rule created successfully.");
       setRuleForm(EMPTY_RULE_FORM);
+      setSuccess("Pricing rule created successfully.");
       loadData();
     } catch (failure) {
       setError(formatApiError(failure));
@@ -284,11 +168,11 @@ export default function AdminPricingPage() {
       await updatePricingRule(editingRule.id, {
         originZoneId: editingRule.originZoneId,
         destinationZoneId: editingRule.destinationZoneId,
-        baseFee: Number(editingRule.baseFee),
-        perKgFee: Number(editingRule.perKgFee),
-        smallSizeSurcharge: Number(editingRule.smallSizeSurcharge),
-        mediumSizeSurcharge: Number(editingRule.mediumSizeSurcharge),
-        largeSizeSurcharge: Number(editingRule.largeSizeSurcharge),
+        baseFee: editingRule.baseFee,
+        perKgFee: editingRule.perKgFee,
+        smallSizeSurcharge: editingRule.smallSizeSurcharge,
+        mediumSizeSurcharge: editingRule.mediumSizeSurcharge,
+        largeSizeSurcharge: editingRule.largeSizeSurcharge,
         currency: editingRule.currency,
         active: editingRule.active,
         version: editingRule.version,
@@ -310,26 +194,25 @@ export default function AdminPricingPage() {
       await updatePricingRule(rule.id, {
         originZoneId: rule.originZoneId,
         destinationZoneId: rule.destinationZoneId,
-        baseFee: Number(rule.baseFee),
-        perKgFee: Number(rule.perKgFee),
-        smallSizeSurcharge: Number(rule.smallSizeSurcharge),
-        mediumSizeSurcharge: Number(rule.mediumSizeSurcharge),
-        largeSizeSurcharge: Number(rule.largeSizeSurcharge),
+        baseFee: rule.baseFee,
+        perKgFee: rule.perKgFee,
+        smallSizeSurcharge: rule.smallSizeSurcharge,
+        mediumSizeSurcharge: rule.mediumSizeSurcharge,
+        largeSizeSurcharge: rule.largeSizeSurcharge,
         currency: rule.currency,
         active: !rule.active,
         version: rule.version,
       });
-      setSuccess(`Pricing rule ${rule.originZoneCode} → ${rule.destinationZoneCode} is now ${!rule.active ? "active" : "inactive"}.`);
+      setSuccess(`Rule is now ${!rule.active ? "active" : "inactive"}.`);
       loadData();
     } catch (failure) {
       setError(formatApiError(failure));
     }
   }
 
-  // Rate simulator
+  // Rate simulator action
   async function handleSimulate(e: FormEvent) {
     e.preventDefault();
-    if (!simPickup || !simDropoff) return;
     setSimulating(true);
     setSimError(null);
     setQuote(null);
@@ -343,20 +226,94 @@ export default function AdminPricingPage() {
     }
   }
 
+  const activeRulesCount = useMemo(() => {
+    return (rules ?? []).filter((r) => r.active).length;
+  }, [rules]);
+
+  const averageBaseFee = useMemo(() => {
+    if (!rules || rules.length === 0) return "0.00";
+    const sum = rules.reduce((acc, r) => acc + r.baseFee, 0);
+    return (sum / rules.length).toFixed(2);
+  }, [rules]);
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Pricing & Delivery Zones</h2>
+      {/* Top Operations Header & Quick Status (Matches Dispatcher Fleet UI) */}
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 font-bold text-primary">
+              <Coins className="size-3.5" aria-hidden="true" />
+              Rate &amp; Fee Management
+            </span>
+            <span aria-hidden="true">&middot;</span>
+            <span className="text-[11px] text-muted-foreground">
+              Currency: LKR
+            </span>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Manage geographical delivery service areas, fee calculation matrices, and rate simulation (ADM-3).
+            Configure geographical pricing matrices, weight fees, parcel size surcharges, and simulate checkout fees.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} className="w-fit gap-1.5">
-          <RefreshCw className="size-4" /> Refresh
-        </Button>
-      </header>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 self-start sm:self-center">
+          <span className="relative flex size-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full size-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-mono text-[11px] text-muted-foreground">Live synced</span>
+        </div>
+      </div>
+
+      {/* KPI Statcards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Total Pricing Rules</p>
+            <p className="text-2xl font-bold font-mono text-foreground">{rules ? rules.length : "—"}</p>
+            <p className="text-[11px] text-muted-foreground">{activeRulesCount} active zone-pair rules</p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Coins className="size-5" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Average Base Fee</p>
+            <p className="text-2xl font-bold font-mono text-foreground">
+              LKR {averageBaseFee}
+            </p>
+            <p className="text-[11px] text-muted-foreground">Across all defined routes</p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <Scale className="size-5" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Service Zones</p>
+            <p className="text-2xl font-bold font-mono text-foreground">{zones ? zones.length : "—"}</p>
+            <p className="text-[11px] text-muted-foreground">Available for routing matrices</p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <MapPin className="size-5" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Rule Coverage</p>
+            <p className="text-2xl font-bold font-mono text-foreground">
+              {rules && rules.length > 0 ? `${Math.round((activeRulesCount / rules.length) * 100)}%` : "0%"}
+            </p>
+            <p className="text-[11px] text-muted-foreground">{activeRulesCount} of {rules?.length ?? 0} active</p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <Sparkles className="size-5" />
+          </div>
+        </div>
+      </div>
 
       {/* Global Alerts */}
       {error && (
@@ -372,336 +329,59 @@ export default function AdminPricingPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <nav aria-label="Sections" className="flex gap-2 border-b border-border pb-2">
-        <button
-          type="button"
-          onClick={() => setTab("zones")}
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            tab === "zones"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <MapPin className="size-4" />
-          Delivery Zones
-          {zones && (
-            <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 py-0.5 text-xs">
-              {zones.length}
-            </span>
-          )}
-        </button>
+      {/* Themed Tabs Bar */}
+      <div className="border-b border-border">
+        <nav aria-label="Sections" className="flex gap-2 overflow-x-auto pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setTab("rules")}
+            className={cn(
+              "flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors",
+              tab === "rules"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+            )}
+          >
+            <Coins className="size-4" />
+            Pricing Rules
+            {rules && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                {rules.length}
+              </span>
+            )}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setTab("rules")}
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            tab === "rules"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <Coins className="size-4" />
-          Pricing Rules
-          {rules && (
-            <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 py-0.5 text-xs">
-              {rules.length}
-            </span>
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={() => setTab("simulator")}
+            className={cn(
+              "flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors",
+              tab === "simulator"
+                ? "border-primary text-primary font-bold"
+                : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+            )}
+          >
+            <Calculator className="size-4" />
+            Rate Simulator
+          </button>
+        </nav>
+      </div>
 
-        <button
-          type="button"
-          onClick={() => setTab("simulator")}
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            tab === "simulator"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <Calculator className="size-4" />
-          Rate Simulator
-        </button>
-      </nav>
-
-      {/* TAB 1: DELIVERY ZONES */}
-      {tab === "zones" && (
-        <div className="space-y-6">
-          {/* Hub Network Callout */}
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-300/60 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-            <Warehouse className="size-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold">Hub Network Prerequisite (ADR 0009)</p>
-              <p className="text-xs text-amber-800 dark:text-amber-300">
-                Parcels move through branch hubs and a central hub. When adding a new zone, you must also assign a branch hub in{" "}
-                <strong>Admin &rarr; Hub Network</strong> and configure pricing rules before deliveries can be booked.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Zones List */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <h3 className="font-semibold text-foreground mb-4">Configured Delivery Zones</h3>
-                {zones === null ? (
-                  <div className="h-48 animate-pulse rounded-xl bg-muted" />
-                ) : zones.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No zones configured yet.</p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {zones.map((zone) => {
-                      const assignedHub = zone.hubId
-                        ? hubs?.find((h) => h.id === zone.hubId)
-                        : servedZoneMap.get(zone.id);
-                      const hasBranchHub = Boolean(assignedHub && assignedHub.active);
-
-                      return (
-                        <div key={zone.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold uppercase tracking-wider text-sm px-2 py-0.5 rounded bg-muted text-foreground">
-                                {zone.code}
-                              </span>
-                              <span className="font-medium text-foreground">{zone.name}</span>
-                              <span
-                                className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                                  zone.active
-                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                                    : "bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                {zone.active ? "Active" : "Inactive"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs">
-                              {hasBranchHub ? (
-                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                                  <Warehouse className="size-3.5" /> Served by {assignedHub?.name} ({assignedHub?.code})
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
-                                  <AlertTriangle className="size-3.5" /> No active hub assigned
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingZone(zone)}
-                              className="h-8 gap-1 text-xs"
-                            >
-                              <Edit2 className="size-3.5" /> Edit
-                            </Button>
-                            <Button
-                              variant={zone.active ? "outline" : "default"}
-                              size="sm"
-                              onClick={() => toggleZoneActive(zone)}
-                              className="h-8 text-xs"
-                            >
-                              {zone.active ? "Deactivate" : "Activate"}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setZoneToDelete(zone);
-                              }}
-                              className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
-                            >
-                              <Trash2 className="size-3.5" />
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Add / Edit Zone Form */}
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-5">
-                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                  {editingZone ? (
-                    <>
-                      <Edit2 className="size-4 text-primary" /> Edit Zone
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="size-4 text-primary" /> Add New Zone
-                    </>
-                  )}
-                </h3>
-
-                {editingZone ? (
-                  <form onSubmit={handleUpdateZone} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="edit-zone-code">Zone Code</Label>
-                      <Input
-                        id="edit-zone-code"
-                        required
-                        maxLength={50}
-                        value={editingZone.code}
-                        onChange={(e) => setEditingZone({ ...editingZone, code: e.target.value.toUpperCase() })}
-                        className="font-mono uppercase tracking-wider"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="edit-zone-name">Zone Name</Label>
-                      <Input
-                        id="edit-zone-name"
-                        required
-                        maxLength={200}
-                        value={editingZone.name}
-                        onChange={(e) => setEditingZone({ ...editingZone, name: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="checkbox"
-                        id="edit-zone-active"
-                        checked={editingZone.active}
-                        onChange={(e) => setEditingZone({ ...editingZone, active: e.target.checked })}
-                        className="rounded border-border"
-                      />
-                      <Label htmlFor="edit-zone-active" className="cursor-pointer text-xs">
-                        Active for bookings
-                      </Label>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <Button type="submit" disabled={savingZone} className="w-full">
-                        {savingZone ? <Loader2 className="size-4 animate-spin" /> : "Save Changes"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setEditingZone(null)}
-                        className="w-auto"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleCreateZone} className="space-y-4">
-                    {/* 1. Hub dropdown */}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="zone-hub">Hub</Label>
-                      <select
-                        id="zone-hub"
-                        required
-                        value={selectedHubId}
-                        onChange={(e) => handleHubChange(e.target.value)}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                      >
-                        <option value="" disabled className="text-muted-foreground bg-background">
-                          {(hubs ?? []).length === 0 ? "No hubs available (add a hub first)" : "Select a hub..."}
-                        </option>
-                        {(hubs ?? []).map((hub) => (
-                          <option key={hub.id} value={hub.id} className="text-foreground bg-background">
-                            {hub.name} ({hub.code} &bull; {hub.city}){hub.central ? " [Central Hub]" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-muted-foreground">Select an existing hub this zone belongs to.</p>
-                    </div>
-
-                    {/* 2. Zone Name dropdown */}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="zone-name-select">Zone Name</Label>
-                      <select
-                        id="zone-name-select"
-                        required
-                        disabled={!selectedHubId || availableSubZones.length === 0}
-                        value={selectedSubZoneName}
-                        onChange={(e) => handleSubZoneChange(e.target.value)}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="" disabled className="text-muted-foreground bg-background">
-                          {!selectedHubId
-                            ? "Select a hub first"
-                            : availableSubZones.length === 0
-                            ? "No zones cataloged for this hub"
-                            : "Select a zone / area..."}
-                        </option>
-                        {availableSubZones.map((sz) => {
-                          const isTaken =
-                            existingZoneCodes.has(sz.code.toUpperCase()) ||
-                            existingZoneNames.has(sz.name.toLowerCase());
-                          return (
-                            <option
-                              key={sz.code}
-                              value={sz.name}
-                              disabled={isTaken}
-                              className={
-                                isTaken
-                                  ? "text-muted-foreground bg-background opacity-50"
-                                  : "text-foreground bg-background"
-                              }
-                            >
-                              {sz.name} {isTaken ? "(Already Added)" : `(${sz.code})`}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <p className="text-[11px] text-muted-foreground">
-                        {selectedHub
-                          ? `Available zones in ${selectedHub.city}. Already added zones cannot be selected.`
-                          : "Select a hub above to load its zones."}
-                      </p>
-                    </div>
-
-                    {/* 3. Zone Code (auto-filled, in third place) */}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="zone-code">Zone Code</Label>
-                      <Input
-                        id="zone-code"
-                        required
-                        maxLength={50}
-                        placeholder="e.g. CMB-MRD"
-                        value={zoneForm.code}
-                        onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value.toUpperCase() })}
-                        className="font-mono uppercase tracking-wider"
-                      />
-                      <p className="text-[11px] text-muted-foreground">Unique identifier (auto-filled from selected zone).</p>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={savingZone || !zoneForm.code || !zoneForm.name}
-                      className="w-full mt-2"
-                    >
-                      {savingZone ? <Loader2 className="size-4 animate-spin" /> : "Create Zone"}
-                    </Button>
-                  </form>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: PRICING RULES MATRIX */}
+      {/* TAB 1: PRICING RULES MATRIX */}
       {tab === "rules" && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Rules Matrix */}
             <div className="lg:col-span-2 space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-xs">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="font-semibold text-foreground">Zone-Pair Pricing Rules</h3>
                     <p className="text-xs text-muted-foreground">Fee calculations between origin and destination zones.</p>
                   </div>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {rules?.length ?? 0} total rules
+                  </span>
                 </div>
 
                 {rules === null ? (
@@ -724,28 +404,22 @@ export default function AdminPricingPage() {
                       <tbody className="divide-y divide-border">
                         {rules.map((rule) => (
                           <tr key={rule.id} className="hover:bg-muted/40 transition-colors">
-                            <td className="py-3 px-2">
-                              <div className="flex items-center gap-1.5 font-medium">
-                                <span className="font-mono text-xs">{rule.originZoneCode ?? "—"}</span>
-                                <ArrowRight className="size-3 text-muted-foreground" />
-                                <span className="font-mono text-xs">{rule.destinationZoneCode ?? "—"}</span>
+                            <td className="py-3 px-2 font-medium">
+                              <span className="font-mono text-xs font-bold text-primary">{rule.originZoneCode || "Zone"}</span>
+                              <span className="mx-1 text-muted-foreground">&rarr;</span>
+                              <span className="font-mono text-xs font-bold text-primary">{rule.destinationZoneCode || "Zone"}</span>
+                              <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                                {rule.originZoneName} to {rule.destinationZoneName}
                               </div>
-                              <span className="text-[11px] text-muted-foreground">
-                                {rule.originZoneName} &rarr; {rule.destinationZoneName}
-                              </span>
                             </td>
-                            <td className="py-3 px-2 font-mono text-xs">
-                              {rule.currency} {Number(rule.baseFee).toFixed(2)}
-                            </td>
-                            <td className="py-3 px-2 font-mono text-xs">
-                              {rule.currency} {Number(rule.perKgFee).toFixed(2)}
-                            </td>
-                            <td className="py-3 px-2 font-mono text-[11px] text-muted-foreground">
-                              +{Number(rule.smallSizeSurcharge).toFixed(0)} / +{Number(rule.mediumSizeSurcharge).toFixed(0)} / +{Number(rule.largeSizeSurcharge).toFixed(0)}
+                            <td className="py-3 px-2 font-mono">{rule.currency} {rule.baseFee.toFixed(2)}</td>
+                            <td className="py-3 px-2 font-mono">+{rule.perKgFee.toFixed(2)}/kg</td>
+                            <td className="py-3 px-2 text-xs text-muted-foreground">
+                              {rule.smallSizeSurcharge.toFixed(0)} / {rule.mediumSizeSurcharge.toFixed(0)} / {rule.largeSizeSurcharge.toFixed(0)}
                             </td>
                             <td className="py-3 px-2">
                               <span
-                                className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                                   rule.active
                                     ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                                     : "bg-muted text-muted-foreground"
@@ -760,10 +434,9 @@ export default function AdminPricingPage() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => setEditingRule(rule)}
-                                  className="h-7 w-7 p-0"
-                                  title="Edit rule"
+                                  className="h-7 px-2 text-xs"
                                 >
-                                  <Edit2 className="size-3.5" />
+                                  <Edit2 className="size-3" />
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -771,7 +444,7 @@ export default function AdminPricingPage() {
                                   onClick={() => toggleRuleActive(rule)}
                                   className="h-7 px-2 text-xs"
                                 >
-                                  {rule.active ? "Disable" : "Enable"}
+                                  {rule.active ? "Deactivate" : "Activate"}
                                 </Button>
                               </div>
                             </td>
@@ -786,7 +459,7 @@ export default function AdminPricingPage() {
 
             {/* Add / Edit Rule Form */}
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-xs">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   {editingRule ? (
                     <>
@@ -794,40 +467,35 @@ export default function AdminPricingPage() {
                     </>
                   ) : (
                     <>
-                      <Plus className="size-4 text-primary" /> Create Pricing Rule
+                      <Plus className="size-4 text-primary" /> Add Pricing Rule
                     </>
                   )}
                 </h3>
 
                 {editingRule ? (
                   <form onSubmit={handleUpdateRule} className="space-y-3.5">
-                    <div className="rounded-lg bg-muted p-3 text-xs space-y-1">
-                      <span className="text-muted-foreground">Zone Route:</span>
-                      <p className="font-medium">
-                        {editingRule.originZoneCode} ({editingRule.originZoneName}) &rarr; {editingRule.destinationZoneCode} ({editingRule.destinationZoneName})
-                      </p>
+                    <div className="text-xs font-medium text-foreground pb-1 border-b border-border">
+                      Route: {editingRule.originZoneName} &rarr; {editingRule.destinationZoneName}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label htmlFor="edit-base-fee" className="text-xs">Base Fee (LKR)</Label>
+                        <Label htmlFor="edit-base-fee" className="text-xs">Base Fee</Label>
                         <Input
                           id="edit-base-fee"
                           type="number"
                           step="0.01"
-                          min="0"
                           required
                           value={editingRule.baseFee}
                           onChange={(e) => setEditingRule({ ...editingRule, baseFee: parseFloat(e.target.value) || 0 })}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="edit-per-kg-fee" className="text-xs">Per-Kg Fee (LKR)</Label>
+                        <Label htmlFor="edit-per-kg" className="text-xs">Per-Kg Fee</Label>
                         <Input
-                          id="edit-per-kg-fee"
+                          id="edit-per-kg"
                           type="number"
                           step="0.01"
-                          min="0"
                           required
                           value={editingRule.perKgFee}
                           onChange={(e) => setEditingRule({ ...editingRule, perKgFee: parseFloat(e.target.value) || 0 })}
@@ -835,33 +503,27 @@ export default function AdminPricingPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Small (+LKR)</Label>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Size Surcharges (Small / Medium / Large)</Label>
+                      <div className="grid grid-cols-3 gap-2">
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Small"
                           value={editingRule.smallSizeSurcharge}
                           onChange={(e) => setEditingRule({ ...editingRule, smallSizeSurcharge: parseFloat(e.target.value) || 0 })}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Med (+LKR)</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Medium"
                           value={editingRule.mediumSizeSurcharge}
                           onChange={(e) => setEditingRule({ ...editingRule, mediumSizeSurcharge: parseFloat(e.target.value) || 0 })}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Lrg (+LKR)</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Large"
                           value={editingRule.largeSizeSurcharge}
                           onChange={(e) => setEditingRule({ ...editingRule, largeSizeSurcharge: parseFloat(e.target.value) || 0 })}
                         />
@@ -874,21 +536,23 @@ export default function AdminPricingPage() {
                         id="edit-rule-active"
                         checked={editingRule.active}
                         onChange={(e) => setEditingRule({ ...editingRule, active: e.target.checked })}
-                        className="rounded border-border"
+                        className="rounded border-border text-primary focus:ring-primary"
                       />
                       <Label htmlFor="edit-rule-active" className="cursor-pointer text-xs">
                         Active for quotes
                       </Label>
                     </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <Button type="submit" disabled={savingRule} className="w-full">
-                        {savingRule ? <Loader2 className="size-4 animate-spin" /> : "Save Changes"}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
+                      <Button type="submit" disabled={savingRule} className="sm:flex-1">
+                        {savingRule ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
+                        Save Changes
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => setEditingRule(null)}
+                        className="shrink-0"
                       >
                         Cancel
                       </Button>
@@ -896,62 +560,46 @@ export default function AdminPricingPage() {
                   </form>
                 ) : (
                   <form onSubmit={handleCreateRule} className="space-y-3.5">
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <Label htmlFor="rule-origin" className="text-xs">Origin Zone</Label>
-                      <select
+                      <ThemedSelect
                         id="rule-origin"
-                        required
                         value={ruleForm.originZoneId}
-                        onChange={(e) => setRuleForm({ ...ruleForm, originZoneId: e.target.value })}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm"
-                      >
-                        <option value="" disabled className="text-muted-foreground">Select origin zone</option>
-                        {(zones ?? []).map((z) => (
-                          <option key={z.id} value={z.id} className="text-foreground bg-background">
-                            {z.code} — {z.name} {!z.active ? "(Inactive)" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setRuleForm({ ...ruleForm, originZoneId: val })}
+                        options={zoneSelectOptions}
+                        placeholder="Select origin zone..."
+                      />
                     </div>
 
-                    <div className="space-y-1">
-                      <Label htmlFor="rule-destination" className="text-xs">Destination Zone</Label>
-                      <select
-                        id="rule-destination"
-                        required
+                    <div className="space-y-1.5">
+                      <Label htmlFor="rule-dest" className="text-xs">Destination Zone</Label>
+                      <ThemedSelect
+                        id="rule-dest"
                         value={ruleForm.destinationZoneId}
-                        onChange={(e) => setRuleForm({ ...ruleForm, destinationZoneId: e.target.value })}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm"
-                      >
-                        <option value="" disabled className="text-muted-foreground">Select destination zone</option>
-                        {(zones ?? []).map((z) => (
-                          <option key={z.id} value={z.id} className="text-foreground bg-background">
-                            {z.code} — {z.name} {!z.active ? "(Inactive)" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setRuleForm({ ...ruleForm, destinationZoneId: val })}
+                        options={zoneSelectOptions}
+                        placeholder="Select destination zone..."
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label htmlFor="rule-base" className="text-xs">Base Fee (LKR)</Label>
+                        <Label htmlFor="create-base-fee" className="text-xs">Base Fee (LKR)</Label>
                         <Input
-                          id="rule-base"
+                          id="create-base-fee"
                           type="number"
                           step="0.01"
-                          min="0"
                           required
                           value={ruleForm.baseFee}
                           onChange={(e) => setRuleForm({ ...ruleForm, baseFee: e.target.value })}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="rule-per-kg" className="text-xs">Per-Kg Fee (LKR)</Label>
+                        <Label htmlFor="create-per-kg" className="text-xs">Per-Kg Fee (LKR)</Label>
                         <Input
-                          id="rule-per-kg"
+                          id="create-per-kg"
                           type="number"
                           step="0.01"
-                          min="0"
                           required
                           value={ruleForm.perKgFee}
                           onChange={(e) => setRuleForm({ ...ruleForm, perKgFee: e.target.value })}
@@ -959,41 +607,40 @@ export default function AdminPricingPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Small (+LKR)</Label>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Size Surcharges (Small / Medium / Large)</Label>
+                      <div className="grid grid-cols-3 gap-2">
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Small"
                           value={ruleForm.smallSizeSurcharge}
                           onChange={(e) => setRuleForm({ ...ruleForm, smallSizeSurcharge: e.target.value })}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Med (+LKR)</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Medium"
                           value={ruleForm.mediumSizeSurcharge}
                           onChange={(e) => setRuleForm({ ...ruleForm, mediumSizeSurcharge: e.target.value })}
                         />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[11px]">Lrg (+LKR)</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          placeholder="Large"
                           value={ruleForm.largeSizeSurcharge}
                           onChange={(e) => setRuleForm({ ...ruleForm, largeSizeSurcharge: e.target.value })}
                         />
                       </div>
                     </div>
 
-                    <Button type="submit" disabled={savingRule} className="w-full mt-2">
-                      {savingRule ? <Loader2 className="size-4 animate-spin" /> : "Save Pricing Rule"}
+                    <Button
+                      type="submit"
+                      disabled={savingRule || !ruleForm.originZoneId || !ruleForm.destinationZoneId}
+                      className="w-full mt-2"
+                    >
+                      {savingRule ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Plus className="size-4 mr-1.5" />}
+                      Create Pricing Rule
                     </Button>
                   </form>
                 )}
@@ -1003,138 +650,124 @@ export default function AdminPricingPage() {
         </div>
       )}
 
-      {/* TAB 3: RATE SIMULATOR */}
+      {/* TAB 2: RATE SIMULATOR */}
       {tab === "simulator" && (
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Simulation Form */}
-          <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-            <div>
-              <h3 className="font-semibold text-foreground">Interactive Rate Calculator</h3>
-              <p className="text-xs text-muted-foreground">
-                Simulate exact pricing quote calculation for customer bookings using active rules.
-              </p>
-            </div>
+          {/* Simulation Inputs */}
+          <div className="rounded-2xl border border-border bg-card p-5 space-y-4 shadow-xs">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <Calculator className="size-4 text-primary" /> Delivery Fee Calculator
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Simulate customer checkout quotes against currently active pricing rules.
+            </p>
 
             <form onSubmit={handleSimulate} className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="sim-origin">Pickup Zone</Label>
-                  <select
-                    id="sim-origin"
-                    required
+                  <Label htmlFor="sim-pickup" className="text-xs">Pickup Zone</Label>
+                  <ThemedSelect
+                    id="sim-pickup"
                     value={simPickup}
-                    onChange={(e) => setSimPickup(e.target.value)}
-                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-                  >
-                    {(zones ?? []).map((z) => (
-                      <option key={z.id} value={z.id} className="text-foreground bg-background">
-                        {z.code} — {z.name} {!z.active ? "(Inactive)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSimPickup(val)}
+                    options={activeZoneSelectOptions}
+                    placeholder="Select origin..."
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="sim-dropoff">Dropoff Zone</Label>
-                  <select
+                  <Label htmlFor="sim-dropoff" className="text-xs">Dropoff Zone</Label>
+                  <ThemedSelect
                     id="sim-dropoff"
-                    required
                     value={simDropoff}
-                    onChange={(e) => setSimDropoff(e.target.value)}
-                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-                  >
-                    {(zones ?? []).map((z) => (
-                      <option key={z.id} value={z.id} className="text-foreground bg-background">
-                        {z.code} — {z.name} {!z.active ? "(Inactive)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSimDropoff(val)}
+                    options={activeZoneSelectOptions}
+                    placeholder="Select destination..."
+                  />
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="sim-size">Parcel Size</Label>
-                  <select
+                  <Label htmlFor="sim-size" className="text-xs">Parcel Size</Label>
+                  <ThemedSelect
                     id="sim-size"
                     value={simSize}
-                    onChange={(e) => setSimSize(e.target.value as ParcelSize)}
-                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-                  >
-                    {PARCEL_SIZES.map((size) => (
-                      <option key={size} value={size} className="text-foreground bg-background">
-                        {size}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSimSize(val as ParcelSize)}
+                    options={parcelSizeOptions}
+                    searchable={false}
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="sim-weight">Weight (grams)</Label>
+                  <Label htmlFor="sim-weight" className="text-xs">Weight (grams)</Label>
                   <Input
                     id="sim-weight"
                     type="number"
-                    min="1"
+                    min={1}
+                    max={100000}
                     required
                     value={simWeightGrams}
                     onChange={(e) => setSimWeightGrams(parseInt(e.target.value, 10) || 0)}
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    {(simWeightGrams / 1000).toFixed(2)} kg
-                  </p>
+                  <p className="text-[10px] text-muted-foreground">{(simWeightGrams / 1000).toFixed(2)} kg</p>
                 </div>
               </div>
 
-              <Button type="submit" disabled={simulating} className="w-full gap-2">
+              <Button
+                type="submit"
+                disabled={simulating || !simPickup || !simDropoff}
+                className="w-full gap-2"
+              >
                 {simulating ? <Loader2 className="size-4 animate-spin" /> : <Calculator className="size-4" />}
                 Calculate Delivery Fee
               </Button>
             </form>
-
-            {simError && (
-              <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                <span>{simError}</span>
-              </div>
-            )}
           </div>
 
-          {/* Simulation Result */}
-          <div className="rounded-2xl border border-border bg-card p-5 flex flex-col justify-between">
+          {/* Simulation Output Card */}
+          <div className="rounded-2xl border border-border bg-card p-5 flex flex-col justify-between shadow-xs">
             <div>
-              <h3 className="font-semibold text-foreground mb-1">Calculation Breakdown</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Formula: Base Fee + (Weight in kg &times; Per-Kg Fee) + Size Surcharge
-              </p>
+              <h3 className="font-semibold text-foreground mb-4">Calculation Breakdown</h3>
+
+              {simError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  <p className="font-semibold text-xs">Rate Calculation Error</p>
+                  <p className="text-xs mt-1">{simError}</p>
+                </div>
+              )}
 
               {quote ? (
                 <div className="space-y-4">
-                  <div className="rounded-xl bg-primary/10 border border-primary/20 p-4 text-center">
-                    <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                      Total Calculated Fee
+                  <div className="flex items-baseline justify-between border-b border-border pb-3">
+                    <span className="text-sm text-muted-foreground">Final Total Fee</span>
+                    <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                      {quote.currency} {quote.amount}
                     </span>
-                    <p className="text-3xl font-bold text-foreground font-mono mt-1">
-                      {quote.currency} {Number(quote.amount).toFixed(2)}
-                    </p>
                   </div>
 
-                  <div className="space-y-2.5 rounded-xl border border-border bg-muted/30 p-3.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Base Delivery Fee:</span>
-                      <span className="font-mono font-medium">{quote.currency} {Number(quote.breakdown.baseFee).toFixed(2)}</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Base Rate</span>
+                      <span className="font-mono text-foreground">{quote.currency} {quote.breakdown.baseFee}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Weight Fee ({(simWeightGrams / 1000).toFixed(2)} kg):</span>
-                      <span className="font-mono font-medium">{quote.currency} {Number(quote.breakdown.weightFee).toFixed(2)}</span>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Weight Fee ({(simWeightGrams / 1000).toFixed(2)} kg)</span>
+                      <span className="font-mono text-foreground">+{quote.currency} {quote.breakdown.weightFee}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Size Surcharge ({simSize}):</span>
-                      <span className="font-mono font-medium">+{quote.currency} {Number(quote.breakdown.sizeSurcharge).toFixed(2)}</span>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Size Surcharge ({simSize})</span>
+                      <span className="font-mono text-foreground">+{quote.currency} {quote.breakdown.sizeSurcharge}</span>
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-muted-foreground space-y-0.5 font-mono">
-                    <p>Applied Rule ID: {quote.pricingRuleId}</p>
+                  <div className="rounded-xl bg-muted/50 p-3 text-xs space-y-1">
+                    <div className="flex items-center gap-1 font-medium text-foreground">
+                      <span>{zones?.find((z) => z.id === simPickup)?.name || "Origin Zone"}</span>
+                      <ArrowRight className="size-3 text-muted-foreground" />
+                      <span>{zones?.find((z) => z.id === simDropoff)?.name || "Destination Zone"}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Pricing rule matched: {quote.pricingRuleId}</p>
                   </div>
                 </div>
               ) : (
@@ -1152,38 +785,6 @@ export default function AdminPricingPage() {
           </div>
         </div>
       )}
-
-      {/* Delete Zone Confirmation Modal with Statcard */}
-      <ConfirmationDialog
-        open={zoneToDelete !== null}
-        onOpenChange={(open) => !open && setZoneToDelete(null)}
-        title="Delete Delivery Zone"
-        description="Are you sure you want to delete this delivery zone? Associated pricing rules will also be cleaned up automatically. This action cannot be undone."
-        confirmLabel="Delete Zone"
-        variant="destructive"
-        loading={deletingZone}
-        onConfirm={confirmDeleteZone}
-        itemSummary={
-          zoneToDelete
-            ? {
-                title: zoneToDelete.name,
-                code: zoneToDelete.code,
-                badge: zoneToDelete.active ? "Active" : "Inactive",
-                badgeVariant: zoneToDelete.active ? "success" : "outline",
-                icon: MapPin,
-                details: [
-                  { label: "Zone Code", value: zoneToDelete.code, badge: true },
-                  {
-                    label: "Serving Hub",
-                    value: zoneToDelete.hubId
-                      ? hubs?.find((h) => h.id === zoneToDelete.hubId)?.name || "Assigned Hub"
-                      : servedZoneMap.get(zoneToDelete.id)?.name || "None",
-                  },
-                ],
-              }
-            : undefined
-        }
-      />
     </div>
   );
 }

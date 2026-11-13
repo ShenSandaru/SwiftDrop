@@ -17,8 +17,8 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { href: "/dispatch", label: "Dispatch Fleet", exact: true },
   { href: "/admin/merchants", label: "Merchants", exact: true },
   { href: "/admin/users", label: "User Directory", exact: true },
-  { href: "/admin/pricing", label: "Pricing & Zones", exact: true },
-  { href: "/admin/hubs", label: "Hub Network", exact: true },
+  { href: "/admin/hubs", label: "Hub & Zone Network", exact: true },
+  { href: "/admin/pricing", label: "Pricing", exact: true },
   { href: "/admin/reports", label: "Reports", exact: true },
 ];
 
@@ -70,7 +70,7 @@ export function PortalShell({
           {/* Navigation Tabs */}
           {navItems.length > 0 && (
             <nav
-              className="flex items-center gap-1 border-b border-border overflow-x-auto pt-2"
+              className="flex items-center gap-1 border-b border-border overflow-x-auto pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               aria-label={`${portalName} navigation`}
             >
               {navItems.map((item) => {
