@@ -1,7 +1,7 @@
 # SwiftDrop Notification Database Design
 
 - **Document:** `docs/architecture/notification-database-design.md`
-- **Phase:** Phase 2 – Notification Database Design
+- **Phase:** Phase 2 – Notification Database Design (Refined)
 - **Status:** Complete Architecture & Schema Specification
 - **Date:** 2026-11-13
 - **Branch:** `feat/dev-notifications`
@@ -15,7 +15,7 @@ The Notification module provides decoupled, asynchronous, at-least-once status n
 - **ADR 0001 (Monorepo & Single Database)**: All tables reside within the shared PostgreSQL database.
 - **ADR 0003 (Modular Monolith Boundaries)**: The `notification` module owns its database schema completely. No foreign keys cross module boundaries to tables owned by `delivery` (`parcels`, `parcel_status_history`) or `pricing` (`pricing_rules`). Foreign keys to the `identity` module's `users` table are permitted following the established project pattern (identical to `parcels.customer_id REFERENCES users(id)` and `merchants.user_id REFERENCES users(id)`).
 - **ADR 0004 (Reliability & Sequence Enforcement)**: The schema enforces idempotent event handling, per-parcel in-order event application, sequence gap buffering, and resilient duplicate-message discarding.
-- **Flyway Migrations (`MigrationConventionTest`)**: Future migration files will reside in `backend/src/main/resources/db/migration/notification/` following the strict pattern `V<yyyyMMddHHmm>__notification_<description>.sql`.
+- **Flyway Migrations (`MigrationConventionTest`)**: Migration files reside in `backend/src/main/resources/db/migration/notification/` following the strict pattern `V<yyyyMMddHHmm>__notification_<description>.sql`.
 
 ---
 
@@ -30,12 +30,15 @@ erDiagram
         uuid event_id "Originating domain event ID"
         uuid recipient_user_id FK "identity.users(id)"
         uuid parcel_id "Logical reference to delivery.parcels"
-        varchar tracking_number "Human-readable tracking number"
-        varchar title "Localized title"
+        varchar tracking_number "Human-readable tracking number (SD...)"
+        varchar title "Notification title / Subject"
         text message "Formatted notification body"
         varchar channel "IN_APP, EMAIL, SMS, PUSH"
-        varchar status "UNREAD, READ, DISPATCHED, FAILED"
-        timestamptz read_at "Nullable timestamp when read"
+        boolean is_read "User read flag (applies to IN_APP)"
+        timestamptz read_at "Timestamp when marked as read (NULL for unread)"
+        varchar delivery_status "PENDING, SENT, FAILED, NOT_APPLICABLE"
+        timestamptz sent_at "Nullable timestamp when dispatched"
+        varchar failure_reason "Diagnostic error message on dispatch failure"
         timestamptz created_at "Creation timestamp"
     }
 
@@ -50,6 +53,9 @@ erDiagram
         uuid parcel_id "Logical reference to delivery.parcels"
         integer sequence "Event sequence number (>= 1)"
         jsonb payload "Serialized ParcelStatusChanged event"
+        integer retry_count "Number of gap reconciliation attempts"
+        varchar status "PENDING, UNRESOLVED"
+        timestamptz last_reconciled_at "Timestamp of last recovery attempt"
         timestamptz received_at "Ingestion timestamp"
     }
 ```
@@ -61,7 +67,18 @@ erDiagram
 ### 3.1 Table: `notification_records`
 
 #### Purpose
-Stores all user notifications, providing the persistent store for the in-app notification feed, read/unread status management, and audit logging for simulated/dispatched channel communications (Mock SMS, Email, future Push).
+Stores all user notifications, providing the persistent store for the in-app notification feed, user read status management, and audit/dispatch logging for external communication channels (Email, Mock SMS, future Push).
+
+#### Separation of User Read State and Channel Delivery State
+A critical requirement is that **user read state** and **channel delivery state** are orthogonal concerns that must not be merged into a single status column:
+- **User Read State (`is_read`, `read_at`)**:
+  - Pertains strictly to the recipient's interaction with the notification in the application UI.
+  - Applies directly to the `IN_APP` channel (e.g. badge counters, mark-as-read in inbox).
+  - For external channels (`EMAIL`, `SMS`, `PUSH`), user read tracking either does not apply or is not captured synchronously; these records default to `is_read = FALSE` with `read_at = NULL`.
+- **Channel Delivery State (`delivery_status`, `sent_at`, `failure_reason`)**:
+  - Pertains to whether the outbound message was successfully dispatched to an external transport or provider.
+  - For `IN_APP` notifications: Delivery is immediate and synchronous with row creation in PostgreSQL. Therefore, `delivery_status` is explicitly set to `'NOT_APPLICABLE'` (or `'SENT'`), avoiding artificial delivery queue states.
+  - For `EMAIL`, `SMS`, `PUSH`: Tracks the lifecycle of the outbound dispatch (`PENDING` $\rightarrow$ `SENT` or `FAILED`). If a provider call fails, `failure_reason` records sanitized diagnostic info, and `sent_at` remains `NULL`.
 
 #### Proposed DDL
 ```sql
@@ -74,25 +91,42 @@ CREATE TABLE notification_records (
     title             VARCHAR(200) NOT NULL,
     message           TEXT         NOT NULL,
     channel           VARCHAR(20)  NOT NULL,
-    status            VARCHAR(20)  NOT NULL,
+    
+    -- User read state (primarily for IN_APP notifications)
+    is_read           BOOLEAN      NOT NULL DEFAULT FALSE,
     read_at           TIMESTAMPTZ,
+
+    -- Channel delivery state (for external transports and audit)
+    delivery_status   VARCHAR(20)  NOT NULL,
+    sent_at           TIMESTAMPTZ,
+    failure_reason    VARCHAR(500),
+
     created_at        TIMESTAMPTZ  NOT NULL,
 
     -- Idempotency: guarantees one notification record per event, channel, and recipient
     CONSTRAINT uq_notification_records_event_channel_user 
         UNIQUE (event_id, channel, recipient_user_id),
 
-    -- Enumeration constraints
+    -- Allowed channels
     CONSTRAINT ck_notification_records_channel 
         CHECK (channel IN ('IN_APP', 'EMAIL', 'SMS', 'PUSH')),
-    CONSTRAINT ck_notification_records_status 
-        CHECK (status IN ('UNREAD', 'READ', 'DISPATCHED', 'FAILED')),
 
-    -- State consistency: read_at must be populated if and only if status is READ
-    CONSTRAINT ck_notification_records_read_state 
-        CHECK ((status = 'READ') = (read_at IS NOT NULL)),
+    -- Allowed delivery statuses
+    CONSTRAINT ck_notification_records_delivery_status 
+        CHECK (delivery_status IN ('PENDING', 'SENT', 'FAILED', 'NOT_APPLICABLE')),
 
-    -- Tracking number format matches system standard
+    -- State consistency: read_at must be populated if and only if is_read is TRUE
+    CONSTRAINT ck_notification_records_read_consistency 
+        CHECK ((is_read = TRUE) = (read_at IS NOT NULL)),
+
+    -- Delivery consistency: sent_at must be populated if delivery_status is SENT
+    CONSTRAINT ck_notification_records_delivery_consistency 
+        CHECK (
+            (delivery_status = 'SENT' AND sent_at IS NOT NULL)
+            OR (delivery_status <> 'SENT')
+        ),
+
+    -- Tracking number format matches system standard (D-05)
     CONSTRAINT ck_notification_records_tracking_number 
         CHECK (tracking_number ~ '^SD[0-9A-HJKMNP-TV-Z]{10}$')
 );
@@ -101,12 +135,12 @@ CREATE TABLE notification_records (
 CREATE INDEX ix_notification_records_user_feed 
     ON notification_records (recipient_user_id, created_at DESC);
 
--- Index 2: Highly efficient partial index for unread notification count badge
+-- Index 2: Highly efficient partial index for unread notification count badge (IN_APP)
 CREATE INDEX ix_notification_records_user_unread 
     ON notification_records (recipient_user_id) 
-    WHERE status = 'UNREAD';
+    WHERE channel = 'IN_APP' AND is_read = FALSE;
 
--- Index 3: Efficient lookup by parcel for support and audit queries
+-- Index 3: Efficient lookup by parcel for support, audit, and verification queries
 CREATE INDEX ix_notification_records_parcel_id 
     ON notification_records (parcel_id);
 ```
@@ -117,13 +151,16 @@ CREATE INDEX ix_notification_records_parcel_id
 | `id` | `UUID` | No | Primary Key, generated via application UUID generator (RFC 4122). |
 | `event_id` | `UUID` | No | UUID of the triggering `ParcelStatusChanged` event from `delivery`. |
 | `recipient_user_id` | `UUID` | No | Foreign Key to `users(id)` in `identity` module. Enforces valid recipient. |
-| `parcel_id` | `UUID` | No | Logical reference to `parcels(id)` (No FK to maintain ADR 0003 boundary). |
+| `parcel_id` | `UUID` | No | Logical reference to `parcels(id)` (No FK across module boundary per ADR 0003). |
 | `tracking_number` | `VARCHAR(16)` | No | 12-char tracking identifier (`SD...`) for display in client UI. |
 | `title` | `VARCHAR(200)` | No | Short title for notification banner or email subject line. |
 | `message` | `TEXT` | No | Full human-readable notification message body. |
 | `channel` | `VARCHAR(20)` | No | Dispatch channel (`IN_APP`, `EMAIL`, `SMS`, `PUSH`). |
-| `status` | `VARCHAR(20)` | No | Delivery/Read status (`UNREAD`, `READ`, `DISPATCHED`, `FAILED`). |
-| `read_at` | `TIMESTAMPTZ` | Yes | Timestamp when user marked notification as read. |
+| `is_read` | `BOOLEAN` | No | Read flag for in-app feed. Defaults to `FALSE`. |
+| `read_at` | `TIMESTAMPTZ` | Yes | Timestamp when user marked notification as read. Set only when `is_read = TRUE`. |
+| `delivery_status` | `VARCHAR(20)` | No | Dispatch status (`PENDING`, `SENT`, `FAILED`, `NOT_APPLICABLE`). |
+| `sent_at` | `TIMESTAMPTZ` | Yes | Timestamp when dispatched to recipient / channel transport. |
+| `failure_reason` | `VARCHAR(500)` | Yes | Sanitized error message if delivery failed. |
 | `created_at` | `TIMESTAMPTZ` | No | Creation timestamp (UTC). |
 
 ---
@@ -162,22 +199,30 @@ Serves as an event buffer / quarantine store for sequence gaps (ADR 0004 §4.3).
 #### Proposed DDL
 ```sql
 CREATE TABLE notification_pending_events (
-    event_id    UUID        PRIMARY KEY,
-    parcel_id   UUID        NOT NULL,
-    sequence    INTEGER     NOT NULL,
-    payload     JSONB       NOT NULL,
-    received_at TIMESTAMPTZ NOT NULL,
+    event_id           UUID        PRIMARY KEY,
+    parcel_id          UUID        NOT NULL,
+    sequence           INTEGER     NOT NULL,
+    payload            JSONB       NOT NULL,
+    retry_count        INTEGER     NOT NULL DEFAULT 0,
+    status             VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    last_reconciled_at TIMESTAMPTZ,
+    received_at        TIMESTAMPTZ NOT NULL,
 
-    -- Only one pending event allowed per parcel sequence number
+    -- Constraint: Only one pending event allowed per parcel sequence number
     CONSTRAINT uq_notification_pending_events_parcel_sequence 
         UNIQUE (parcel_id, sequence),
     CONSTRAINT ck_notification_pending_events_sequence 
-        CHECK (sequence >= 1)
+        CHECK (sequence >= 1),
+    CONSTRAINT ck_notification_pending_events_retry_count 
+        CHECK (retry_count >= 0),
+    CONSTRAINT ck_notification_pending_events_status 
+        CHECK (status IN ('PENDING', 'UNRESOLVED'))
 );
 
--- Index: Used by GapReconciliationScheduler to discover orphaned pending events older than grace period
+-- Index: Used by GapReconciliationScheduler to discover active pending events older than grace period
 CREATE INDEX ix_notification_pending_events_reconciliation 
-    ON notification_pending_events (received_at, parcel_id);
+    ON notification_pending_events (received_at, parcel_id)
+    WHERE status = 'PENDING';
 ```
 
 #### Column Details
@@ -186,86 +231,106 @@ CREATE INDEX ix_notification_pending_events_reconciliation
 | `event_id` | `UUID` | No | Primary Key. Stable event identifier from the message envelope. |
 | `parcel_id` | `UUID` | No | The parcel associated with the pending event. |
 | `sequence` | `INTEGER` | No | Sequence number of the pending event ($s > 1$). |
-| `payload` | `JSONB` | No | Full serialized `ParcelStatusChanged` JSON message body. |
+| `payload` | `JSONB` | No | Full serialized `ParcelStatusChanged` JSON message body (preserved indefinitely for recovery/investigation). |
+| `retry_count` | `INTEGER` | No | Number of times reconciliation was attempted for this pending event. |
+| `status` | `VARCHAR(20)` | No | `PENDING` (active retry) or `UNRESOLVED` (exhausted retries, quarantined for operational review). |
+| `last_reconciled_at` | `TIMESTAMPTZ` | Yes | Timestamp of the most recent reconciliation attempt. |
 | `received_at` | `TIMESTAMPTZ` | No | Arrival timestamp when quarantined. |
 
 ---
 
-## 4. Verification Against Core System Requirements
+## 4. Re-Evaluation of the Three Proposed Tables
 
-### 4.1 Multiple Notifications per User
-- A single user can have multiple notifications across different parcels or multiple notifications across the lifecycle of a single parcel (`CREATED`, `PICKED_UP`, `OUT_FOR_DELIVERY`, `DELIVERED`).
-- Supported by: `notification_records.id` as primary key and compound index on `(recipient_user_id, created_at DESC)`.
+We explicitly re-evaluated whether all three tables are necessary or whether the design could be simplified:
 
-### 4.2 Efficient Unread Notification Queries
-- In-app notification bells frequently execute `COUNT(*)` or fetch only unread notifications.
-- Supported by: **Partial index** `ix_notification_records_user_unread` (`WHERE status = 'UNREAD'`). PostgreSQL scans only unread rows, resulting in index-only scans that execute in sub-millisecond time even with millions of read historical notifications.
-
-### 4.3 Idempotent Event Processing & Duplicate Deliveries
-- RabbitMQ redeliveries or unconfirmed message requeues present duplicate messages with identical `eventId`.
-- Supported by:
-  1. Watermark check on `notification_consumer_state`: if $s \le last\_applied\_sequence$, event is dropped with zero side effects.
-  2. Database constraint `uq_notification_records_event_channel_user`: prevents duplicate notification records if the consumer state check is bypassed.
-  3. Unique constraint `uq_notification_pending_events_parcel_sequence`: prevents duplicate quarantine records.
-
-### 4.4 Event Sequence Gap Recovery Flow
-- If sequence 1 arrives, then sequence 3 arrives:
-  1. Sequence 3 ($s=3, last=1$) fails condition $s = last + 1$.
-  2. Sequence 3 is inserted into `notification_pending_events` and acknowledged.
-  3. When sequence 2 arrives later:
-     - Sequence 2 is processed, setting $last = 2$.
-     - Consumer immediately inspects `notification_pending_events` for `parcel_id` with sequence 3.
-     - Sequence 3 is applied, deleted from `notification_pending_events`, and $last$ advances to 3.
-  4. If sequence 2 never arrives (lost broker message):
-     - `GapReconciliationScheduler` polls `ix_notification_pending_events_reconciliation` for `received_at < NOW() - INTERVAL '60 seconds'`.
-     - Calls `delivery.api.ParcelEvents.eventsBetween(parcelId, 2, 3)` to fetch sequence 2 directly from historical status logs.
-     - Processes sequences 2 and 3 sequentially, cleaning up the pending table.
-
-### 4.5 Future Channel Extensibility (Email, SMS, Push)
-- The column `channel` (`IN_APP`, `EMAIL`, `SMS`, `PUSH`) allows a single business event to create distinct dispatch records.
-- For example, a `DELIVERED` event can generate:
-  - Record A: `channel = 'IN_APP'`, `status = 'UNREAD'`.
-  - Record B: `channel = 'EMAIL'`, `status = 'DISPATCHED'`.
-- Both are tracked under the same `event_id` and `parcel_id` without collision due to `UNIQUE (event_id, channel, recipient_user_id)`.
-
----
-
-## 5. Data Retention & Archival Considerations
-
-1. **`notification_consumer_state`**:
-   - Must be retained as long as the parcel is active.
-   - For terminal parcels (`DELIVERED`, `RETURNED`, `CANCELLED`, `FAILED`), state records can safely be retained for 90 days after parcel termination, or kept indefinitely given the small row footprint (~48 bytes per parcel).
-2. **`notification_pending_events`**:
-   - Highly ephemeral table. Rows are deleted immediately upon resolution.
-   - If an event remains in pending status beyond max reconciliation attempts (default 5 retries, ADR 0004 §9), it is flagged as stuck and moved to DLQ / operational logs.
-3. **`notification_records`**:
-   - In-app notification feed retention: Recommended retention of **30 days for READ notifications** and **90 days for UNREAD notifications**.
-   - A scheduled daily cleanup worker (`NotificationRetention`) can purge expired rows:
-     ```sql
-     DELETE FROM notification_records 
-     WHERE (status = 'READ' AND read_at < NOW() - INTERVAL '30 days')
-        OR (created_at < NOW() - INTERVAL '90 days');
-     ```
-
----
-
-## 6. Review Against Existing Backend Architecture & Identified Risks
-
-| Area | Assessment & Findings | Risk Mitigation |
+| Table | Why It Is Genuinely Necessary | Failure Scenario If Omitted |
 | :--- | :--- | :--- |
-| **Module Boundary Isolation (ADR 0003)** | No foreign key to `delivery.parcels` is declared. `parcel_id` is stored as an unconstrained UUID, identical to how `delivery.parcels.merchant_id` references `merchants.id`. | Strictly complies with ADR 0003. `ModuleBoundaryTest` will remain green. |
-| **Identity Reference** | `recipient_user_id` declares `REFERENCES users (id) ON DELETE RESTRICT`. | Matches established project conventions (`parcels.customer_id`, `merchants.user_id`). Prevents accidental user deletion while active notification records exist. |
-| **PostgreSQL JSONB Compatibility** | `payload JSONB` used in `notification_pending_events`. | PostgreSQL 18 supports JSONB natively; already utilized in `delivery_parcel_outbox_events.payload`. |
-| **Migration Directory & Naming** | Migration will be placed in `backend/src/main/resources/db/migration/notification/`. | Conforms to `MigrationConventionTest` naming: `V<timestamp>__notification_<description>.sql`. |
-| **Open Decision: Recipient Phone Number** | `users` table does not contain a phone number column. If SMS notifications are added later, contact numbers must be fetched via `delivery.api.DeliveryContact` or stored in an extended profile. | For Phase 2/3, in-app and email channels are fully supported by `identity_users(email)`. |
+| **`notification_records`** | Required to store the user-facing notification feed (`IN_APP`), drive the unread notification badge, maintain read/unread state, and provide audit logging for outbound dispatches. | Without it, users cannot view past notifications in the application, and the frontend cannot display an unread notification count. |
+| **`notification_consumer_state`** | Implements the lightweight watermark ($lastAppliedSequence$) per parcel. Required to detect sequence gaps ($s > last + 1$) and identify duplicate deliveries ($s \le last$). | If omitted, the consumer would have to execute aggregate `MAX(sequence)` queries across `notification_records` on every message. Worse, if a status transition does *not* produce a notification (e.g. `AT_HUB` or `IN_TRANSIT` per ADR 0004 §8), no row is written to `notification_records`, destroying the sequence chain and causing false gap detections. |
+| **`notification_pending_events`** | Quarantines out-of-order messages in a durable store so the consumer can acknowledge RabbitMQ without dropping the message. | If omitted, out-of-order messages would have to be rejected (`NACK`) with requeue, causing head-of-line blocking in RabbitMQ, spinning worker threads, and consuming excessive CPU. |
+
+**Conclusion**: All three tables serve distinct, essential responsibilities and cannot be merged or omitted without sacrificing correctness or performance.
 
 ---
 
-## 7. Phase 2 Conclusion
+## 5. Event Sequence Handling & Watermark Mechanics
 
-The proposed database design completely fulfills the requirements of the Notification module:
-- Implements strict ordering, sequence gap buffering, and deduplication (ADR 0004).
-- Adheres strictly to modular monolith boundary rules (ADR 0003).
-- Optimizes query performance for unread badge counters and notification feeds.
-- Prepares the data layer for seamless integration with upcoming Java entities in Phase 3.
+### 5.1 Universal Sequence Watermark Advancement
+- **The Core Rule**: **Every** consumed `ParcelStatusChanged` event that is successfully processed or recognized as valid in-order ($sequence = last\_applied\_sequence + 1$) **must advance the per-parcel sequence watermark** in `notification_consumer_state`.
+- **Filtered Events Still Advance State**:
+  - As established in ADR 0004 §8, certain events (e.g. `AT_HUB`, `IN_TRANSIT`, or merchant-created parcels) do not generate user-facing notifications.
+  - However, the consumer **must still update `notification_consumer_state.last_applied_sequence = sequence`**.
+  - If watermark advancement were skipped for `AT_HUB` (sequence 2), the subsequent `OUT_FOR_DELIVERY` event (sequence 3) would be incorrectly flagged as a gap ($3 > 1 + 1$) and permanently stuck in quarantine.
+- **Transactional Atomicity**:
+  - The evaluation of notification eligibility, the insertion into `notification_records` (if applicable), and the update to `notification_consumer_state` are executed within a **single database transaction** (`@Transactional`).
+  - If a notification record is generated, it commits together with the watermark update.
+  - If no notification is generated (filtered status), only the watermark update commits.
+  - If any failure occurs during database operations, the transaction rolls back completely, ensuring no partial or corrupted watermark advancement.
 
+---
+
+## 6. RabbitMQ Acknowledgement, Transactions & Failure Handling
+
+### 6.1 Strict Commit-Before-Acknowledgement Policy
+To guarantee at-least-once delivery without message loss:
+1. The RabbitMQ listener operates with container acknowledgment mode set to manual or transaction-synchronized auto-ack (`AcknowledgeMode.AUTO` bound to transaction completion, or explicit manual ACK via `Channel.basicAck`).
+2. **Persistence Guarantee**: The database transaction that persists `notification_records` (or `notification_pending_events`) and updates `notification_consumer_state` **must commit successfully before the RabbitMQ message is acknowledged**.
+3. **No Early ACKs**: Under no circumstances is a message acknowledged to RabbitMQ while its corresponding database changes are uncommitted or in-flight.
+
+### 6.2 Failure Scenarios and Edge Cases
+| Scenario | Consumer Behavior & Invariant | Outcome |
+| :--- | :--- | :--- |
+| **Duplicate RabbitMQ Delivery** | Incoming event has $sequence \le last\_applied\_sequence$ or $eventId$ exists in `notification_records`. | Recognized as duplicate. The listener skips business processing, no database mutation occurs, and the message is safely acknowledged (**idempotent no-op**). |
+| **Database Transaction Failure** | Database lock timeout, connectivity blip, or constraint violation occurs during processing. | The transaction rolls back. Spring AMQP negatively acknowledges the message (`basicNack(requeue = true)`). RabbitMQ redelivers the message according to quorum queue retry limits. |
+| **Application Crash After DB Commit but Before ACK** | Database commit succeeded, but node crashes before the ACK frame reaches RabbitMQ. | On node restart, RabbitMQ redelivers the message. The consumer checks `notification_consumer_state`, detects $sequence \le last\_applied\_sequence$, recognizes it as an already-processed duplicate, and immediately ACKs. **Zero duplicate notifications are created**. |
+| **Permanent Deserialization / Payload Error** | Message body is unparseable JSON or corrupted schema. | Deserializer error handler routes message directly to the Dead-Letter Queue (`notification.parcel-status-changed.dlq`) and ACKs the primary queue to avoid blocking worker threads. |
+
+---
+
+## 7. Reconciliation Failure & Operational Isolation
+
+### 7.1 Strict Decoupling from Delivery Lifecycle
+- **Fundamental Invariant**: **Notification failures must NEVER alter, degrade, or mutate the actual `delivery.parcels` lifecycle status.**
+- The parcel in the physical world is unaffected by background notification delays: a parcel that is `OUT_FOR_DELIVERY` or `DELIVERED` remains valid and unchanged in `delivery_parcels` and `delivery_parcel_status_history`.
+- Under no circumstances does the Notification module write to `delivery_parcels` or invoke status changes on `delivery`.
+
+### 7.2 Notification-Specific Operational Tracking (`status = 'UNRESOLVED'`)
+In earlier drafts, the term "STUCK parcel" was used colloquially. To eliminate any ambiguity with delivery domain state, this is formalized strictly as a **notification-level operational state**:
+- In `notification_pending_events`, the column `status` tracks:
+  - `'PENDING'`: Active quarantine awaiting normal arrival or gap recovery.
+  - `'UNRESOLVED'`: Indicates that **5 consecutive reconciliation attempts** (`retry_count >= 5`) over a bounded retry duration failed to retrieve the missing sequence from `delivery.api.ParcelEvents`.
+- When an event transitions to `UNRESOLVED`:
+  1. The raw event payload is **preserved indefinitely** in `notification_pending_events(payload)` for audit, replay, and root-cause analysis.
+  2. The `GapReconciliationScheduler` excludes `UNRESOLVED` events from its periodic query (`WHERE status = 'PENDING'`), eliminating infinite polling loops and database load spikes.
+  3. An `ERROR` log line is emitted containing `event_id`, `parcel_id`, and `sequence` (omitting personal data).
+  4. An operational metric is incremented: `notifications.reconciliation.unresolved`.
+  5. System administrators can manually inspect the payload and trigger re-evaluation after resolving upstream issues.
+
+---
+
+## 8. PostgreSQL Types, Naming Conventions, and Flyway Consistency
+
+The schema strictly adheres to the conventions observed across `backend/src/main/resources/db/migration/`:
+- **Naming Prefix**: Tables are singular/plural words prefixed by the module name (`notification_records`, `notification_consumer_state`, `notification_pending_events`).
+- **Identifiers**: Primary keys are named `id` or `<aggregate>_id` of type `UUID`.
+- **Timestamps**: All timestamps use `TIMESTAMPTZ` (UTC).
+- **Constraints & Indexes**:
+  - Primary keys: `PRIMARY KEY`.
+  - Unique constraints: `uq_<table_name>_<columns>`.
+  - Check constraints: `ck_<table_name>_<rule>`.
+  - Indexes: `ix_<table_name>_<columns>`.
+- **Flyway Target**: Prepared for migration file `backend/src/main/resources/db/migration/notification/V202611131000__notification_create_tables.sql`.
+
+---
+
+## 9. Unresolved Architectural Decisions
+
+The following open items are documented for confirmation:
+
+1. **Email Channel Phase 1 Implementation**:
+   - For Phase 1, `MockChannelSender` satisfies the assignment requirement for mock dispatch logging.
+   - When real email is enabled in Phase 2, `notification_records.delivery_status` will track `PENDING` $\rightarrow$ `SENT`/`FAILED`.
+2. **Data Retention Cleanup Schedule**:
+   - Recommended retention: 30 days for `is_read = TRUE`, 90 days for unread. An automated daily cleanup worker can be introduced in Phase 3 without schema changes.
+3. **Courier / Recipient Phone Numbers**:
+   - Confirmed that `users` has no phone number. SMS dispatch will remain mocked using recipient details from `delivery.api.DeliveryContact` or fallback identifiers.
