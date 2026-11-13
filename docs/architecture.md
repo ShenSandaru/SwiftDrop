@@ -108,7 +108,7 @@ The frontend and backend share no code. They communicate only over HTTP.
 | `merchant` | Registration and approval, API credentials, order intake, dashboard queries, webhook delivery and retries | merchants, API credentials, webhook endpoints, webhook delivery records |
 | `notification` | Notifications triggered by status events | notification messages |
 | `tracking` | Live SSE connections; no history of its own | nothing persistent |
-| `assistant` (Proposed, [ADR 0010](adr/0010-ai-delivery-assistant.md); implemented) | AI delivery assistant: chat endpoint, read-only tools over public tracking and pricing data, Gemini client | nothing persistent |
+| `assistant` (Proposed, [ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md); implemented) | AI delivery assistant: chat endpoint, read-only tools over public tracking and pricing data, Gemini client | nothing persistent |
 
 `reporting` is deferred: the required reports (ADM-4) and workload counts (ADM-2) use data owned by
 `delivery`. ADR 0003 lists what each module must not own.
@@ -463,7 +463,7 @@ whether springdoc and Actuator details are exposed outside local development.
   [ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)'s alternatives. The brief offers
   Kubernetes only as an optional bonus (BON-1); pursuing it needs
   a separate, explicitly reviewed ADR.
-- **Proposed and implemented ([ADR 0010](adr/0010-ai-delivery-assistant.md)):** the AI delivery
+- **Proposed and implemented ([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)):** the AI delivery
   assistant (BON-2). `POST /api/v1/assistant/messages` (public, rate limited per client) sends the
   conversation to the Gemini API with function calling. The model may call three read-only tools,
   `track_parcel`, `estimate_fee` and `list_service_areas`, which use only the `api` packages of

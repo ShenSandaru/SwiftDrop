@@ -16,7 +16,7 @@ current state of each decision and lists the open questions that still need one.
 | [0006](0006-delivery-lifecycle-and-transition-rules.md) | Delivery lifecycle and transition rules | Proposed |
 | [0007](0007-public-sse-tracking-stream.md) | Public SSE tracking stream | Proposed |
 | [0009](0009-hub-network-delivery-attempts-and-returns.md) | Hub network, delivery attempts, returns and cancellation | Accepted |
-| [0010](0010-ai-delivery-assistant.md) | AI delivery assistant (BON-2) | Proposed |
+| [0010](0010-ai-delivery-assistant-and-mcp-server.md) | AI delivery assistant and MCP server (BON-2) | Proposed |
 
 ## Process
 

@@ -1,4 +1,4 @@
-# 0010. AI delivery assistant (BON-2)
+# 0010. AI delivery assistant and MCP server (BON-2)
 
 - Status: Proposed
 - Date: 2026-11-13

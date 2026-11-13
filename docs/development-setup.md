@@ -162,7 +162,7 @@ same JSON token body as `POST /api/v1/auth/tokens`.
 ### AI assistant (optional)
 
 The chat assistant on the Track Parcel and customer pages
-([ADR 0010](adr/0010-ai-delivery-assistant.md)) needs a Gemini API key; without one it answers that
+([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)) needs a Gemini API key; without one it answers that
 it is unavailable and everything else works. Create a free key at <https://aistudio.google.com>,
 put it in your `.env` as `SWIFTDROP_GEMINI_API_KEY` (never commit or share it) and restart the
 backend, which reads `.env` only at startup. The model is optional (`SWIFTDROP_ASSISTANT_MODEL`);
