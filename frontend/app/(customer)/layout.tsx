@@ -1,4 +1,5 @@
 import React from "react";
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { PortalShell, type PortalNavItem } from "@/components/portal/portal-shell";
 
 const CUSTOMER_NAV: PortalNavItem[] = [
@@ -9,13 +10,16 @@ const CUSTOMER_NAV: PortalNavItem[] = [
 
 export default function CustomerPortalLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PortalShell
-      portalName="Customer Portal"
-      role="CUSTOMER"
-      workspaceBadge="Customer Workspace · WS2"
-      navItems={CUSTOMER_NAV}
-    >
-      {children}
-    </PortalShell>
+    <>
+      <PortalShell
+        portalName="Customer Portal"
+        role="CUSTOMER"
+        workspaceBadge="Customer Workspace · WS2"
+        navItems={CUSTOMER_NAV}
+      >
+        {children}
+      </PortalShell>
+      <AssistantWidget />
+    </>
   );
 }
