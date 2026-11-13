@@ -1,3 +1,4 @@
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { Hero } from "@/components/landing/hero";
 import { BoardingPass } from "@/components/landing/boarding-pass";
 import { Journey } from "@/components/landing/journey";
@@ -15,6 +16,7 @@ export default function Home() {
       <Stamps />
       <Faq />
       <Closing />
+      <AssistantWidget />
     </main>
   );
 }
