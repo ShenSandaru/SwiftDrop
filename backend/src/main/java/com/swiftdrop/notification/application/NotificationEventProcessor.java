@@ -287,5 +287,161 @@ public class NotificationEventProcessor {
         }
         return true;
     }
+
+    /**
+     * Atomically reconciles pending events for a single parcel using a non-blocking advisory lock.
+     * <p>
+     * Processing guarantees:
+     * <ul>
+     *   <li>Attempts to acquire {@code tryAcquireParcelLock(parcelId)}. If another transaction
+     *       (e.g., listener or concurrent worker) holds the lock, returns {@code false} immediately
+     *       without blocking or incrementing retry counts.</li>
+     *   <li>Cleans up obsolete pending events that have already been applied ({@code sequence <= watermark}).</li>
+     *   <li>Finds the lowest unapplied pending event $S$. If $S > expected$, queries Delivery's
+     *       {@link ParcelEvents#eventsBetween(UUID, int, int)}.</li>
+     *   <li>If history is complete, applies recovered events in sequence, updates watermark, applies $S$,
+     *       and drains subsequent contiguous buffered events.</li>
+     *   <li>If history is incomplete, increments {@code retryCount} on the pending event and updates
+     *       {@code lastReconciledAt}. If {@code retryCount >= 5}, marks the event {@code UNRESOLVED}
+     *       and emits an error log.</li>
+     * </ul>
+     *
+     * @param parcelId the unique parcel identifier
+     * @param now the reconciliation execution timestamp
+     * @param maxAttempts maximum reconciliation attempts before marking UNRESOLVED (e.g. 5)
+     * @return {@code true} if reconciliation executed, {@code false} if lock was busy or no pending events
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    public boolean reconcileParcel(UUID parcelId, Instant now, int maxAttempts) {
+        Objects.requireNonNull(parcelId, "parcelId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+
+        // 1. Attempt non-blocking transaction-level advisory lock
+        if (!consumerStateRepository.tryAcquireParcelLock(parcelId)) {
+            log.debug("Advisory lock busy for parcel {}. Skipping reconciliation for this cycle.", parcelId);
+            return false;
+        }
+
+        // 2. Fetch all pending events for this parcel ordered by sequence ASC
+        List<NotificationPendingEvent> pendingEvents = pendingEventRepository.findByParcelIdOrderBySequenceAsc(parcelId);
+        if (pendingEvents.isEmpty()) {
+            return true;
+        }
+
+        // 3. Load current consumer state watermark
+        Optional<NotificationConsumerState> existingState = consumerStateRepository.findById(parcelId);
+        int currentWatermark = existingState.map(NotificationConsumerState::getLastAppliedSequence).orElse(0);
+        int expected = currentWatermark + 1;
+
+        // 4. Find the first pending event
+        NotificationPendingEvent firstPending = pendingEvents.getFirst();
+
+        // If already applied (e.g. applied by listener earlier), clean up and re-drain
+        if (firstPending.getSequence() <= currentWatermark) {
+            log.debug("Pending event seq {} for parcel {} already applied (watermark {}). Cleaning up.",
+                    firstPending.getSequence(), parcelId, currentWatermark);
+            pendingEventRepository.delete(firstPending);
+            existingState.ifPresent(this::drainContiguousPendingEvents);
+            return true;
+        }
+
+        // Check if already quarantined as UNRESOLVED
+        if (firstPending.getStatus() == NotificationPendingEventStatus.UNRESOLVED) {
+            log.warn("Pending event seq {} for parcel {} is UNRESOLVED. Halting reconciliation.",
+                    firstPending.getSequence(), parcelId);
+            return true;
+        }
+
+        int targetSeq = firstPending.getSequence();
+
+        if (targetSeq == expected) {
+            // Can apply directly!
+            ParcelStatusChanged eventToApply;
+            try {
+                eventToApply = eventParser.parse(firstPending.getPayload());
+            } catch (Exception e) {
+                log.error("Failed to parse pending payload for parcel {} seq {}. Marking UNRESOLVED.", parcelId, targetSeq, e);
+                firstPending.markUnresolved();
+                pendingEventRepository.save(firstPending);
+                return true;
+            }
+
+            if (!firstPending.getParcelId().equals(eventToApply.data().parcelId())
+                    || firstPending.getSequence() != eventToApply.data().sequence()) {
+                log.error("Corrupted pending payload for parcel {} seq {}. Marking UNRESOLVED.", parcelId, targetSeq);
+                firstPending.markUnresolved();
+                pendingEventRepository.save(firstPending);
+                return true;
+            }
+
+            applyEvent(eventToApply);
+            NotificationConsumerState state = updateWatermark(existingState, parcelId, targetSeq, eventToApply.occurredAt());
+            pendingEventRepository.delete(firstPending);
+            drainContiguousPendingEvents(state);
+            return true;
+        }
+
+        // targetSeq > expected: gap exists, query ParcelEvents
+        List<ParcelStatusChanged> recoveredEvents;
+        try {
+            recoveredEvents = parcelEvents.eventsBetween(parcelId, expected, targetSeq - 1);
+        } catch (Exception e) {
+            log.warn("Error querying ParcelEvents for parcel {} (range {}-{}): {}", parcelId, expected, targetSeq - 1, e.getMessage());
+            // Transient query failure: do NOT increment retry count on external error
+            return false;
+        }
+
+        int expectedRecoveredCount = (targetSeq - 1) - expected + 1;
+        if (!isRecoveredHistoryComplete(recoveredEvents, expected, expectedRecoveredCount)) {
+            // History incomplete: record genuine attempt
+            firstPending.recordReconciliationAttempt(now);
+            if (firstPending.getRetryCount() >= maxAttempts) {
+                firstPending.markUnresolved();
+                log.error("Pending event {} for parcel {} sequence {} failed {} reconciliation attempts. Quarantined as UNRESOLVED.",
+                        firstPending.getEventId(), parcelId, targetSeq, maxAttempts);
+            } else {
+                log.debug("Incomplete history for parcel {} sequence {} (attempt {}/{}).",
+                        parcelId, targetSeq, firstPending.getRetryCount(), maxAttempts);
+            }
+            pendingEventRepository.save(firstPending);
+            return true;
+        }
+
+        // History complete: apply recovered events in strict order
+        NotificationConsumerState state = existingState.orElse(null);
+        for (ParcelStatusChanged recovered : recoveredEvents) {
+            applyEvent(recovered);
+            state = updateWatermark(Optional.ofNullable(state), parcelId, recovered.data().sequence(), recovered.occurredAt());
+            pendingEventRepository.findByParcelIdAndSequence(parcelId, recovered.data().sequence())
+                    .ifPresent(pendingEventRepository::delete);
+        }
+
+        // Now parse and apply the first pending event
+        ParcelStatusChanged targetEvent;
+        try {
+            targetEvent = eventParser.parse(firstPending.getPayload());
+        } catch (Exception e) {
+            log.error("Failed to parse target payload for parcel {} seq {}. Marking UNRESOLVED.", parcelId, targetSeq, e);
+            firstPending.markUnresolved();
+            pendingEventRepository.save(firstPending);
+            return true;
+        }
+
+        if (!firstPending.getParcelId().equals(targetEvent.data().parcelId())
+                || firstPending.getSequence() != targetEvent.data().sequence()) {
+            log.error("Corrupted target payload for parcel {} seq {}. Marking UNRESOLVED.", parcelId, targetSeq);
+            firstPending.markUnresolved();
+            pendingEventRepository.save(firstPending);
+            return true;
+        }
+
+        applyEvent(targetEvent);
+        state = updateWatermark(Optional.ofNullable(state), parcelId, targetSeq, targetEvent.occurredAt());
+        pendingEventRepository.delete(firstPending);
+
+        // Drain any contiguous buffered events that follow
+        drainContiguousPendingEvents(state);
+        return true;
+    }
 }
 
