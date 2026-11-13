@@ -19,13 +19,16 @@ import {
   Star,
   Trash2,
   Warehouse,
+  X,
 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemedSelect } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { IslandCoverageMap } from "@/components/admin/island-coverage-map";
 import { formatApiError } from "@/lib/api";
 import { createHub, deleteHub, listHubs, updateHub, type Hub } from "@/lib/hubs";
 import { listDistricts, type District } from "@/lib/districts";
@@ -39,7 +42,7 @@ const EMPTY_ZONE_FORM = { code: "", name: "" };
  * Styled to match the Dispatch Control Tower dashboard.
  */
 export default function AdminHubsAndZonesPage() {
-  const [tab, setTab] = useState<"hubs" | "zones">("hubs");
+  const [tab, setTab] = useState<"hubs" | "zones" | "coverage">("hubs");
 
   // Shared state
   const [hubs, setHubs] = useState<Hub[] | null>(null);
@@ -56,8 +59,9 @@ export default function AdminHubsAndZonesPage() {
   const [hubToDelete, setHubToDelete] = useState<Hub | null>(null);
   const [deletingHub, setDeletingHub] = useState(false);
 
-  // Zone form states
+  // Zone form & filter states
   const [zoneForm, setZoneForm] = useState(EMPTY_ZONE_FORM);
+  const [zoneSearch, setZoneSearch] = useState("");
   const [selectedHubId, setSelectedHubId] = useState("");
   const [selectedSubZoneName, setSelectedSubZoneName] = useState("");
   const [savingZone, setSavingZone] = useState(false);
@@ -537,9 +541,23 @@ export default function AdminHubsAndZonesPage() {
             >
               <MapPin className="size-4 mr-1.5" /> Delivery Zones ({zoneList.length})
             </Button>
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-1.5 text-xs font-medium text-primary-foreground">
-              <Globe className="size-3.5" /> Island Coverage: {coveragePercent}%
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setTab("coverage");
+                setError(null);
+                setSuccess(null);
+              }}
+              className={cn(
+                "font-semibold transition-colors",
+                tab === "coverage"
+                  ? "bg-primary-foreground text-primary hover:bg-primary-foreground/90 shadow-xs"
+                  : "border border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
+              )}
+            >
+              <Globe className="size-4 mr-1.5" /> Island Coverage: {coveragePercent}%
+            </Button>
           </div>
         </div>
       </section>
@@ -647,14 +665,34 @@ export default function AdminHubsAndZonesPage() {
 
       {/* Status Alerts */}
       {error && (
-        <p role="alert" className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          <AlertTriangle className="size-4 shrink-0" /> {error}
-        </p>
+        <Alert variant="destructive" className="pr-10">
+          <AlertTriangle aria-hidden="true" />
+          <AlertTitle>Action Required</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            className="absolute right-3 top-3 rounded-md p-1 text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
+          >
+            <X className="size-3.5" />
+          </button>
+        </Alert>
       )}
       {success && (
-        <p role="status" className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">
-          <Check className="size-4 shrink-0" /> {success}
-        </p>
+        <Alert variant="success" role="status" className="pr-10">
+          <Check aria-hidden="true" />
+          <AlertTitle>Network Updated</AlertTitle>
+          <AlertDescription>{success}</AlertDescription>
+          <button
+            type="button"
+            onClick={() => setSuccess(null)}
+            aria-label="Dismiss status"
+            className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <X className="size-3.5" />
+          </button>
+        </Alert>
       )}
 
       {/* Navigation Tabs (Pills Matching Dispatch Tabs) */}
@@ -714,26 +752,69 @@ export default function AdminHubsAndZonesPage() {
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setTab("coverage");
+            setError(null);
+            setSuccess(null);
+          }}
+          className={cn(
+            "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors",
+            tab === "coverage"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Globe className="size-3.5" />
+          Island Coverage
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.2 text-[10px] font-bold",
+              tab === "coverage" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}
+          >
+            {coveragePercent}%
+          </span>
+        </button>
       </div>
 
       {/* ===================== TAB 1: HUB NETWORK ===================== */}
       {tab === "hubs" && (
         <div className="space-y-6">
           {hubs !== null && unserved.length > 0 && (
-            <p className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-              <span>
-                <strong>Not served yet:</strong> {unserved.map((zone) => zone.name).join(", ")}. Parcels to or from these
-                zones are refused until each has an active branch hub.
-              </span>
-            </p>
+            <Alert variant="warning">
+              <AlertTriangle aria-hidden="true" />
+              <AlertTitle>
+                {unserved.length} Delivery {unserved.length === 1 ? "Zone" : "Zones"} Without an Active Branch Hub
+              </AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  Parcels to or from these zones are paused until each has an active branch hub assigned:
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {unserved.map((zone) => (
+                    <span
+                      key={zone.id}
+                      className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:text-amber-200"
+                    >
+                      {zone.name}
+                    </span>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           {hubs !== null && !central && hubs.length > 0 && (
-            <p className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-              No active central hub: parcels between two different branches cannot be booked.
-            </p>
+            <Alert variant="warning">
+              <AlertTriangle aria-hidden="true" />
+              <AlertTitle>No Active Central Hub</AlertTitle>
+              <AlertDescription>
+                Parcels between two different branches cannot be booked until a central hub is active.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Central Hub & Branches Visual Network */}
@@ -761,24 +842,26 @@ export default function AdminHubsAndZonesPage() {
                 {branches.length > 0 && (
                   <>
                     {central && <span aria-hidden="true" className="h-6 border-l-2 border-dashed border-primary/40" />}
-                    <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {branches.map((hub) => (
-                        <li key={hub.id}>
-                          <HubCard
-                            hub={hub}
-                            zone={zoneName(hub.zoneId)}
-                            assignedZones={getAssignedZones(hub)}
-                            busy={busyHub === hub.id}
-                            onToggle={toggleHubActive}
-                            onDelete={setHubToDelete}
-                            zones={zoneList}
-                            takenZones={takenZones}
-                            onSave={saveHub}
-                            hasOtherCentralHub={Boolean(central && central.id !== hub.id)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="w-full max-h-[820px] overflow-y-auto pr-1">
+                      <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {branches.map((hub) => (
+                          <li key={hub.id}>
+                            <HubCard
+                              hub={hub}
+                              zone={zoneName(hub.zoneId)}
+                              assignedZones={getAssignedZones(hub)}
+                              busy={busyHub === hub.id}
+                              onToggle={toggleHubActive}
+                              onDelete={setHubToDelete}
+                              zones={zoneList}
+                              takenZones={takenZones}
+                              onSave={saveHub}
+                              hasOtherCentralHub={Boolean(central && central.id !== hub.id)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </>
                 )}
               </div>
@@ -856,23 +939,96 @@ export default function AdminHubsAndZonesPage() {
             {/* Zones List */}
             <div className="lg:col-span-2 space-y-4">
               <div className="rounded-2xl border border-border bg-card p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <div>
                     <h3 className="font-semibold text-foreground">Configured Delivery Zones</h3>
                     <p className="text-xs text-muted-foreground">Service areas served by delivery dispatch branches.</p>
                   </div>
-                  <span className="text-xs text-muted-foreground font-medium">
-                    {zoneList.length} total zones
+                  <span className="text-xs text-muted-foreground font-medium shrink-0">
+                    {zoneSearch.trim()
+                      ? `${zones ? zones.filter((zone) => {
+                          const q = zoneSearch.trim().toLowerCase();
+                          const assignedHub = zone.hubId
+                            ? (hubs ?? []).find((h) => h.id === zone.hubId)
+                            : servedZoneMap.get(zone.id);
+                          return (
+                            zone.code.toLowerCase().includes(q) ||
+                            zone.name.toLowerCase().includes(q) ||
+                            (assignedHub?.name.toLowerCase().includes(q) ?? false) ||
+                            (assignedHub?.code.toLowerCase().includes(q) ?? false)
+                          );
+                        }).length : 0} of ${zoneList.length} zones`
+                      : `${zoneList.length} total zones`}
                   </span>
+                </div>
+
+                {/* Professional Search Bar */}
+                <div className="relative mb-3">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    value={zoneSearch}
+                    onChange={(e) => setZoneSearch(e.target.value)}
+                    placeholder="Search by zone code, area name, or assigned branch..."
+                    aria-label="Search delivery zones"
+                    className="pl-9 pr-9 bg-background/70"
+                  />
+                  {zoneSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setZoneSearch("")}
+                      aria-label="Clear zone search"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {zones === null ? (
                   <div className="h-48 animate-pulse rounded-xl bg-muted" />
                 ) : zones.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">No zones configured yet.</p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {zones.map((zone) => {
+                ) : (() => {
+                  const query = zoneSearch.trim().toLowerCase();
+                  const filteredZones = query
+                    ? zones.filter((zone) => {
+                        const assignedHub = zone.hubId
+                          ? (hubs ?? []).find((h) => h.id === zone.hubId)
+                          : servedZoneMap.get(zone.id);
+                        return (
+                          zone.code.toLowerCase().includes(query) ||
+                          zone.name.toLowerCase().includes(query) ||
+                          (assignedHub?.name.toLowerCase().includes(query) ?? false) ||
+                          (assignedHub?.code.toLowerCase().includes(query) ?? false)
+                        );
+                      })
+                    : zones;
+
+                  if (filteredZones.length === 0) {
+                    return (
+                      <div className="py-10 text-center space-y-2">
+                        <p className="text-sm font-medium text-foreground">
+                          No delivery zones match &ldquo;{zoneSearch.trim()}&rdquo;
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setZoneSearch("")}
+                        >
+                          Clear search
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                  <div className="max-h-[780px] overflow-y-auto pr-1 divide-y divide-border">
+                    {filteredZones.map((zone) => {
                       const assignedHub = zone.hubId
                         ? (hubs ?? []).find((h) => h.id === zone.hubId)
                         : servedZoneMap.get(zone.id);
@@ -964,7 +1120,8 @@ export default function AdminHubsAndZonesPage() {
                       );
                     })}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
 
@@ -1103,6 +1260,17 @@ export default function AdminHubsAndZonesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===================== TAB 3: ISLAND COVERAGE MAP ===================== */}
+      {tab === "coverage" && (
+        <IslandCoverageMap
+          hubs={hubs ?? []}
+          zones={zoneList}
+          districts={districts}
+          coveragePercent={coveragePercent}
+          loading={hubs === null || zones === null}
+        />
       )}
 
       {/* Delete Hub Confirmation Dialog with StatCard */}
