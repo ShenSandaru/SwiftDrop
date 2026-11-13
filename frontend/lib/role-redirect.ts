@@ -47,6 +47,25 @@ export function sanitizeRedirectTarget(
 }
 
 /**
+ * Returns true if a given path is an internal staff or merchant destination where
+ * Google OAuth is not permitted (only email/password authentication is allowed).
+ */
+export function isNonCustomerDestination(path: string | null | undefined): boolean {
+  if (!path) return false;
+  const normalized = path.split("?")[0].split("#")[0];
+  return (
+    normalized === "/merchant" ||
+    normalized.startsWith("/merchant/") ||
+    normalized === "/admin" ||
+    normalized.startsWith("/admin/") ||
+    normalized === "/dispatch" ||
+    normalized.startsWith("/dispatch/") ||
+    normalized === "/courier" ||
+    normalized.startsWith("/courier/")
+  );
+}
+
+/**
  * Computes the post-authentication destination based on user roles and profile completion state.
  * Standardizes navigation across manual email/password sign-in, Google sign-in, and Google registration.
  */

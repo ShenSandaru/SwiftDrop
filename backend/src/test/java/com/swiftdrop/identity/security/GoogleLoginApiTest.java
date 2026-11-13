@@ -249,6 +249,23 @@ class GoogleLoginApiTest {
     }
 
     @Test
+    void nonCustomerLinkedAccountIsRejectedWithRoleNotPermittedErrorRedirect() throws Exception {
+        for (Role nonCustomerRole : List.of(Role.MERCHANT, Role.COURIER, Role.DISPATCHER, Role.ADMIN)) {
+            User staffOrMerchant = withId(new User("staff@example.com", null, "Staff", Set.of(nonCustomerRole)));
+            when(identities.findByProviderAndSubject(IdentityProvider.GOOGLE, SUBJECT))
+                    .thenReturn(Optional.of(new ExternalIdentity(IdentityProvider.GOOGLE, SUBJECT, staffOrMerchant.getId())));
+            when(users.findById(staffOrMerchant.getId())).thenReturn(Optional.of(staffOrMerchant));
+
+            callback(claims -> { })
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string(HttpHeaders.LOCATION,
+                            "http://localhost:3000/auth/google/callback?error=role_not_permitted"));
+            verify(users, never()).saveAndFlush(any());
+        }
+    }
+
+    @Test
     void unverifiedOrMissingEmailVerificationRedirectsWithUnverifiedEmailError() throws Exception {
         List<Consumer<JwtClaimsSet.Builder>> unverified = List.of(
                 claims -> claims.claim("email_verified", false),

@@ -17,6 +17,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 const ALLOWED_ERROR_MESSAGES: Record<string, string> = {
   conflict_email_exists:
     "An account with this email already exists. Please sign in with your email and password.",
+  role_not_permitted:
+    "Google sign-in is available only for customer accounts. Please sign in with your email and password.",
   unverified_email:
     "Your Google account email address is not verified. Please verify your email with Google and try again.",
   account_disabled:

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
-import { getPostAuthRedirect, sanitizeRedirectTarget } from "@/lib/role-redirect";
+import { getPostAuthRedirect, isNonCustomerDestination, sanitizeRedirectTarget } from "@/lib/role-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,8 +34,8 @@ function LoginForm() {
   const expired = searchParams.get("expired") === "true";
   const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
 
-  // Google button is enabled only when explicitly configured via environment flag (AC-2)
-  const isGoogleLoginEnabled = checkGoogleLoginEnabled();
+  // Google button is enabled only for customer authentication and when configured via environment flag
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled() && !isNonCustomerDestination(redirectTarget);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
