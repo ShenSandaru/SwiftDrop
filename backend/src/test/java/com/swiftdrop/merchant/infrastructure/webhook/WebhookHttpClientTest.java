@@ -199,6 +199,25 @@ class WebhookHttpClientTest {
         assertThat(server.hits("/target")).isZero();
     }
 
+    @Test
+    @DisplayName("Retry-After is passed on for 429 and 503 only")
+    void retryAfterOnlyFor429And503() throws Exception {
+        int port = startHttp();
+        server.status("/busy", 429);
+        server.status("/down", 503);
+        server.status("/broken", 500);
+        dns.answer("merchant.invalid", LOOPBACK);
+
+        try (var client = client(true, Duration.ofSeconds(10), defaultTls())) {
+            String base = "http://merchant.invalid:" + port;
+            assertThat(client.post(base + "/busy", Map.of(), BODY).retryAfter()).isEqualTo("120");
+            assertThat(client.post(base + "/down", Map.of(), BODY).retryAfter()).isEqualTo("120");
+            var broken = client.post(base + "/broken", Map.of(), BODY);
+            assertThat(broken.httpStatus()).isEqualTo(500);
+            assertThat(broken.retryAfter()).isNull();
+        }
+    }
+
     // Check 5: prohibited destinations are refused unless local mode allows loopback.
 
     @Test
@@ -373,6 +392,7 @@ class WebhookHttpClientTest {
         private final List<Integer> clientPorts = new CopyOnWriteArrayList<>();
         private final Map<String, String> redirects = new ConcurrentHashMap<>();
         private final Map<String, Duration> delays = new ConcurrentHashMap<>();
+        private final Map<String, Integer> statuses = new ConcurrentHashMap<>();
         private volatile HttpExchange last;
         private volatile byte[] lastBody;
 
@@ -388,6 +408,11 @@ class WebhookHttpClientTest {
 
         void delay(String path, Duration delay) {
             delays.put(path, delay);
+        }
+
+        /** Answers with this status and {@code Retry-After: 120}. */
+        void status(String path, int status) {
+            statuses.put(path, status);
         }
 
         int hits(String path) {
@@ -423,7 +448,11 @@ class WebhookHttpClientTest {
                     Thread.sleep(delay.toMillis());
                 }
                 String location = redirects.get(path);
-                if (location != null) {
+                Integer status = statuses.get(path);
+                if (status != null) {
+                    exchange.getResponseHeaders().set("Retry-After", "120");
+                    exchange.sendResponseHeaders(status, -1);
+                } else if (location != null) {
                     exchange.getResponseHeaders().set("Location", location);
                     exchange.sendResponseHeaders(302, -1);
                 } else {
