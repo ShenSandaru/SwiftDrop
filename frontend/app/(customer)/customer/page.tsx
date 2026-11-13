@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MapPinned, PackagePlus, Search } from "lucide-react";
+import { ArrowRight, AlertCircle, MapPinned, PackagePlus, Search } from "lucide-react";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import { MiniRoute } from "@/components/delivery/mini-route";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatMoney } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { isFinalStatus, listParcels, type ParcelListItem } from "@/lib/delivery";
 
 export default function CustomerOverviewPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [recent, setRecent] = useState<ParcelListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -30,6 +32,32 @@ export default function CustomerOverviewPage() {
 
   return (
     <div className="space-y-8">
+      {user && user.profileCompleted === false && (
+        <div
+          role="alert"
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="space-y-0.5 text-sm">
+              <p className="font-semibold">Complete your customer profile</p>
+              <p className="text-xs opacity-90">
+                Please provide your contact phone number for real-time delivery notifications and courier coordination.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/customer/profile"
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "bg-amber-600 text-white hover:bg-amber-700 shrink-0 self-start sm:self-auto font-medium"
+            )}
+          >
+            Complete Profile &rarr;
+          </Link>
+        </div>
+      )}
+
       {/* Hero: the island route */}
       <section className="relative overflow-hidden rounded-3xl bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10">
         <svg

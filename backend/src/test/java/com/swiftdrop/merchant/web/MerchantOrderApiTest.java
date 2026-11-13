@@ -85,7 +85,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class})
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class})
 class MerchantOrderApiTest {
 
     private static final String ORDERS = "/api/v1/merchant-orders";
