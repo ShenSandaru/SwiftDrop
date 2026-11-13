@@ -30,6 +30,10 @@ import {
   type PricingRuleAdmin,
   type ZoneAdmin,
 } from "@/lib/pricing";
+import {
+  findDistrictByCode,
+  findDistrictByName,
+} from "@/lib/sri-lanka-districts";
 
 const EMPTY_ZONE_FORM = { code: "", name: "" };
 const EMPTY_RULE_FORM = {
@@ -54,6 +58,8 @@ export default function AdminPricingPage() {
 
   // Zone form states
   const [zoneForm, setZoneForm] = useState(EMPTY_ZONE_FORM);
+  const [selectedHubId, setSelectedHubId] = useState("");
+  const [selectedSubZoneName, setSelectedSubZoneName] = useState("");
   const [savingZone, setSavingZone] = useState(false);
   const [editingZone, setEditingZone] = useState<ZoneAdmin | null>(null);
 
@@ -105,16 +111,72 @@ export default function AdminPricingPage() {
     return map;
   }, [hubs]);
 
+  const existingZoneCodes = useMemo(
+    () => new Set((zones ?? []).map((z) => z.code.trim().toUpperCase())),
+    [zones],
+  );
+
+  const existingZoneNames = useMemo(
+    () => new Set((zones ?? []).map((z) => z.name.trim().toLowerCase())),
+    [zones],
+  );
+
+  const selectedHub = useMemo(
+    () => (hubs ?? []).find((h) => h.id === selectedHubId),
+    [hubs, selectedHubId],
+  );
+
+  const currentDistrict = useMemo(() => {
+    if (!selectedHub) return undefined;
+    return findDistrictByName(selectedHub.city) || findDistrictByCode(selectedHub.code);
+  }, [selectedHub]);
+
+  const availableSubZones = useMemo(() => {
+    if (!currentDistrict) return [];
+    return currentDistrict.zones;
+  }, [currentDistrict]);
+
+  function handleHubChange(hubId: string) {
+    setSelectedHubId(hubId);
+    setSelectedSubZoneName("");
+    setZoneForm(EMPTY_ZONE_FORM);
+  }
+
+  function handleSubZoneChange(subZoneName: string) {
+    setSelectedSubZoneName(subZoneName);
+    const matched = availableSubZones.find((sz) => sz.name === subZoneName);
+    if (matched) {
+      setZoneForm({
+        name: matched.name,
+        code: matched.code,
+      });
+    } else {
+      setZoneForm((prev) => ({
+        ...prev,
+        name: subZoneName,
+      }));
+    }
+  }
+
   // Zone actions
   async function handleCreateZone(e: FormEvent) {
     e.preventDefault();
+    if (existingZoneCodes.has(zoneForm.code.trim().toUpperCase())) {
+      setError(`Zone code "${zoneForm.code}" already exists.`);
+      return;
+    }
+    if (existingZoneNames.has(zoneForm.name.trim().toLowerCase())) {
+      setError(`Zone "${zoneForm.name}" already exists.`);
+      return;
+    }
     setSavingZone(true);
     setError(null);
     setSuccess(null);
     try {
       await createZone(zoneForm);
       setZoneForm(EMPTY_ZONE_FORM);
-      setSuccess(`Zone ${zoneForm.code} added successfully.`);
+      setSelectedSubZoneName("");
+      setSuccess(`Zone ${zoneForm.code} (${zoneForm.name}) added successfully.`);
       loadData();
     } catch (failure) {
       setError(formatApiError(failure));
@@ -495,32 +557,93 @@ export default function AdminPricingPage() {
                   </form>
                 ) : (
                   <form onSubmit={handleCreateZone} className="space-y-4">
+                    {/* 1. Hub dropdown */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="zone-hub">Hub</Label>
+                      <select
+                        id="zone-hub"
+                        required
+                        value={selectedHubId}
+                        onChange={(e) => handleHubChange(e.target.value)}
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="" disabled className="text-muted-foreground bg-background">
+                          {(hubs ?? []).length === 0 ? "No hubs available (add a hub first)" : "Select a hub..."}
+                        </option>
+                        {(hubs ?? []).map((hub) => (
+                          <option key={hub.id} value={hub.id} className="text-foreground bg-background">
+                            {hub.name} ({hub.code} &bull; {hub.city}){hub.central ? " [Central Hub]" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-muted-foreground">Select an existing hub this zone belongs to.</p>
+                    </div>
+
+                    {/* 2. Zone Name dropdown */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="zone-name-select">Zone Name</Label>
+                      <select
+                        id="zone-name-select"
+                        required
+                        disabled={!selectedHubId || availableSubZones.length === 0}
+                        value={selectedSubZoneName}
+                        onChange={(e) => handleSubZoneChange(e.target.value)}
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="" disabled className="text-muted-foreground bg-background">
+                          {!selectedHubId
+                            ? "Select a hub first"
+                            : availableSubZones.length === 0
+                            ? "No zones cataloged for this hub"
+                            : "Select a zone / area..."}
+                        </option>
+                        {availableSubZones.map((sz) => {
+                          const isTaken =
+                            existingZoneCodes.has(sz.code.toUpperCase()) ||
+                            existingZoneNames.has(sz.name.toLowerCase());
+                          return (
+                            <option
+                              key={sz.code}
+                              value={sz.name}
+                              disabled={isTaken}
+                              className={
+                                isTaken
+                                  ? "text-muted-foreground bg-background opacity-50"
+                                  : "text-foreground bg-background"
+                              }
+                            >
+                              {sz.name} {isTaken ? "(Already Added)" : `(${sz.code})`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedHub
+                          ? `Available zones in ${selectedHub.city}. Already added zones cannot be selected.`
+                          : "Select a hub above to load its zones."}
+                      </p>
+                    </div>
+
+                    {/* 3. Zone Code (auto-filled, in third place) */}
                     <div className="space-y-1.5">
                       <Label htmlFor="zone-code">Zone Code</Label>
                       <Input
                         id="zone-code"
                         required
                         maxLength={50}
-                        placeholder="e.g. GAL"
+                        placeholder="e.g. CMB-MRD"
                         value={zoneForm.code}
                         onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value.toUpperCase() })}
                         className="font-mono uppercase tracking-wider"
                       />
-                      <p className="text-[11px] text-muted-foreground">Unique identifier (e.g. CMB, KDY, GAL).</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="zone-name">Zone Name</Label>
-                      <Input
-                        id="zone-name"
-                        required
-                        maxLength={200}
-                        placeholder="e.g. Galle"
-                        value={zoneForm.name}
-                        onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
-                      />
+                      <p className="text-[11px] text-muted-foreground">Unique identifier (auto-filled from selected zone).</p>
                     </div>
 
-                    <Button type="submit" disabled={savingZone} className="w-full mt-2">
+                    <Button
+                      type="submit"
+                      disabled={savingZone || !zoneForm.code || !zoneForm.name}
+                      className="w-full mt-2"
+                    >
                       {savingZone ? <Loader2 className="size-4 animate-spin" /> : "Create Zone"}
                     </Button>
                   </form>

@@ -1,7 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, Building2, Loader2, Pencil, Plus, Star, Warehouse } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  AlertTriangle,
+  Building2,
+  Check,
+  ChevronDown,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Warehouse,
+} from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,17 +20,19 @@ import { Label } from "@/components/ui/label";
 import { formatApiError } from "@/lib/api";
 import { listZones, type Zone } from "@/lib/delivery";
 import { createHub, listHubs, updateHub, type Hub } from "@/lib/hubs";
+import { SRI_LANKA_DISTRICTS, type DistrictInfo } from "@/lib/sri-lanka-districts";
+import { createZone } from "@/lib/pricing";
 
 const EMPTY_FORM = { code: "", name: "", city: "", zoneId: "", central: false };
 
 /**
- * The hub network (ADR 0009): a branch per zone and one central hub. Zones without an active hub
- * cannot be booked, so they are flagged at the top.
+ * The hub network (ADR 0009): a branch per district/zone and one central hub.
  */
 export default function AdminHubsPage() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedDistrict, setSelectedDistrict] = useState<DistrictInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyHub, setBusyHub] = useState<string | null>(null);
@@ -44,17 +57,60 @@ export default function AdminHubsPage() {
   );
   const unserved = zones.filter((zone) => !servedZones.has(zone.id));
   const takenZones = new Set((hubs ?? []).map((hub) => hub.zoneId));
-  const freeZones = zones.filter((zone) => !takenZones.has(zone.id));
   const central = hubs?.find((hub) => hub.central && hub.active);
   const branches = (hubs ?? []).filter((hub) => hub !== central);
 
+  const existingDistrictKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const h of hubs ?? []) {
+      if (h.city) set.add(h.city.trim().toLowerCase());
+      if (h.code) set.add(h.code.trim().toLowerCase());
+    }
+    return set;
+  }, [hubs]);
+
+  function handleDistrictSelect(district: DistrictInfo) {
+    if (existingDistrictKeys.has(district.name.toLowerCase()) || existingDistrictKeys.has(district.code.toLowerCase())) {
+      return;
+    }
+    setSelectedDistrict(district);
+    const matchingZone = zones.find(
+      (z) => z.name.toLowerCase() === district.name.toLowerCase() || z.code.toUpperCase() === district.code.toUpperCase()
+    );
+    setForm((prev) => ({
+      ...prev,
+      city: district.name,
+      code: district.code,
+      name: district.defaultBranchName,
+      zoneId: matchingZone ? matchingZone.id : "",
+    }));
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (existingDistrictKeys.has(form.city.toLowerCase()) || existingDistrictKeys.has(form.code.toLowerCase())) {
+      setError(`A hub for ${form.city} (${form.code}) already exists.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await createHub({ ...form, zoneId: form.zoneId || null });
+      let targetZoneId = form.zoneId;
+      if (!form.central && !targetZoneId) {
+        const match = zones.find(
+          (z) => z.name.toLowerCase() === form.city.toLowerCase() || z.code.toUpperCase() === form.code.toUpperCase()
+        );
+        if (match) {
+          targetZoneId = match.id;
+        } else {
+          // Automatically create the zone for this district
+          const created = await createZone({ code: form.code, name: form.city });
+          targetZoneId = created.id;
+        }
+      }
+      await createHub({ ...form, zoneId: targetZoneId || null });
       setForm(EMPTY_FORM);
+      setSelectedDistrict(null);
       load();
     } catch (failure) {
       setError(formatApiError(failure));
@@ -97,7 +153,7 @@ export default function AdminHubsPage() {
       <header className="space-y-1">
         <h2 className="text-xl font-bold text-foreground">Hub network</h2>
         <p className="text-sm text-muted-foreground">
-          Parcels travel origin branch → central hub → destination branch. Every zone needs an active branch
+          Parcels travel origin branch &rarr; central hub &rarr; destination branch. Every zone needs an active branch
           before parcels can be booked for it.
         </p>
       </header>
@@ -147,46 +203,196 @@ export default function AdminHubsPage() {
         )}
       </section>
 
+      {/* Add a Hub Form */}
       <form onSubmit={submit} className="space-y-4 rounded-3xl border border-border bg-card p-5">
         <h3 className="flex items-center gap-2 font-bold text-foreground">
           <Plus className="size-4 text-primary" aria-hidden="true" /> Add a hub
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          {/* Field 1: District (Searchable Dropdown) */}
+          <div className="space-y-1">
+            <Label htmlFor="hub-district">District</Label>
+            <DistrictSelect
+              selected={selectedDistrict}
+              onSelect={handleDistrictSelect}
+              existingDistricts={existingDistrictKeys}
+            />
+            <p className="text-xs text-muted-foreground">Select from the 25 administrative districts.</p>
+          </div>
+
+          {/* Field 2: Code (Auto-filled) */}
           <div className="space-y-1">
             <Label htmlFor="hub-code">Code</Label>
-            <Input id="hub-code" required maxLength={20} placeholder="KDY" value={form.code}
+            <Input
+              id="hub-code"
+              required
+              maxLength={20}
+              placeholder="e.g. KDY"
+              value={form.code}
               onChange={(event) => setForm({ ...form, code: event.target.value.toUpperCase() })}
-              className="font-mono uppercase tracking-widest" />
+              className="font-mono uppercase tracking-widest"
+            />
             <p className="text-xs text-muted-foreground">Letters, digits or hyphens. Cannot be changed later.</p>
           </div>
+
+          {/* Field 3: Branch Name (Auto-filled) */}
           <div className="space-y-1">
-            <Label htmlFor="hub-name">Name</Label>
-            <Input id="hub-name" required maxLength={100} placeholder="Kandy branch" value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="hub-city">City</Label>
-            <Input id="hub-city" required maxLength={100} placeholder="Kandy" value={form.city}
-              onChange={(event) => setForm({ ...form, city: event.target.value })} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="hub-zone">Zone it serves</Label>
-            <select id="hub-zone" value={form.zoneId} onChange={(event) => setForm({ ...form, zoneId: event.target.value })}
-              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm">
-              <option value="">{form.central ? "None (central hub only)" : "Choose a zone"}</option>
-              {freeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
-            </select>
+            <Label htmlFor="hub-name">Branch Name</Label>
+            <Input
+              id="hub-name"
+              required
+              maxLength={100}
+              placeholder="e.g. Kandy Branch"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">Auto-generated branch name.</p>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.central} disabled={Boolean(central)}
-            onChange={(event) => setForm({ ...form, central: event.target.checked })} />
+
+        <label className="flex items-center gap-2 text-sm pt-1">
+          <input
+            type="checkbox"
+            checked={form.central}
+            disabled={Boolean(central)}
+            onChange={(event) => setForm({ ...form, central: event.target.checked })}
+          />
           Central hub {central && <span className="text-muted-foreground">({central.name} already is)</span>}
         </label>
-        <Button type="submit" disabled={saving || (!form.central && !form.zoneId)}>
-          {saving && <Loader2 className="animate-spin" aria-hidden="true" />} Add hub
+
+        <Button type="submit" disabled={saving || !form.code || !form.name || !form.city}>
+          {saving && <Loader2 className="animate-spin mr-2" aria-hidden="true" />} Add hub
         </Button>
       </form>
+    </div>
+  );
+}
+
+/** Searchable combobox dropdown for the 25 Sri Lankan administrative districts */
+function DistrictSelect({
+  selected,
+  onSelect,
+  existingDistricts,
+}: {
+  selected: DistrictInfo | null;
+  onSelect: (district: DistrictInfo) => void;
+  existingDistricts: Set<string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return SRI_LANKA_DISTRICTS;
+    return SRI_LANKA_DISTRICTS.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.code.toLowerCase().includes(q) ||
+        d.province.toLowerCase().includes(q) ||
+        d.postalCode.includes(q)
+    );
+  }, [search]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        id="hub-district"
+        onClick={() => setOpen(!open)}
+        className="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors hover:bg-muted/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 truncate">
+            <span className="font-semibold text-foreground">{selected.name}</span>
+            <span className="font-mono text-xs text-muted-foreground">[{selected.code}]</span>
+            <span className="text-xs text-muted-foreground">({selected.province} Prov.)</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Select a district...</span>
+        )}
+        <ChevronDown className="size-4 shrink-0 opacity-50" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-[280px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg">
+          <div className="sticky top-0 bg-popover p-1 border-b border-border/50">
+            <div className="flex items-center gap-1.5 rounded-lg border border-input px-2 py-1 bg-background">
+              <Search className="size-3.5 text-muted-foreground shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search district, code, province..."
+                className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="py-1">
+            {filtered.length === 0 ? (
+              <p className="p-3 text-center text-xs text-muted-foreground">No matching district found.</p>
+            ) : (
+              filtered.map((district) => {
+                const isTaken =
+                  existingDistricts.has(district.name.toLowerCase()) ||
+                  existingDistricts.has(district.code.toLowerCase());
+                return (
+                  <button
+                    key={district.code}
+                    type="button"
+                    disabled={isTaken}
+                    aria-disabled={isTaken}
+                    onClick={() => {
+                      if (isTaken) return;
+                      onSelect(district);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition-colors",
+                      isTaken
+                        ? "opacity-45 cursor-not-allowed bg-muted/20 select-none"
+                        : selected?.code === district.code
+                        ? "bg-accent font-medium text-accent-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("font-semibold", isTaken ? "text-muted-foreground" : "text-foreground")}>
+                          {district.name}
+                        </span>
+                        <span className="font-mono text-[10px] text-muted-foreground">({district.code})</span>
+                        {isTaken && (
+                          <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border/40 font-medium">
+                            Hub exists
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {district.province} Province &middot; Postal: {district.postalCode}
+                      </span>
+                    </div>
+                    {!isTaken && selected?.code === district.code && <Check className="size-3.5 text-primary" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -255,7 +461,7 @@ function HubCard({ hub, zone, busy, onToggle, zones, takenZones, onSave }: {
               onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={`edit-city-${hub.id}`}>City</Label>
+            <Label htmlFor={`edit-city-${hub.id}`}>City / District</Label>
             <Input id={`edit-city-${hub.id}`} required maxLength={100} value={draft.city}
               onChange={(event) => setDraft({ ...draft, city: event.target.value })} />
           </div>
