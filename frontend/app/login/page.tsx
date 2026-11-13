@@ -34,8 +34,9 @@ function LoginForm() {
   const expired = searchParams.get("expired") === "true";
   const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
 
-  // Google button is enabled only for customer authentication and when configured via environment flag
-  const isGoogleLoginEnabled = checkGoogleLoginEnabled() && !isNonCustomerDestination(redirectTarget);
+  // Google button and public customer signup prompt are enabled only for customer authentication
+  const isCustomerContext = !isNonCustomerDestination(redirectTarget);
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled() && isCustomerContext;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -175,15 +176,17 @@ function LoginForm() {
             </div>
           )}
 
-          <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/signup/customer"
-              className="font-semibold text-primary underline-offset-4 hover:underline"
-            >
-              Sign up
-            </Link>
-          </div>
+          {isCustomerContext && (
+            <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup/customer"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Sign up
+              </Link>
+            </div>
+          )}
         </form>
       </AuthFormContainer>
     </AuthLayout>
