@@ -179,6 +179,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611131200",
                                 "merchant extend webhook event types",
-                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"));
+                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"),
+                        tuple(
+                                "202611141000",
+                                "merchant create event consumer tables",
+                                "merchant/V202611141000__merchant_create_event_consumer_tables.sql"));
     }
 }
