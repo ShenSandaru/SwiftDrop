@@ -28,6 +28,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.jayway.jsonpath.JsonPath;
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.merchant.domain.Merchant;
 import com.swiftdrop.merchant.domain.MerchantRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
@@ -65,6 +66,7 @@ class MerchantOrderIT {
 
     @BeforeEach
     void setUp() {
+        TestHubs.install(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("650.00"), "LKR", new BigDecimal("400.00"), new BigDecimal("150.00"),
                 new BigDecimal("100.00"), UUID.randomUUID()));
@@ -190,8 +192,8 @@ class MerchantOrderIT {
         return userId;
     }
 
+    /** Colombo to Kandy, both served by the test hub network (ADR 0009 §1). */
     private static String orderJson(String reference) {
-        UUID zone = UUID.randomUUID();
         return """
                 {
                   "merchantOrderReference": "%s",
@@ -202,6 +204,6 @@ class MerchantOrderIT {
                   "size": "MEDIUM",
                   "weightGrams": 1200
                 }
-                """.formatted(reference, zone, zone);
+                """.formatted(reference, TestHubs.COLOMBO_ZONE, TestHubs.KANDY_ZONE);
     }
 }

@@ -20,6 +20,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +35,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
+import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelSource;
@@ -74,7 +77,8 @@ import com.swiftdrop.test.security.TestPrincipal;
 @MockitoBean(types = {UserRepository.class, ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
         ZoneRepository.class, PricingRuleRepository.class, ParcelRepository.class, ParcelStatusHistoryRepository.class,
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
-        MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class})
+        MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class})
 class MerchantOrderApiTest {
 
     private static final String ORDERS = "/api/v1/merchant-orders";
@@ -204,6 +208,17 @@ class MerchantOrderApiTest {
     }
 
     @Test
+    @DisplayName("A zone no hub serves answers 409 with delivery's reason, not 500 (ADR 0009)")
+    void zoneNotServedByHub() throws Exception {
+        when(parcelCreation.createMerchantParcel(any()))
+                .thenThrow(new ParcelConflictException("The pickup zone is not served by a hub"));
+
+        mvc.perform(withKey(post(ORDERS)).contentType(MediaType.APPLICATION_JSON).content(orderJson("ORD-5")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The pickup zone is not served by a hub"));
+    }
+
+    @Test
     @DisplayName("GET returns the merchant's own order by reference")
     void getOwnOrder() throws Exception {
         when(parcelQueries.findByMerchantReference(MERCHANT_ID, "ORD-10045")).thenReturn(Optional.of(new ParcelSummary(
@@ -217,6 +232,19 @@ class MerchantOrderApiTest {
                 .andExpect(jsonPath("$.size").value("SMALL"))
                 .andExpect(jsonPath("$.weightGrams").value(800))
                 .andExpect(jsonPath("$.assignedCourierId").doesNotExist());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ParcelStatus.class)
+    @DisplayName("GET returns every parcel status by name, including the ADR 0009 ones")
+    void getOrderInEveryStatus(ParcelStatus status) throws Exception {
+        when(parcelQueries.findByMerchantReference(MERCHANT_ID, "ORD-10045")).thenReturn(Optional.of(new ParcelSummary(
+                PARCEL_ID, "SD7K3M9Q2XWB", status, ParcelSize.SMALL, 800, ParcelSource.MERCHANT,
+                null, MERCHANT_ID, "ORD-10045", null, CREATED_AT)));
+
+        mvc.perform(withKey(get(ORDERS + "/ORD-10045")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(status.name()));
     }
 
     @Test

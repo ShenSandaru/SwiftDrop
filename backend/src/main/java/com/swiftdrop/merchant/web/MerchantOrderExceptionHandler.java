@@ -7,6 +7,8 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.swiftdrop.delivery.api.ParcelConflictException;
+
 /**
  * Problem Details for the merchant order API. Invalid input from delivery answers a generic 400, as
  * for customer bookings, so internal messages never reach merchant systems. Body validation errors
@@ -21,6 +23,17 @@ class MerchantOrderExceptionHandler {
     ProblemDetail invalid(IllegalArgumentException e) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid request");
         problem.setTitle("Bad Request");
+        return problem;
+    }
+
+    /**
+     * A business rule of delivery refused the order, for example a zone no hub serves (ADR 0009 §1).
+     * Answered with delivery's own message, as for customer bookings.
+     */
+    @ExceptionHandler(ParcelConflictException.class)
+    ProblemDetail conflict(ParcelConflictException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+        problem.setTitle("Conflict");
         return problem;
     }
 
