@@ -146,4 +146,19 @@ class HubApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content(KANDY))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void onlyTheAdminDeletesHubs() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(hubs.findById(id)).thenReturn(Optional.of(
+                new Hub("KDY", "Kandy branch", "Kandy", UUID.randomUUID(), false, NOW)));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/hubs/" + id)
+                        .with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/hubs/" + id)
+                        .with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isNoContent());
+    }
 }

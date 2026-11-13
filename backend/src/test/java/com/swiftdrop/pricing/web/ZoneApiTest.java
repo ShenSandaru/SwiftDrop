@@ -253,6 +253,25 @@ class ZoneApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void adminCanDeleteZone() throws Exception {
+        UUID id = UUID.randomUUID();
+        Zone existing = zone("CMB", "Colombo");
+        ReflectionTestUtils.setField(existing, "id", id);
+        when(zones.findById(id)).thenReturn(Optional.of(existing));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/zones/" + id)
+                        .with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void nonAdminCannotDeleteZone() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/zones/" + UUID.randomUUID())
+                        .with(TestPrincipal.customer().postProcessor()))
+                .andExpect(status().isForbidden());
+    }
+
     private static Zone zone(String code, String name) {
         Zone zone = new Zone(code, name);
         ReflectionTestUtils.setField(zone, "id", UUID.randomUUID());

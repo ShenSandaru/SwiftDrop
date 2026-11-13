@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,7 +63,7 @@ class ZoneController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('ADMIN')")
     ZoneAdminResponse createZone(@Valid @RequestBody ZoneRequest request) {
-        Zone zone = zoneAdministration.create(request.code(), request.name());
+        Zone zone = zoneAdministration.create(request.code(), request.name(), request.hubId());
         return ZoneAdminResponse.from(zone);
     }
 
@@ -73,5 +74,12 @@ class ZoneController {
         boolean active = request.active() != null ? request.active() : true;
         Zone zone = zoneAdministration.update(id, request.code(), request.name(), active, version);
         return ZoneAdminResponse.from(zone);
+    }
+
+    @DeleteMapping("/api/v1/zones/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    void deleteZone(@PathVariable UUID id) {
+        zoneAdministration.delete(id);
     }
 }

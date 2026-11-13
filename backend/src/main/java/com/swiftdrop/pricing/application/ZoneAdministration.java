@@ -13,26 +13,37 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.pricing.api.PricingConflictException;
 import com.swiftdrop.pricing.api.PricingNotFoundException;
+import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.Zone;
 import com.swiftdrop.pricing.domain.ZoneRepository;
 
 /**
  * Administrative operations on delivery zones (ADM-3, contract §4.2).
- * Admin-only: create, update, and toggle active status.
+ * Admin-only: create, update, delete, and toggle active status.
  */
 @Service
 public class ZoneAdministration {
 
     private final ZoneRepository zones;
+    private final PricingRuleRepository pricingRules;
     private final Clock clock;
 
     @Autowired
+    public ZoneAdministration(ZoneRepository zones, @Autowired(required = false) PricingRuleRepository pricingRules) {
+        this(zones, pricingRules, Clock.systemUTC());
+    }
+
     public ZoneAdministration(ZoneRepository zones) {
-        this(zones, Clock.systemUTC());
+        this(zones, null, Clock.systemUTC());
     }
 
     ZoneAdministration(ZoneRepository zones, Clock clock) {
+        this(zones, null, clock);
+    }
+
+    ZoneAdministration(ZoneRepository zones, PricingRuleRepository pricingRules, Clock clock) {
         this.zones = zones;
+        this.pricingRules = pricingRules;
         this.clock = clock;
     }
 
@@ -49,6 +60,11 @@ public class ZoneAdministration {
 
     @Transactional
     public Zone create(String code, String name) {
+        return create(code, name, null);
+    }
+
+    @Transactional
+    public Zone create(String code, String name, UUID hubId) {
         String normalizedCode = Zone.normalizeCode(code);
         String normalizedName = Zone.normalizeName(name);
 
@@ -59,7 +75,7 @@ public class ZoneAdministration {
             throw new PricingConflictException("A zone with name '" + normalizedName + "' already exists");
         }
 
-        Zone zone = new Zone(normalizedCode, normalizedName);
+        Zone zone = new Zone(normalizedCode, normalizedName, true, hubId);
         return save(zone);
     }
 
@@ -86,6 +102,21 @@ public class ZoneAdministration {
         zone.setActive(active);
 
         return save(zone);
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        Zone zone = get(id);
+        if (pricingRules != null) {
+            pricingRules.deleteByOriginZoneIdOrDestinationZoneId(id, id);
+        }
+        try {
+            zones.delete(zone);
+            zones.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new PricingConflictException("Cannot delete zone '" + zone.getName()
+                    + "': it is in use by deliveries or rules. Deactivate the zone instead.");
+        }
     }
 
     private Zone save(Zone zone) {

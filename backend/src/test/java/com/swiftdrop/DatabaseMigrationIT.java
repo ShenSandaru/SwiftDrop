@@ -96,7 +96,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(18);
+        assertThat(rows).hasSize(19);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -160,6 +160,9 @@ class DatabaseMigrationIT {
         assertThat(rows.get(17))
                 .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
                 .containsEntry("success", true);
+        assertThat(rows.get(18))
+                .containsEntry("script", "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql")
+                .containsEntry("success", true);
 
         // Assert tables exist in the isolated test database
         Integer usersCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -177,6 +180,9 @@ class DatabaseMigrationIT {
 
         Integer zonesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM zones", Integer.class);
         assertThat(zonesCount).isNotNull();
+
+        Integer districtsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM districts", Integer.class);
+        assertThat(districtsCount).isEqualTo(25);
 
         Integer pricingRulesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pricing_rules", Integer.class);
         assertThat(pricingRulesCount).isNotNull();

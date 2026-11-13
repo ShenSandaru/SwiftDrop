@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,5 +51,12 @@ class HubController {
     @PreAuthorize("hasRole('ADMIN')")
     HubResponse update(@PathVariable UUID id, @Valid @RequestBody HubRequest request) {
         return HubResponse.from(hubs.update(id, request.details(), request.activeOrDefault()));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    void delete(@PathVariable UUID id) {
+        hubs.delete(id);
     }
 }

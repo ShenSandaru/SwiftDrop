@@ -13,6 +13,7 @@ public record ZoneAdminResponse(
         String code,
         String name,
         boolean active,
+        UUID hubId,
         long version,
         Instant createdAt
 ) {
@@ -23,6 +24,7 @@ public record ZoneAdminResponse(
                 zone.getCode(),
                 zone.getName(),
                 zone.isActive(),
+                zone.getHubId(),
                 zone.getVersion(),
                 zone.getCreatedAt()
         );

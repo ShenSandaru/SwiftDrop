@@ -12,17 +12,20 @@ import {
   MapPin,
   Plus,
   RefreshCw,
+  Trash2,
   Warehouse,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { formatApiError } from "@/lib/api";
 import { listHubs, type Hub } from "@/lib/hubs";
 import { getQuote, type ParcelSize, PARCEL_SIZES, type PriceQuote } from "@/lib/delivery";
 import {
   createPricingRule,
   createZone,
+  deleteZone,
   listAdminZones,
   listPricingRules,
   updatePricingRule,
@@ -30,10 +33,7 @@ import {
   type PricingRuleAdmin,
   type ZoneAdmin,
 } from "@/lib/pricing";
-import {
-  findDistrictByCode,
-  findDistrictByName,
-} from "@/lib/sri-lanka-districts";
+import { listDistricts, type District } from "@/lib/districts";
 
 const EMPTY_ZONE_FORM = { code: "", name: "" };
 const EMPTY_RULE_FORM = {
@@ -52,6 +52,7 @@ export default function AdminPricingPage() {
   const [zones, setZones] = useState<ZoneAdmin[] | null>(null);
   const [rules, setRules] = useState<PricingRuleAdmin[] | null>(null);
   const [hubs, setHubs] = useState<Hub[] | null>(null);
+  const [districts, setDistricts] = useState<District[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -62,6 +63,8 @@ export default function AdminPricingPage() {
   const [selectedSubZoneName, setSelectedSubZoneName] = useState("");
   const [savingZone, setSavingZone] = useState(false);
   const [editingZone, setEditingZone] = useState<ZoneAdmin | null>(null);
+  const [zoneToDelete, setZoneToDelete] = useState<ZoneAdmin | null>(null);
+  const [deletingZone, setDeletingZone] = useState(false);
 
   // Pricing rule form states
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE_FORM);
@@ -78,11 +81,12 @@ export default function AdminPricingPage() {
   const [simError, setSimError] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
-    Promise.all([listAdminZones(), listPricingRules(), listHubs()])
-      .then(([loadedZones, loadedRules, loadedHubs]) => {
+    Promise.all([listAdminZones(), listPricingRules(), listHubs(), listDistricts()])
+      .then(([loadedZones, loadedRules, loadedHubs, loadedDistricts]) => {
         setZones(loadedZones);
         setRules(loadedRules);
         setHubs(loadedHubs);
+        setDistricts(loadedDistricts);
         setError(null);
         if (loadedZones.length > 0) {
           setSimPickup((prev) => prev || loadedZones[0].id);
@@ -95,11 +99,6 @@ export default function AdminPricingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const activeHubZones = useMemo(
-    () => new Set((hubs ?? []).filter((h) => h.active && h.zoneId).map((h) => h.zoneId)),
-    [hubs],
-  );
 
   const servedZoneMap = useMemo(() => {
     const map = new Map<string, Hub>();
@@ -128,8 +127,12 @@ export default function AdminPricingPage() {
 
   const currentDistrict = useMemo(() => {
     if (!selectedHub) return undefined;
-    return findDistrictByName(selectedHub.city) || findDistrictByCode(selectedHub.code);
-  }, [selectedHub]);
+    const hubCity = selectedHub.city.trim().toLowerCase();
+    const hubCode = selectedHub.code.trim().toLowerCase();
+    return districts.find(
+      (d) => d.name.toLowerCase() === hubCity || d.code.toLowerCase() === hubCode
+    );
+  }, [selectedHub, districts]);
 
   const availableSubZones = useMemo(() => {
     if (!currentDistrict) return [];
@@ -173,10 +176,10 @@ export default function AdminPricingPage() {
     setError(null);
     setSuccess(null);
     try {
-      await createZone(zoneForm);
+      await createZone({ ...zoneForm, hubId: selectedHubId || null });
       setZoneForm(EMPTY_ZONE_FORM);
       setSelectedSubZoneName("");
-      setSuccess(`Zone ${zoneForm.code} (${zoneForm.name}) added successfully.`);
+      setSuccess(`Zone ${zoneForm.code} (${zoneForm.name}) added and assigned to hub successfully.`);
       loadData();
     } catch (failure) {
       setError(formatApiError(failure));
@@ -222,6 +225,24 @@ export default function AdminPricingPage() {
       loadData();
     } catch (failure) {
       setError(formatApiError(failure));
+    }
+  }
+
+  async function confirmDeleteZone() {
+    if (!zoneToDelete) return;
+    setDeletingZone(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteZone(zoneToDelete.id);
+      setSuccess(`Zone ${zoneToDelete.code} (${zoneToDelete.name}) has been deleted.`);
+      setZones((prev) => (prev ? prev.filter((z) => z.id !== zoneToDelete.id) : prev));
+      setZoneToDelete(null);
+      loadData();
+    } catch (failure) {
+      setError(formatApiError(failure));
+    } finally {
+      setDeletingZone(false);
     }
   }
 
@@ -430,8 +451,10 @@ export default function AdminPricingPage() {
                 ) : (
                   <div className="divide-y divide-border">
                     {zones.map((zone) => {
-                      const hasBranchHub = activeHubZones.has(zone.id);
-                      const hub = servedZoneMap.get(zone.id);
+                      const assignedHub = zone.hubId
+                        ? hubs?.find((h) => h.id === zone.hubId)
+                        : servedZoneMap.get(zone.id);
+                      const hasBranchHub = Boolean(assignedHub && assignedHub.active);
 
                       return (
                         <div key={zone.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5">
@@ -454,7 +477,7 @@ export default function AdminPricingPage() {
                             <div className="flex items-center gap-1.5 text-xs">
                               {hasBranchHub ? (
                                 <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                                  <Warehouse className="size-3.5" /> Served by {hub?.name} ({hub?.code})
+                                  <Warehouse className="size-3.5" /> Served by {assignedHub?.name} ({assignedHub?.code})
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
@@ -480,6 +503,19 @@ export default function AdminPricingPage() {
                               className="h-8 text-xs"
                             >
                               {zone.active ? "Deactivate" : "Activate"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setZoneToDelete(zone);
+                              }}
+                              className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                            >
+                              <Trash2 className="size-3.5" />
+                              Delete
                             </Button>
                           </div>
                         </div>
@@ -1116,6 +1152,38 @@ export default function AdminPricingPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Zone Confirmation Modal with Statcard */}
+      <ConfirmationDialog
+        open={zoneToDelete !== null}
+        onOpenChange={(open) => !open && setZoneToDelete(null)}
+        title="Delete Delivery Zone"
+        description="Are you sure you want to delete this delivery zone? Associated pricing rules will also be cleaned up automatically. This action cannot be undone."
+        confirmLabel="Delete Zone"
+        variant="destructive"
+        loading={deletingZone}
+        onConfirm={confirmDeleteZone}
+        itemSummary={
+          zoneToDelete
+            ? {
+                title: zoneToDelete.name,
+                code: zoneToDelete.code,
+                badge: zoneToDelete.active ? "Active" : "Inactive",
+                badgeVariant: zoneToDelete.active ? "success" : "outline",
+                icon: MapPin,
+                details: [
+                  { label: "Zone Code", value: zoneToDelete.code, badge: true },
+                  {
+                    label: "Serving Hub",
+                    value: zoneToDelete.hubId
+                      ? hubs?.find((h) => h.id === zoneToDelete.hubId)?.name || "Assigned Hub"
+                      : servedZoneMap.get(zoneToDelete.id)?.name || "None",
+                  },
+                ],
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

@@ -171,6 +171,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111010",
                                 "delivery add hub lifecycle",
-                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
+                        tuple(
+                                "202611131400",
+                                "pricing create districts and postal zones",
+                                "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql"));
     }
 }

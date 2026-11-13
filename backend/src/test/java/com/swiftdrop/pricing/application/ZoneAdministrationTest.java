@@ -137,6 +137,31 @@ class ZoneAdministrationTest {
                 .hasMessageContaining("name 'Kandy' already exists");
     }
 
+    @Test
+    void deleteRemovesZoneWhenNoPricingRules() {
+        UUID id = UUID.randomUUID();
+        Zone existing = createZoneWithId(id, "CMB", "Colombo", true, 0L);
+        when(repository.findById(id)).thenReturn(Optional.of(existing));
+
+        administration.delete(id);
+
+        verify(repository).delete(existing);
+    }
+
+    @Test
+    void deleteDeletesZoneAndCleansUpPricingRules() {
+        UUID id = UUID.randomUUID();
+        Zone existing = createZoneWithId(id, "CMB", "Colombo", true, 0L);
+        when(repository.findById(id)).thenReturn(Optional.of(existing));
+        com.swiftdrop.pricing.domain.PricingRuleRepository pricingRules = mock(com.swiftdrop.pricing.domain.PricingRuleRepository.class);
+
+        ZoneAdministration adminWithRules = new ZoneAdministration(repository, pricingRules, clock);
+        adminWithRules.delete(id);
+
+        verify(pricingRules).deleteByOriginZoneIdOrDestinationZoneId(id, id);
+        verify(repository).delete(existing);
+    }
+
     private static Zone createZoneWithId(UUID id, String code, String name, boolean active, long version) {
         Zone zone = new Zone(code, name, active);
         ReflectionTestUtils.setField(zone, "id", id);

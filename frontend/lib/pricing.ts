@@ -5,6 +5,7 @@ export interface ZoneAdmin {
   code: string;
   name: string;
   active: boolean;
+  hubId?: string | null;
   version: number;
   createdAt: string;
 }
@@ -12,6 +13,7 @@ export interface ZoneAdmin {
 export interface ZoneInput {
   code: string;
   name: string;
+  hubId?: string | null;
   active?: boolean;
   version?: number;
 }
@@ -61,6 +63,11 @@ export function createZone(input: ZoneInput): Promise<ZoneAdmin> {
 /** Updates zone name, code, or active status with version optimistic locking. */
 export function updateZone(id: string, input: ZoneInput): Promise<ZoneAdmin> {
   return api.put<ZoneAdmin>(`/api/v1/zones/${encodeURIComponent(id)}`, input);
+}
+
+/** Deletes a delivery zone. */
+export function deleteZone(id: string): Promise<void> {
+  return api.delete<void>(`/api/v1/zones/${encodeURIComponent(id)}`);
 }
 
 /** Lists all pricing rules across zone pairs. */

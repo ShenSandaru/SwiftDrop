@@ -1,5 +1,7 @@
 package com.swiftdrop.pricing.web;
 
+import java.util.UUID;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -15,8 +17,12 @@ public record ZoneRequest(
         @Size(max = 200, message = "name must be at most 200 characters")
         String name,
 
+        UUID hubId,
         Boolean active,
         Long version
 ) {
+    public ZoneRequest(String code, String name, Boolean active, Long version) {
+        this(code, name, null, active, version);
+    }
 }
 

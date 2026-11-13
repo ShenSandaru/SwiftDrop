@@ -7,21 +7,23 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  MapPin,
   Pencil,
   Plus,
   Search,
   Star,
+  Trash2,
   Warehouse,
 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { formatApiError } from "@/lib/api";
-import { listZones, type Zone } from "@/lib/delivery";
-import { createHub, listHubs, updateHub, type Hub } from "@/lib/hubs";
-import { SRI_LANKA_DISTRICTS, type DistrictInfo } from "@/lib/sri-lanka-districts";
-import { createZone } from "@/lib/pricing";
+import { createHub, deleteHub, listHubs, updateHub, type Hub } from "@/lib/hubs";
+import { listDistricts, type District } from "@/lib/districts";
+import { createZone, listAdminZones, type ZoneAdmin } from "@/lib/pricing";
 
 const EMPTY_FORM = { code: "", name: "", city: "", zoneId: "", central: false };
 
@@ -30,18 +32,22 @@ const EMPTY_FORM = { code: "", name: "", city: "", zoneId: "", central: false };
  */
 export default function AdminHubsPage() {
   const [hubs, setHubs] = useState<Hub[] | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
+  const [zones, setZones] = useState<ZoneAdmin[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [selectedDistrict, setSelectedDistrict] = useState<DistrictInfo | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyHub, setBusyHub] = useState<string | null>(null);
+  const [hubToDelete, setHubToDelete] = useState<Hub | null>(null);
+  const [deletingHub, setDeletingHub] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([listHubs(), listZones()])
-      .then(([loadedHubs, loadedZones]) => {
+    Promise.all([listHubs(), listAdminZones(), listDistricts()])
+      .then(([loadedHubs, loadedZones, loadedDistricts]) => {
         setHubs(loadedHubs);
         setZones(loadedZones);
+        setDistricts(loadedDistricts);
       })
       .catch((failure) => setError(formatApiError(failure)));
   }, []);
@@ -51,14 +57,28 @@ export default function AdminHubsPage() {
   }, [load]);
 
   const zoneName = (zoneId: string | null) => zones.find((zone) => zone.id === zoneId)?.name;
-  const servedZones = useMemo(
-    () => new Set((hubs ?? []).filter((hub) => hub.active && hub.zoneId).map((hub) => hub.zoneId)),
-    [hubs],
-  );
-  const unserved = zones.filter((zone) => !servedZones.has(zone.id));
+  const servedZoneIds = useMemo(() => {
+    const set = new Set<string>();
+    (hubs ?? []).filter((h) => h.active).forEach((h) => {
+      if (h.zoneId) set.add(h.zoneId);
+    });
+    zones.forEach((z) => {
+      if (z.hubId && hubs?.some((h) => h.active && h.id === z.hubId)) {
+        set.add(z.id);
+      }
+    });
+    return set;
+  }, [hubs, zones]);
+
+  const unserved = zones.filter((zone) => !servedZoneIds.has(zone.id));
   const takenZones = new Set((hubs ?? []).map((hub) => hub.zoneId));
   const central = hubs?.find((hub) => hub.central && hub.active);
   const branches = (hubs ?? []).filter((hub) => hub !== central);
+
+  const getAssignedZones = useCallback(
+    (hub: Hub) => zones.filter((z) => z.hubId === hub.id || z.id === hub.zoneId),
+    [zones],
+  );
 
   const existingDistrictKeys = useMemo(() => {
     const set = new Set<string>();
@@ -69,7 +89,7 @@ export default function AdminHubsPage() {
     return set;
   }, [hubs]);
 
-  function handleDistrictSelect(district: DistrictInfo) {
+  function handleDistrictSelect(district: District) {
     if (existingDistrictKeys.has(district.name.toLowerCase()) || existingDistrictKeys.has(district.code.toLowerCase())) {
       return;
     }
@@ -148,6 +168,22 @@ export default function AdminHubsPage() {
     }
   }
 
+  async function confirmDeleteHub() {
+    if (!hubToDelete) return;
+    setDeletingHub(true);
+    setError(null);
+    try {
+      await deleteHub(hubToDelete.id);
+      setHubs((prev) => (prev ? prev.filter((h) => h.id !== hubToDelete.id) : prev));
+      setHubToDelete(null);
+      load();
+    } catch (failure) {
+      setError(formatApiError(failure));
+    } finally {
+      setDeletingHub(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -184,16 +220,36 @@ export default function AdminHubsPage() {
           <p className="py-8 text-center text-sm text-muted-foreground">No hubs yet. Start with the central hub.</p>
         ) : (
           <div className="flex flex-col items-center gap-6">
-            {central && <HubCard hub={central} zone={zoneName(central.zoneId)} busy={busyHub === central.id} onToggle={toggleActive}
-              zones={zones} takenZones={takenZones} onSave={saveHub} />}
+            {central && (
+              <HubCard
+                hub={central}
+                zone={zoneName(central.zoneId)}
+                assignedZones={getAssignedZones(central)}
+                busy={busyHub === central.id}
+                onToggle={toggleActive}
+                onDelete={setHubToDelete}
+                zones={zones}
+                takenZones={takenZones}
+                onSave={saveHub}
+              />
+            )}
             {branches.length > 0 && (
               <>
                 {central && <span aria-hidden="true" className="h-6 border-l-2 border-dashed border-primary/40" />}
                 <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {branches.map((hub) => (
                     <li key={hub.id}>
-                      <HubCard hub={hub} zone={zoneName(hub.zoneId)} busy={busyHub === hub.id} onToggle={toggleActive}
-                        zones={zones} takenZones={takenZones} onSave={saveHub} />
+                      <HubCard
+                        hub={hub}
+                        zone={zoneName(hub.zoneId)}
+                        assignedZones={getAssignedZones(hub)}
+                        busy={busyHub === hub.id}
+                        onToggle={toggleActive}
+                        onDelete={setHubToDelete}
+                        zones={zones}
+                        takenZones={takenZones}
+                        onSave={saveHub}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -216,6 +272,7 @@ export default function AdminHubsPage() {
             <DistrictSelect
               selected={selectedDistrict}
               onSelect={handleDistrictSelect}
+              districts={districts}
               existingDistricts={existingDistrictKeys}
             />
             <p className="text-xs text-muted-foreground">Select from the 25 administrative districts.</p>
@@ -265,6 +322,40 @@ export default function AdminHubsPage() {
           {saving && <Loader2 className="animate-spin mr-2" aria-hidden="true" />} Add hub
         </Button>
       </form>
+
+      {/* Delete Hub Confirmation Dialog with StatCard */}
+      <ConfirmationDialog
+        open={hubToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setHubToDelete(null);
+        }}
+        title="Delete Hub"
+        description="Are you sure you want to permanently delete this hub? All associated operations and routing through this hub will be discontinued. This action cannot be undone."
+        confirmLabel="Delete Hub"
+        cancelLabel="Cancel"
+        variant="destructive"
+        loading={deletingHub}
+        onConfirm={confirmDeleteHub}
+        itemSummary={
+          hubToDelete
+            ? {
+                title: hubToDelete.name,
+                code: hubToDelete.code,
+                badge: hubToDelete.central ? "Central Hub" : "Branch Hub",
+                badgeVariant: hubToDelete.central ? "default" : "outline",
+                icon: hubToDelete.central ? Warehouse : Building2,
+                details: [
+                  { label: "City / District", value: hubToDelete.city || "—" },
+                  { label: "Status", value: hubToDelete.active ? "Active" : "Inactive" },
+                  {
+                    label: "Zones Served",
+                    value: `${getAssignedZones(hubToDelete).length} zone(s) assigned`,
+                  },
+                ],
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }
@@ -273,10 +364,12 @@ export default function AdminHubsPage() {
 function DistrictSelect({
   selected,
   onSelect,
+  districts,
   existingDistricts,
 }: {
-  selected: DistrictInfo | null;
-  onSelect: (district: DistrictInfo) => void;
+  selected: District | null;
+  onSelect: (district: District) => void;
+  districts: District[];
   existingDistricts: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
@@ -295,15 +388,15 @@ function DistrictSelect({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return SRI_LANKA_DISTRICTS;
-    return SRI_LANKA_DISTRICTS.filter(
+    if (!q) return districts;
+    return districts.filter(
       (d) =>
         d.name.toLowerCase().includes(q) ||
         d.code.toLowerCase().includes(q) ||
         d.province.toLowerCase().includes(q) ||
         d.postalCode.includes(q)
     );
-  }, [search]);
+  }, [search, districts]);
 
   return (
     <div ref={containerRef} className="relative">
@@ -397,12 +490,24 @@ function DistrictSelect({
   );
 }
 
-function HubCard({ hub, zone, busy, onToggle, zones, takenZones, onSave }: {
+function HubCard({
+  hub,
+  zone,
+  assignedZones,
+  busy,
+  onToggle,
+  onDelete,
+  zones,
+  takenZones,
+  onSave,
+}: {
   hub: Hub;
   zone: string | undefined;
+  assignedZones: ZoneAdmin[];
   busy: boolean;
   onToggle: (hub: Hub) => void;
-  zones: Zone[];
+  onDelete: (hub: Hub) => void;
+  zones: ZoneAdmin[];
   /** Zones that already have a hub, active or not: the database allows one hub per zone. */
   takenZones: Set<string | null>;
   onSave: (hub: Hub, changes: { name: string; city: string; zoneId: string | null }) => Promise<boolean>;
@@ -438,7 +543,7 @@ function HubCard({ hub, zone, busy, onToggle, zones, takenZones, onSave }: {
             </p>
             <p className="font-mono text-[11px] tracking-[0.15em] text-primary">{hub.code}</p>
             <p className="text-xs text-muted-foreground">
-              {hub.city}{zone ? ` · serves ${zone}` : hub.central ? " · central only" : ""}
+              {hub.city}{zone ? ` · primary zone: ${zone}` : hub.central ? " · central only" : ""}
             </p>
           </div>
         </div>
@@ -450,7 +555,48 @@ function HubCard({ hub, zone, busy, onToggle, zones, takenZones, onSave }: {
             {busy && <Loader2 className="animate-spin" aria-hidden="true" />}
             {hub.active ? "Deactivate" : "Activate"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(hub);
+            }}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" /> Delete
+          </Button>
         </div>
+      </div>
+
+      {/* Assigned Delivery Zones */}
+      <div className="mt-3 border-t border-border/40 pt-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <MapPin className="size-3 text-primary" aria-hidden="true" />
+            Zones Served ({assignedZones.length})
+          </span>
+        </div>
+        {assignedZones.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground italic">
+            No delivery zones assigned to this hub yet.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
+            {assignedZones.map((z) => (
+              <span
+                key={z.id}
+                className="inline-flex items-center gap-1 text-[10px] rounded-md bg-muted px-2 py-0.5 border border-border/50 text-foreground"
+              >
+                <span className="font-mono text-[9px] text-primary font-bold">{z.code}</span>
+                <span className="truncate max-w-[120px]">{z.name}</span>
+                {!z.active && <span className="text-[8px] text-muted-foreground">(Inactive)</span>}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {editing && (
