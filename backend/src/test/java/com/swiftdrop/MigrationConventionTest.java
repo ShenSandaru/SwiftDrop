@@ -175,6 +175,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111010",
                                 "delivery add hub lifecycle",
-                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
+                        tuple(
+                                "202611131200",
+                                "merchant extend webhook event types",
+                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"));
     }
 }
