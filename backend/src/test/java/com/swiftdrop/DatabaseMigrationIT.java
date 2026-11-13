@@ -102,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(19);
+        assertThat(rows).hasSize(20);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -166,6 +166,9 @@ class DatabaseMigrationIT {
                 .containsEntry("success", true);
         assertThat(rows.get(18))
                 .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(19))
+                .containsEntry("script", "merchant/V202611131200__merchant_extend_webhook_event_types.sql")
                 .containsEntry("success", true);
 
         // Assert tables exist in the isolated test database
@@ -425,6 +428,34 @@ class DatabaseMigrationIT {
         List<MerchantWebhookEndpoint> afterDelete = merchantWebhookEndpointRepository
                 .findActiveForMerchantAndEvent(merchant.getId(), ParcelStatus.CREATED);
         assertThat(afterDelete).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Webhook endpoints can subscribe to every parcel status, including the ADR 0009 ones")
+    void merchantWebhookEndpointAcceptsEveryParcelStatus() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, email, password_hash, full_name, enabled, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                userId, "merchant" + userId + "@example.com", "hash", "Merchant User", true);
+        Merchant merchant = merchantRepository.saveAndFlush(new Merchant(
+                userId, "Hub Store", "Retail", "REG-HUB-" + userId, "+94771234567", "Hub Way", null, null));
+
+        MerchantWebhookEndpoint saved = merchantWebhookEndpointRepository.saveAndFlush(new MerchantWebhookEndpoint(
+                merchant.getId(), "https://hook.example.com/all", "All statuses", "cipher-bytes", "iv-bytes", 1,
+                "3a9f", Set.of(ParcelStatus.values())));
+
+        assertThat(saved.getEvents()).containsExactlyInAnyOrder(ParcelStatus.values());
+        for (ParcelStatus status : ParcelStatus.values()) {
+            assertThat(merchantWebhookEndpointRepository.findActiveForMerchantAndEvent(merchant.getId(), status))
+                    .as("subscription for %s", status)
+                    .extracting(MerchantWebhookEndpoint::getId)
+                    .containsExactly(saved.getId());
+        }
+        // The constraint still rejects values that are not parcel statuses.
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO merchant_webhook_endpoint_events (endpoint_id, event_type) VALUES (?, ?)",
+                saved.getId(), "LOST_IN_SPACE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

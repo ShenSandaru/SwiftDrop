@@ -108,7 +108,7 @@ public class MerchantController {
      * Retrieves full merchant details including status audit history (Admin only).
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public MerchantDetailResponse getMerchantDetail(@PathVariable UUID id) {
         return approvalService.getMerchantDetail(id);
     }
@@ -117,7 +117,7 @@ public class MerchantController {
      * Admin decision endpoint for approving, rejecting, or suspending a merchant application (Phase 3).
      */
     @PostMapping("/{id}/approval-decisions")
-    @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public MerchantStatusResponse decideApproval(
             @PathVariable UUID id,
             @Valid @RequestBody ApprovalDecisionRequest request,

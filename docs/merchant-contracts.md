@@ -161,7 +161,10 @@ public interface WebhookUrlValidator {
     }
 }
 ```
-*Member A provides a fallback bean that verifies basic URI syntax and HTTPS/HTTP protocols until Member B's bean is wired.*
+*Implemented by Member B's SSRF-safe `WebhookDestinationValidator` (SD-409), registered unconditionally in
+`merchant.infrastructure.webhook.WebhookClientConfiguration`. It is the only `WebhookUrlValidator` bean; the same
+instance checks every outbound webhook request. The earlier fallback bean was removed (F-02): a second bean made
+startup fail, and `@ConditionalOnMissingBean` is not reliable on component-scanned classes.*
 
 ### 3.2 `WebhookDeliveryQuery` (Owner: Member B)
 Used by Member A to display the webhook delivery history screen in the merchant portal.
@@ -277,3 +280,15 @@ To avoid collisions:
 - A merchant with `PENDING`, `REJECTED`, or `SUSPENDED` status can authenticate and view their status screen.
 - Webhook endpoint CRUD and machine API order creation require `APPROVED` status.
 
+- Merchant review endpoints (list, detail, approval decisions) require the `ADMIN` role. `DISPATCHER_ADMIN`
+  was replaced by separate `ADMIN` and `DISPATCHER` roles; dispatchers do not review merchants.
+
+### 4.7 Parcel Lifecycle of ADR 0009 (hub network, attempts, returns, cancellation)
+- Webhook endpoints may subscribe to every `ParcelStatus`: `CREATED`, `PICKED_UP`, `AT_HUB`, `IN_TRANSIT`,
+  `OUT_FOR_DELIVERY`, `DELIVERY_ATTEMPT_FAILED`, `DELIVERED`, `RETURNING`, `RETURNED`, `CANCELLED`, `FAILED`
+  (migration `V202611131200`). Existing endpoints keep their subscriptions; new statuses are opt-in.
+- The `parcel.status-changed` event keeps `schemaVersion` 1 and gains two optional fields: `hubCode`
+  (`AT_HUB`, `IN_TRANSIT`) and `attempt` (`OUT_FOR_DELIVERY`, `DELIVERY_ATTEMPT_FAILED`).
+  `failureReasonCode` is now also set for `DELIVERY_ATTEMPT_FAILED`. Webhook payloads pass these through;
+  receivers must ignore unknown fields (ADR 0004 §2) and must not assume a fixed status list.
+- The merchant order API returns the parcel status by name, so the new statuses need no API change.
