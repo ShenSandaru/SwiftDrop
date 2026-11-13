@@ -165,6 +165,11 @@ this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
 `http://localhost:9000/hook`), and the backend logs a warning at startup. Private addresses stay
 refused. Never enable it outside local development.
 
+The merchant event consumer turns every merchant parcel's status change into webhook delivery records
+(`merchant_webhook_deliveries`, status `PENDING` until the sender exists). It is on by default; set
+`SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED=false` to leave events waiting in the
+`merchant.parcel-status-changed` queue (visible in the RabbitMQ management UI).
+
 Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
 a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the
 admin and create, under **Hub Network**, one central hub (Colombo) and a branch hub for each

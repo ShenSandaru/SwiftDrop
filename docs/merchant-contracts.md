@@ -292,3 +292,38 @@ To avoid collisions:
   `failureReasonCode` is now also set for `DELIVERY_ATTEMPT_FAILED`. Webhook payloads pass these through;
   receivers must ignore unknown fields (ADR 0004 §2) and must not assume a fixed status list.
 - The merchant order API returns the parcel status by name, so the new statuses need no API change.
+
+### 4.8 Parcel Event Consumer and Webhook Delivery Records (SD-410)
+- `merchant.infrastructure.messaging.MerchantEventListener` consumes `merchant.parcel-status-changed`;
+  `merchant.application.MerchantEventProcessor` applies each merchant parcel's events in sequence order
+  (ADR 0004 §4.3). Customer parcels are ignored. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`
+  (default `true`); tuning `swiftdrop.merchant.events.*` (ADR 0004 §9 defaults, bounds checked at startup).
+- Tables (migration `V202611141000`): `merchant_event_states` (last applied sequence, `stuck`),
+  `merchant_processed_events`, `merchant_pending_events`, `merchant_event_anomalies`,
+  `merchant_webhook_deliveries` (unique per event and endpoint). They replace the `webhook_deliveries` and
+  consumer-state names in the implementation contract §5.5/§5.7.
+- **Delivery record status vocabulary** (`WebhookDeliveryStatus`, also a database check): `PENDING`,
+  `IN_PROGRESS`, `SUCCEEDED`, `FAILED`, `SECRET_UNAVAILABLE`. The consumer only creates `PENDING` records;
+  the sender (SD-411) uses exactly these values. `WebhookDeliveryView.deliveryStatus` carries them.
+- **Which endpoints:** every enabled, not deleted endpoint of the parcel's merchant subscribed to the event's
+  new status, at the time the event is processed.
+- **Approval rule:** merchant approval is evaluated **when the consumer processes the event**, not when the
+  parcel event was generated. An event of a merchant that is not `APPROVED` at that moment advances the
+  sequence but creates no delivery record; it is not sent later.
+- **Payload rule (for SD-411):** `payload` is the event envelope as UTF-8 text — the message body exactly as
+  received, or for events rebuilt during reconciliation, the envelope serialized by `MerchantEventJson`.
+  The sender reads it as UTF-8, signs **exactly those bytes** (`"<timestamp>.<body>"`, ADR 0004 §7.2) and sends
+  **the same bytes** as the request body; it never parses and re-serializes the JSON.
+- **Anomalies:** an event whose ID is stored for another sequence (`IDENTITY_CONFLICT`), whose sequence is
+  stored with another ID (`SEQUENCE_CONFLICT`), whose merchant does not own the parcel (`OWNERSHIP_MISMATCH`)
+  or whose sequence was applied by an event no longer kept (`UNKNOWN_DUPLICATE`) is not applied; it is kept
+  in `merchant_event_anomalies` with an `ERROR` log line and the `swiftdrop.merchant.events.anomalies{kind}`
+  counter. Invalid messages (not a supported `parcel.status-changed` event) go to the `.dlq` at once; other
+  failures are tried 3 times in total, then dead-lettered.
+- **Stuck parcels and recovery:** a gap that reconciliation cannot close within 5 attempts marks the parcel
+  `stuck` (`ERROR` line, `swiftdrop.merchant.events.stuck` counter); its pending events are kept. After the
+  cause is fixed, reset it so the reconciler tries again (nothing is deleted):
+  ```sql
+  UPDATE merchant_pending_events SET reconcile_attempts = 0, next_reconcile_at = now() WHERE parcel_id = '<id>';
+  UPDATE merchant_event_states SET stuck = FALSE WHERE parcel_id = '<id>';
+  ```

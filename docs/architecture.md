@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant queue declared; no consumers yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant consumer creates webhook delivery records; webhook sending not yet) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -218,8 +218,18 @@ tracking     → delivery
   name), delivery limit 5, maximum length 100,000, `reject-publish` and `at-least-once`
   dead-lettering, plus its dead-letter queue `merchant.parcel-status-changed.dlq`.
   `MerchantEventQueueIT` verifies on RabbitMQ 4.3 that the `stream_queue` feature flag is on, the
-  arguments are accepted and a rejected message is dead-lettered. **No consumer exists yet**
-  (merchant SD-410), so events collect in the queue; `notification` has no queue yet.
+  arguments are accepted and a rejected message is dead-lettered. `notification` has no queue yet.
+- **Implemented (SD-410, ADR 0004 §4.3, §6, §7.1):** the merchant consumer (`MerchantEventListener`,
+  `MerchantEventProcessor`) reads that queue. Customer parcels are ignored; for a merchant parcel it locks
+  the parcel's state row, recognizes duplicates in processed and pending events, applies events in
+  sequence order, keeps early events pending and quarantines contradicting events in
+  `merchant_event_anomalies`. Applying an event creates one `PENDING` row in
+  `merchant_webhook_deliveries` per enabled endpoint subscribed to the new status, if the merchant is
+  `APPROVED` when the event is processed. Listener retries: 3 attempts in total, invalid messages to
+  the `.dlq` at once. A reconciler closes gaps after 60 s from `ParcelEvents.eventsBetween` (contiguous
+  sequences only, `SKIP LOCKED` per parcel) and marks a parcel stuck after 5 failed attempts; processed
+  IDs are deleted after 30 days. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`. **Webhook sending
+  (SD-411) is not implemented**, so records stay `PENDING`. Details: `docs/merchant-contracts.md` §4.8.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
