@@ -27,6 +27,35 @@ public interface NotificationRecordRepository extends JpaRepository<Notification
             UUID recipientUserId);
 
     /**
+     * Finds a single notification record by its ID, recipient, and channel.
+     * Guarantees that callers can only access their own in-app notifications.
+     */
+    Optional<NotificationRecord> findByIdAndRecipientUserIdAndChannel(
+            UUID id,
+            UUID recipientUserId,
+            NotificationChannel channel);
+
+    /**
+     * Queries notification feed for a user filtered by channel (e.g. IN_APP).
+     * Backed by index {@code ix_notification_records_user_feed}.
+     */
+    Page<NotificationRecord> findByRecipientUserIdAndChannel(
+            UUID recipientUserId,
+            NotificationChannel channel,
+            Pageable pageable);
+
+    /**
+     * Bulk marks all unread in-app notifications as read for a recipient.
+     * Preserves existing read_at timestamps by updating only records where is_read is false.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE NotificationRecord r SET r.isRead = true, r.readAt = :readAt "
+            + "WHERE r.recipientUserId = :recipientUserId AND r.isRead = false AND r.channel = 'IN_APP'")
+    int markAllAsReadForRecipient(
+            @org.springframework.data.repository.query.Param("recipientUserId") UUID recipientUserId,
+            @org.springframework.data.repository.query.Param("readAt") java.time.Instant readAt);
+
+    /**
      * Queries notification feed for a user ordered by created_at DESC.
      * Backed by index {@code ix_notification_records_user_feed}.
      */

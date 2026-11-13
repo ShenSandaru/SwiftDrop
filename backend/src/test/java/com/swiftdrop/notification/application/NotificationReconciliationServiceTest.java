@@ -436,6 +436,33 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public Optional<NotificationRecord> findByIdAndRecipientUserIdAndChannel(UUID id, UUID recipientUserId, NotificationChannel channel) {
+            return records.stream().filter(r -> r.getId().equals(id)
+                    && r.getRecipientUserId().equals(recipientUserId)
+                    && r.getChannel() == channel).findFirst();
+        }
+
+        @Override
+        public org.springframework.data.domain.Page<NotificationRecord> findByRecipientUserIdAndChannel(UUID recipientUserId, NotificationChannel channel, org.springframework.data.domain.Pageable pageable) {
+            List<NotificationRecord> matches = records.stream()
+                    .filter(r -> r.getRecipientUserId().equals(recipientUserId) && r.getChannel() == channel)
+                    .toList();
+            return new org.springframework.data.domain.PageImpl<>(matches, pageable, matches.size());
+        }
+
+        @Override
+        public int markAllAsReadForRecipient(UUID recipientUserId, java.time.Instant readAt) {
+            int updated = 0;
+            for (NotificationRecord r : records) {
+                if (r.getRecipientUserId().equals(recipientUserId) && !r.isRead() && r.getChannel() == NotificationChannel.IN_APP) {
+                    r.markAsRead(readAt);
+                    updated++;
+                }
+            }
+            return updated;
+        }
+
+        @Override
         public org.springframework.data.domain.Page<NotificationRecord> findByRecipientUserId(UUID recipientUserId, org.springframework.data.domain.Pageable pageable) {
             List<NotificationRecord> matches = records.stream().filter(r -> r.getRecipientUserId().equals(recipientUserId)).toList();
             return new org.springframework.data.domain.PageImpl<>(matches, pageable, matches.size());
