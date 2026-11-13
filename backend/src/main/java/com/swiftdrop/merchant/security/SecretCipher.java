@@ -32,8 +32,15 @@ public class SecretCipher {
     private final SecureRandom secureRandom = new SecureRandom();
     private final SecretKeySpec masterKeySpec;
 
-    public SecretCipher(@Value("${swiftdrop.merchant.webhook.secret-key}") String masterKeyString) {
-        Objects.requireNonNull(masterKeyString, "swiftdrop.merchant.webhook.secret-key must not be null");
+    /** The key comes only from the environment (IMP-6); startup fails without one of at least this many bytes. */
+    static final int MIN_KEY_BYTES = 32;
+
+    public SecretCipher(@Value("${swiftdrop.merchant.webhook.secret-key:}") String masterKeyString) {
+        if (masterKeyString == null || masterKeyString.isBlank()
+                || masterKeyString.getBytes(StandardCharsets.UTF_8).length < MIN_KEY_BYTES) {
+            throw new IllegalStateException("swiftdrop.merchant.webhook.secret-key (SWIFTDROP_WEBHOOK_SECRET_KEY)"
+                    + " must be set to at least " + MIN_KEY_BYTES + " bytes");
+        }
         byte[] rawKeyBytes = masterKeyString.getBytes(StandardCharsets.UTF_8);
         byte[] keyBytes = sha256(rawKeyBytes);
         this.masterKeySpec = new SecretKeySpec(keyBytes, "AES");
