@@ -143,6 +143,16 @@ public class AccountService implements UserDirectory {
     }
 
     @Override
+    public List<UserSummary> findUsers(Set<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return users.findAllById(ids).stream()
+                .map(AccountService::toSummary)
+                .toList();
+    }
+
+    @Override
     public List<UserSummary> findEnabledCouriers() {
         return users.findByRoleAndEnabledTrue(Role.COURIER).stream()
                 .map(AccountService::toSummary)

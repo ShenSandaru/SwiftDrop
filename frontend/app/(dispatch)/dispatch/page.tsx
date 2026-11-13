@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  History,
   LayoutDashboard,
   MapPin,
   MapPinned,
@@ -30,6 +31,7 @@ import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
+import { DispatchHistory } from "@/components/dispatch/dispatch-history";
 import { formatApiError, type PageResponse } from "@/lib/api";
 import type { ParcelStatus } from "@/lib/delivery";
 import type {
@@ -61,7 +63,7 @@ const FILTER_STATUSES: Array<ParcelStatus | "ALL"> = [
 const SOURCE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT"] as const;
 type SourceFilter = (typeof SOURCE_FILTERS)[number];
 
-type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "tracking";
+type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "tracking" | "history";
 
 interface DashboardMetrics {
   total: number | null;
@@ -456,6 +458,12 @@ export default function DispatchPage() {
             onClick={() => setActiveTab("tracking")}
             icon={MapPin}
             label="Live Tracking"
+          />
+          <TabButton
+            active={activeTab === "history"}
+            onClick={() => setActiveTab("history")}
+            icon={History}
+            label="History"
           />
         </nav>
       </div>
@@ -1056,6 +1064,8 @@ export default function DispatchPage() {
           </Card>
         </section>
       )}
+
+      {activeTab === "history" && <DispatchHistory />}
 
       {/* Parcel Details / Courier Assignment Dialog */}
       {selectedParcel && (

@@ -3,11 +3,16 @@ package com.swiftdrop.dispatch.application;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.swiftdrop.delivery.api.DispatchActivity;
+import com.swiftdrop.delivery.api.DispatchActivityFilter;
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.PageRequest;
@@ -23,6 +28,7 @@ import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.Staff;
+import com.swiftdrop.dispatch.api.DispatchActivityItem;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
@@ -67,6 +73,34 @@ public class DispatchService {
     public ParcelAssignmentHistory assignmentHistory(UUID parcelId) {
         Objects.requireNonNull(parcelId, "parcelId");
         return parcels.findAssignmentHistory(parcelId).orElseThrow(ParcelNotFoundException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<DispatchActivityItem> activityHistory(
+            DispatchActivityFilter filter, PageRequest page) {
+        PageResult<DispatchActivity> result = parcels.findDispatchActivityHistory(filter, page);
+        Set<UUID> actorIds = result.items().stream()
+                .map(DispatchActivity::actorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, UserSummary> actors = users.findUsers(actorIds).stream()
+                .collect(Collectors.toMap(UserSummary::id, Function.identity()));
+
+        List<DispatchActivityItem> items = result.items().stream()
+                .map(activity -> {
+                    UserSummary actor = activity.actorId() == null ? null : actors.get(activity.actorId());
+                    String actorName = actor == null ? "Unknown dispatcher" : actor.fullName();
+                    return new DispatchActivityItem(
+                            activity.id(),
+                            activity.trackingNumber(),
+                            activity.occurredAt(),
+                            activity.actionType(),
+                            activity.actorId(),
+                            actorName,
+                            activity.details());
+                })
+                .toList();
+        return PageResult.of(items, page, result.totalItems());
     }
 
     @Transactional

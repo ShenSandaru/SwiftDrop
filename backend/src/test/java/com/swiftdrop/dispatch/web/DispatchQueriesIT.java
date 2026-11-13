@@ -68,6 +68,35 @@ class DispatchQueriesIT {
         }
     }
 
+    @Test
+    void dispatcherHistoryIsReadOnlyAndRestrictedToAdminsAndDispatchers() throws Exception {
+        for (TestPrincipal principal : new TestPrincipal[] {
+                TestPrincipal.admin(), TestPrincipal.dispatcher()}) {
+            mvc.perform(get("/api/v1/dispatch/history")
+                            .param("page", "0")
+                            .param("size", "20")
+                            .with(principal.postProcessor()))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.items").isEmpty())
+                    .andExpect(jsonPath("$.page").value(0))
+                    .andExpect(jsonPath("$.size").value(20));
+        }
+
+        for (TestPrincipal principal : new TestPrincipal[] {
+                TestPrincipal.customer(), TestPrincipal.courier(), TestPrincipal.merchant()}) {
+            mvc.perform(get("/api/v1/dispatch/history").with(principal.postProcessor()))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/v1/dispatch/history")).andExpect(status().isUnauthorized());
+
+        mvc.perform(get("/api/v1/dispatch/history")
+                        .param("from", "2026-11-13T10:00:00Z")
+                        .param("to", "2026-11-13T09:00:00Z")
+                        .with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isBadRequest());
+    }
+
     private void assertEmptyResponse(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request)
             throws Exception {
         mvc.perform(request

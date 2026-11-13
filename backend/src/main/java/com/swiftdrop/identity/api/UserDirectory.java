@@ -2,6 +2,7 @@ package com.swiftdrop.identity.api;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -17,6 +18,9 @@ public interface UserDirectory {
      * @return the user summary, or empty if no user exists with this ID
      */
     Optional<UserSummary> findUser(UUID id);
+
+    /** Looks up a batch of users without exposing identity entities to consuming modules. */
+    List<UserSummary> findUsers(Set<UUID> ids);
 
     /**
      * Retrieves all enabled users having the {@code COURIER} role.

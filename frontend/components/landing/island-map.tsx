@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 import { useReducedMotion } from "./use-reduced-motion";
 import "./landing.css";
@@ -103,24 +103,56 @@ export function IslandMap({ className }: { className?: string }) {
   const pinRef = useRef<SVGGElement>(null);
   const legRefs = useRef<(SVGPathElement | null)[]>([]);
   const trailRefs = useRef<(SVGPathElement | null)[]>([]);
+  const legRefCallbacks = useMemo(
+    () => LEGS.map((_, index) => (node: SVGPathElement | null) => {
+      legRefs.current[index] = node;
+    }),
+    [],
+  );
+  const trailRefCallbacks = useMemo(
+    () => LEGS.map((_, index) => (node: SVGPathElement | null) => {
+      trailRefs.current[index] = node;
+    }),
+    [],
+  );
 
   useEffect(() => {
+    const host = hostRef.current;
     const legs = legRefs.current;
     const trails = trailRefs.current;
     const pin = pinRef.current;
-    const host = hostRef.current;
-    if (!pin || !host || legs.some((leg) => !leg)) {
+    if (
+      !host?.isConnected ||
+      !pin?.isConnected ||
+      legs.length !== LEGS.length ||
+      legs.some((leg) => !leg?.isConnected) ||
+      trails.length !== LEGS.length ||
+      trails.some((trail) => !trail?.isConnected)
+    ) {
       return;
     }
-    const lengths = legs.map((leg) => leg!.getTotalLength());
+    const lengths = legs.map((leg) => leg?.getTotalLength() ?? 0);
+    if (lengths.some((length) => !Number.isFinite(length) || length <= 0)) {
+      return;
+    }
     trails.forEach((trail, index) => trail?.setAttribute("stroke-dasharray", `${lengths[index]}`));
 
     const place = (legIndex: number, progress: number) => {
-      const point = legs[legIndex]!.getPointAtLength(lengths[legIndex] * progress);
-      pin.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      const leg = legs[legIndex];
+      const currentPin = pinRef.current;
+      const length = lengths[legIndex];
+      if (!leg?.isConnected || !currentPin?.isConnected || !Number.isFinite(length)) {
+        return false;
+      }
+      const point = leg.getPointAtLength(length * progress);
+      currentPin.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      return true;
     };
     const drawTrails = (legIndex: number, progress: number) => {
       trails.forEach((trail, index) => {
+        if (!trail?.isConnected) {
+          return;
+        }
         const done = index < legIndex ? 1 : index === legIndex ? progress : 0;
         trail?.setAttribute("stroke-dashoffset", `${lengths[index] * (1 - done)}`);
       });
@@ -134,17 +166,34 @@ export function IslandMap({ className }: { className?: string }) {
     }
 
     let frame = 0;
+    let disposed = false;
     let visible = true;
     let elapsed = 0;
     let last = performance.now();
     let shownSegment = -1;
 
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!disposed && entry) {
+        visible = entry.isIntersecting;
+      }
     });
     observer.observe(host);
 
     const tick = (now: number) => {
+      if (disposed) {
+        return;
+      }
+      if (
+        !host.isConnected ||
+        !pinRef.current?.isConnected ||
+        legs.some((leg) => !leg?.isConnected) ||
+        trails.some((trail) => !trail?.isConnected)
+      ) {
+        observer.disconnect();
+        return;
+      }
+
       const delta = Math.min(now - last, 100);
       last = now;
       if (visible) {
@@ -158,23 +207,31 @@ export function IslandMap({ className }: { className?: string }) {
         const travelling = index % 2 === 1;
         const legIndex = travelling ? (index - 1) / 2 : index / 2 - 1;
         const progress = travelling ? easeInOut(time / SEGMENTS[index]) : 1;
+        let positioned: boolean;
         if (legIndex < 0) {
-          place(0, 0);
+          positioned = place(0, 0);
           drawTrails(-1, 0);
         } else {
-          place(legIndex, progress);
+          positioned = place(legIndex, progress);
           drawTrails(legIndex, progress);
+        }
+        if (!positioned) {
+          observer.disconnect();
+          return;
         }
         if (index !== shownSegment) {
           shownSegment = index;
           setSegment(index);
         }
       }
-      frame = requestAnimationFrame(tick);
+      if (!disposed) {
+        frame = requestAnimationFrame(tick);
+      }
     };
     frame = requestAnimationFrame(tick);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
@@ -222,11 +279,11 @@ export function IslandMap({ className }: { className?: string }) {
 
         {/* The sample parcel's route: road ahead, then the part already travelled */}
         {LEGS.map((d, index) => (
-          <path key={`road-${d}`} ref={(node) => { legRefs.current[index] = node; }} d={d}
+          <path key={`road-${d}`} ref={legRefCallbacks[index]} d={d}
             className="fill-none stroke-border" strokeWidth="3" strokeDasharray="1 6" strokeLinecap="round" />
         ))}
         {LEGS.map((d, index) => (
-          <path key={`trail-${d}`} ref={(node) => { trailRefs.current[index] = node; }} d={d}
+          <path key={`trail-${d}`} ref={trailRefCallbacks[index]} d={d}
             className="fill-none stroke-primary" strokeWidth="3.5" strokeLinecap="round" />
         ))}
 

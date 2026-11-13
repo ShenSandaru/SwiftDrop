@@ -74,13 +74,10 @@ The frontend and backend share no code. They communicate only over HTTP.
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Decided:** each business module exposes a small public API. Other modules use only that API and
   never reach into another module's internal classes, entities or repositories.
-- **Implemented:** the application class `com.swiftdrop.SwiftdropBackendApplication` and an empty
-  package skeleton: `com.swiftdrop.<module>` with an `api` sub-package for each of the seven modules
-  below, plus `com.swiftdrop.config` and `com.swiftdrop.shared`. They contain only
-  `package-info.java` files, except `identity`, whose `domain` package holds the `User` entity,
-  the `Role` enum and `UserRepository`, with `application` (registration, login), `security` (JWT
-  signing and verification), `web` (REST controllers) and `api` (`IdentityClaims`, the token claim
-  names). `config` holds the security filter chain.
+- **Implemented:** the application class `com.swiftdrop.SwiftdropBackendApplication` and the
+  `com.swiftdrop.config` and `com.swiftdrop.shared` packages. `identity`, `pricing`, `delivery`,
+  `dispatch` and `tracking` contain their implemented `api`, `domain`, `application` and `web`
+  packages as appropriate; `config` holds the security filter chain.
 - **Implemented:** `pricing` (`api`, `domain`, `application`, `web`): zones and zone-pair pricing
   rules, and the `FeeCalculator` behind `pricing.api`. Fee = base fee + per-kg fee × every started
   kilogram + the size surcharge, rounded `HALF_UP` to 2 decimals in LKR. An unknown or inactive
@@ -88,14 +85,18 @@ The frontend and backend share no code. They communicate only over HTTP.
   `POST /api/v1/price-quotes` (fee estimate with breakdown) and `GET /api/v1/zones` (active zones)
   are open to any logged-in user; anonymous access, as the contract proposes, needs a rule in
   `SecurityConfiguration`. Managing zones and rules (ADM-3) is not implemented yet.
-- **Implemented:** `delivery` (`api`, `domain`, `application`, `web`) and `tracking`
+- **Implemented:** `delivery` (`api`, `domain`, `application`, `web`), `dispatch`
+  (`api`, `application`, `web`) and `tracking`
   (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
   `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
   (sections 7 and 8).
+- **Implemented:** dispatcher assignment history distinguishes pickup and delivery tasks, uses
+  PostgreSQL uniqueness constraints for one active task per parcel/courier, and integrates with
+  the delivery lifecycle through `delivery.api` (ADR 0008).
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
-  `delivery` and `tracking` have code so far; the decision is not an authorization to implement
-  another module: that needs an approved task.
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), superseded in part by
+  [ADR 0008](adr/0008-dispatch-assignment-history-and-handoff.md)). Assignment history is owned by
+  `delivery`; assignment orchestration and courier eligibility are owned by `dispatch`.
 
 ### Modules (Decided, ADR 0003)
 

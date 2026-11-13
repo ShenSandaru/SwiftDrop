@@ -1,11 +1,13 @@
 package com.swiftdrop.dispatch.web;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,7 +20,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.swiftdrop.delivery.api.DispatchActivityAction;
+import com.swiftdrop.delivery.api.DispatchActivityFilter;
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignmentHistory;
@@ -28,6 +33,7 @@ import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.dispatch.application.DispatchService;
+import com.swiftdrop.dispatch.api.DispatchActivityItem;
 import com.swiftdrop.identity.api.IdentityClaims;
 import com.swiftdrop.shared.web.PageLimit;
 import com.swiftdrop.shared.web.PageResponse;
@@ -79,6 +85,23 @@ class DispatchController {
     @GetMapping("/parcels/{id}/assignment-history")
     ParcelAssignmentHistory assignmentHistory(@PathVariable UUID id) {
         return dispatch.assignmentHistory(id);
+    }
+
+    @GetMapping("/history")
+    PageResponse<DispatchActivityItem> activityHistory(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(required = false) DispatchActivityAction actionType,
+            @RequestParam(required = false) String trackingNumber,
+            @RequestParam(required = false) UUID dispatcherId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (from != null && to != null && !from.isBefore(to)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "'from' must be earlier than 'to'");
+        }
+        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
+        DispatchActivityFilter filter = new DispatchActivityFilter(from, to, actionType, trackingNumber, dispatcherId);
+        return toResponse(dispatch.activityHistory(filter, request), request);
     }
 
     @PostMapping("/parcel-assignments")

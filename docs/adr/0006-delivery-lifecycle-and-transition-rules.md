@@ -1,6 +1,6 @@
 # 0006. Delivery lifecycle and transition rules
 
-- Status: Accepted
+- Status: Superseded by 0008
 - Date: 2026-10-28 (Accepted: 2026-11-01)
 
 ## Context
@@ -165,4 +165,3 @@ Endpoints in the `delivery` module follow standard RFC 9457 Problem Details erro
 - Couriers have clear, validated steps for completing deliveries and recording failures.
 - Delivery proof and personal data remain private and decoupled from event publishing.
 - Receipt generation is available immediately without blocking on delivery completion.
-

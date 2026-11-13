@@ -3,6 +3,46 @@ import type { FailureReason, ParcelDetail, ParcelStatus, ParcelSize } from "@/li
 
 export type DispatchAssignmentType = "PICKUP" | "DELIVERY" | "RETURN";
 export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "CANCELLED";
+export type DispatchActivityAction =
+  | "PICKUP_ASSIGNED"
+  | "DELIVERY_ASSIGNED"
+  | "RETURN_ASSIGNED"
+  | "COURIER_REASSIGNED"
+  | "HUB_SCAN"
+  | "TRANSIT"
+  | "FAILURE"
+  | "RETURN_INITIATED"
+  | "CANCELLATION";
+
+export interface DispatchActivityDetails {
+  assignmentType: DispatchAssignmentType | null;
+  courierId: string | null;
+  fromStatus: ParcelStatus | null;
+  toStatus: ParcelStatus | null;
+  hubCode: string | null;
+  attempt: number | null;
+  failureReason: FailureReason | null;
+}
+
+export interface DispatchActivityItem {
+  id: string;
+  trackingNumber: string;
+  occurredAt: string;
+  actionType: DispatchActivityAction;
+  actorId: string | null;
+  actorName: string;
+  details: DispatchActivityDetails;
+}
+
+export interface DispatchActivityPageRequest {
+  page: number;
+  size: number;
+  from?: string;
+  to?: string;
+  actionType?: DispatchActivityAction;
+  trackingNumber?: string;
+  dispatcherId?: string;
+}
 
 /** What a dispatcher may do next with a parcel; the backend works it out (ADR 0009). */
 export type DispatchAction =
@@ -71,6 +111,34 @@ export interface DispatchParcelPageRequest {
   source?: "CUSTOMER" | "MERCHANT";
   assigned?: boolean;
   search?: string;
+}
+
+export function listDispatchActivityHistory({
+  page,
+  size,
+  from,
+  to,
+  actionType,
+  trackingNumber,
+  dispatcherId,
+}: DispatchActivityPageRequest): Promise<PageResponse<DispatchActivityItem>> {
+  const query = new URLSearchParams({ page: String(page), size: String(size) });
+  if (from) {
+    query.set("from", from);
+  }
+  if (to) {
+    query.set("to", to);
+  }
+  if (actionType) {
+    query.set("actionType", actionType);
+  }
+  if (trackingNumber?.trim()) {
+    query.set("trackingNumber", trackingNumber.trim());
+  }
+  if (dispatcherId?.trim()) {
+    query.set("dispatcherId", dispatcherId.trim());
+  }
+  return api.get<PageResponse<DispatchActivityItem>>(`/api/v1/dispatch/history?${query.toString()}`);
 }
 
 export function listDispatchParcels({

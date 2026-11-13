@@ -29,6 +29,10 @@ public interface ParcelQueries {
     /** Assignment history, empty when the parcel does not exist. */
     Optional<ParcelAssignmentHistory> findAssignmentHistory(UUID parcelId);
 
+    /** Dispatcher/admin assignment and status activity, newest first. */
+    PageResult<DispatchActivity> findDispatchActivityHistory(
+            DispatchActivityFilter filter, PageRequest page);
+
     /**
      * The merchant's parcels, newest first (merchant dashboard, MER-4).
      *
