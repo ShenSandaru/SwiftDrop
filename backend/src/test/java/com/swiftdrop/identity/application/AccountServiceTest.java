@@ -329,6 +329,20 @@ class AccountServiceTest {
         verify(users).findByRoleAndEnabledTrue(Role.COURIER);
     }
 
+    @Test
+    void updatesCustomerProfileAndCompletesProfile() {
+        User user = existing("hash");
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+
+        assertThat(user.isProfileCompleted()).isFalse();
+
+        User updated = service.updateProfile(user.getId(), "Alice Wonder", "+94771234567");
+
+        assertThat(updated.getFullName()).isEqualTo("Alice Wonder");
+        assertThat(updated.getPhoneNumber()).isEqualTo("+94771234567");
+        assertThat(updated.isProfileCompleted()).isTrue();
+    }
+
     private static User existing(String passwordHash) {
         return withId(new User("alice@example.com", passwordHash, "Alice", Set.of(Role.CUSTOMER)));
     }

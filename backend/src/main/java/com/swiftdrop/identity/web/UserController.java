@@ -113,4 +113,14 @@ class UserController {
         }
         return UserResponse.from(user);
     }
+
+    /** Updates the authenticated user's own profile (e.g. for customer profile completion). */
+    @PatchMapping("/me")
+    UserResponse updateProfile(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return UserResponse.from(accounts.updateProfile(userId, request.fullName(), request.phoneNumber()));
+    }
 }

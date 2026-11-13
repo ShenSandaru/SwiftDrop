@@ -154,7 +154,7 @@ export function NavHeader() {
   ) : (
     <>
       <Link href="/login" onClick={close} className={linkClass("/login")}>Sign In</Link>
-      <Link href="/signup" onClick={close}
+      <Link href="/signup/customer" onClick={close}
         className="shrink-0 whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
         Register
       </Link>

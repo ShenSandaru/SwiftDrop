@@ -4,8 +4,9 @@ import React, { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "cn";
-import { api, ApiError, formatApiError, type AccessTokenResponse } from "@/lib/api";
+import { api, ApiError, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getPostAuthRedirect } from "@/lib/role-redirect";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -16,6 +17,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 const ALLOWED_ERROR_MESSAGES: Record<string, string> = {
   conflict_email_exists:
     "An account with this email already exists. Please sign in with your email and password.",
+  role_not_permitted:
+    "Google sign-in is available only for customer accounts. Please sign in with your email and password.",
   unverified_email:
     "Your Google account email address is not verified. Please verify your email with Google and try again.",
   account_disabled:
@@ -25,50 +28,6 @@ const ALLOWED_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed:
     "Google sign-in failed. Please try again.",
 };
-
-const DEFAULT_POST_LOGIN_PATH = "/customer";
-
-/**
- * Validates and sanitizes the post-login destination retrieved from sessionStorage (ADR 0005).
- * Rejects external origins, protocol-relative URLs ('//'), backslash tricks ('/\'),
- * control characters, and navigation back to '/login', falling back safely to '/customer'.
- */
-function sanitizeRedirectTarget(target: string | null | undefined): string {
-  if (!target || typeof target !== "string") {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  const trimmed = target.trim();
-
-  if (trimmed === "" || trimmed === "/" || trimmed === "/login") {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  // Must begin with a single '/' and not be followed by '/' or '\'
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  // Reject CRLF or control characters
-  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-
-  try {
-    const parsed = new URL(trimmed, "http://localhost");
-    // Ensure the host authority was not parsed, origin remains unchanged, and destination is not a login loop
-    if (
-      parsed.origin !== "http://localhost" ||
-      !parsed.pathname.startsWith("/") ||
-      parsed.pathname === "/login"
-    ) {
-      return DEFAULT_POST_LOGIN_PATH;
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return DEFAULT_POST_LOGIN_PATH;
-  }
-}
 
 function GoogleCallbackContent() {
   const router = useRouter();
@@ -125,13 +84,15 @@ function GoogleCallbackContent() {
           return;
         }
 
-        // Retrieve and double-sanitize post-login destination from sessionStorage (ADR 0005)
-        let destination = DEFAULT_POST_LOGIN_PATH;
+        // Retrieve stored destination and resolve post-auth redirect based on user role and profile state
+        let storedDestination: string | null = null;
         if (typeof window !== "undefined") {
-          const storedDestination = window.sessionStorage.getItem("swiftdrop_auth_redirect");
+          storedDestination = window.sessionStorage.getItem("swiftdrop_auth_redirect");
           window.sessionStorage.removeItem("swiftdrop_auth_redirect");
-          destination = sanitizeRedirectTarget(storedDestination);
         }
+
+        const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
+        const destination = await getPostAuthRedirect(currentUser, response.accessToken, storedDestination);
 
         router.push(destination);
       } catch (err: unknown) {

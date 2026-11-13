@@ -8,7 +8,19 @@ import java.util.UUID;
  * Read-only summary of an existing user account for other modules. Password hashes and JPA
  * entities are never exposed through this API.
  */
-public record UserSummary(UUID id, String fullName, String email, Set<String> roles, boolean enabled) {
+public record UserSummary(
+        UUID id,
+        String fullName,
+        String email,
+        String phoneNumber,
+        Set<String> roles,
+        boolean enabled,
+        boolean profileCompleted
+) {
+
+    public UserSummary(UUID id, String fullName, String email, Set<String> roles, boolean enabled) {
+        this(id, fullName, email, null, roles, enabled, true);
+    }
 
     public UserSummary {
         Objects.requireNonNull(id, "id");
