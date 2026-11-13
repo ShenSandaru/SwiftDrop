@@ -31,6 +31,10 @@ interface PortalConfig {
   title: string;
   description: string;
   icon: React.ReactNode;
+  headline: string;
+  subheadline: string;
+  imageSrc: string;
+  imageAlt: string;
 }
 
 const PORTAL_CONFIGS: Record<PortalRole, PortalConfig> = {
@@ -39,30 +43,50 @@ const PORTAL_CONFIGS: Record<PortalRole, PortalConfig> = {
     title: "Welcome Back",
     description: "Sign in to book parcels and track your deliveries.",
     icon: <User className="size-4" aria-hidden="true" />,
+    headline: "From your door to anywhere on the island.",
+    subheadline: "Book in a minute. Track every stop. Delivered with proof.",
+    imageSrc: "/images/auth-delivery.png",
+    imageAlt: "Professional courier delivering parcel box at doorstep",
   },
   MERCHANT: {
     badge: "Merchant Portal",
     title: "Merchant Portal",
     description: "Sign in to manage your business and deliveries.",
     icon: <Store className="size-4" aria-hidden="true" />,
+    headline: "Grow and streamline your commercial deliveries.",
+    subheadline: "Bulk order intake, scheduled pickups, and real-time shipment monitoring.",
+    imageSrc: "/images/business-account.png",
+    imageAlt: "Merchant shipping account dashboard on digital tablet",
   },
   COURIER: {
     badge: "Courier Portal",
     title: "Courier Portal",
     description: "Sign in to view and manage your assigned deliveries.",
     icon: <Truck className="size-4" aria-hidden="true" />,
+    headline: "Your daily runs, routes, and handoffs in one place.",
+    subheadline: "View assigned parcels, record digital proof of delivery, and update transit statuses.",
+    imageSrc: "/images/auth-courier.png",
+    imageAlt: "SwiftDrop courier driver with delivery van and parcel packages",
   },
   DISPATCHER: {
     badge: "Dispatcher Portal",
     title: "Dispatcher Portal",
     description: "Sign in to coordinate and manage delivery operations.",
     icon: <Warehouse className="size-4" aria-hidden="true" />,
+    headline: "Centralized delivery dispatch and fleet coordination.",
+    subheadline: "Manage regional hub operations, balance courier workloads, and resolve exceptions.",
+    imageSrc: "/images/auth-dispatcher.png",
+    imageAlt: "Logistics dispatch coordinator monitoring live parcel routes on operations screens",
   },
   ADMIN: {
     badge: "Admin Portal",
     title: "Administration Portal",
     description: "Sign in to manage and oversee SwiftDrop operations.",
     icon: <Shield className="size-4" aria-hidden="true" />,
+    headline: "Platform administration and system oversight.",
+    subheadline: "Onboard staff, review merchant accounts, configure hubs, and manage pricing rules.",
+    imageSrc: "/images/auth-admin.png",
+    imageAlt: "System administrator managing enterprise logistics platform controls and user access",
   },
 };
 
@@ -135,8 +159,11 @@ function LoginForm() {
     <AuthLayout
       branding={
         <AuthBrandingPanel
-          headline="From your door to anywhere on the island."
-          description="Book in a minute. Track every stop. Delivered with proof."
+          badgeText={portalConfig.badge}
+          headline={portalConfig.headline}
+          description={portalConfig.subheadline}
+          imageSrc={portalConfig.imageSrc}
+          imageAlt={portalConfig.imageAlt}
         />
       }
     >
