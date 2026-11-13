@@ -159,6 +159,26 @@ create a Google OAuth client of type "Web application" with the authorized redir
 `http://localhost:8080/oauth2/authorization/google` in a browser. The callback responds with the
 same JSON token body as `POST /api/v1/auth/tokens`.
 
+### AI assistant (optional)
+
+The chat assistant on the Track Parcel and customer pages
+([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)) needs a Gemini API key; without one it answers that
+it is unavailable and everything else works. Create a free key at <https://aistudio.google.com>,
+put it in your `.env` as `SWIFTDROP_GEMINI_API_KEY` (never commit or share it) and restart the
+backend, which reads `.env` only at startup. The model is optional (`SWIFTDROP_ASSISTANT_MODEL`);
+Google retires models, so if the log line `Assistant model unavailable: ... HTTP 404 for model ...`
+appears, pick a current Flash or Flash-Lite model from AI Studio. `HTTP 429` means the free quota is
+used up. The free tier may use prompts to improve Google products, so the assistant sends only
+public data (tracking status, prices, service areas), never names, phones or addresses.
+
+The same tools are available to MCP clients at `http://localhost:8080/mcp` while the backend runs;
+no key is needed, because the client's own model does the reasoning. In Claude Code:
+`claude mcp add --transport http swiftdrop http://localhost:8080/mcp`, then ask for example "Use
+swiftdrop to estimate 2 kg from Colombo to Kandy". To inspect the tools, run
+`npx @modelcontextprotocol/inspector` outside the repository, choose the Streamable HTTP transport
+and that URL, and connect through the Inspector's proxy (a direct browser connection is refused
+because its origin is not an allowed frontend origin).
+
 Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
 a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the
 admin and create, under **Hub Network**, one central hub (Colombo) and a branch hub for each

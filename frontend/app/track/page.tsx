@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, MapPinned, PackageSearch, Search, XCircle } from "lucide-react";
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { JourneyNotice, attemptsIn, lastHubName } from "@/components/delivery/journey-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ export default function TrackPage() {
       <Suspense fallback={<div className="h-40 animate-pulse rounded-3xl border border-border bg-muted" />}>
         <Tracker />
       </Suspense>
+      <AssistantWidget />
     </main>
   );
 }
