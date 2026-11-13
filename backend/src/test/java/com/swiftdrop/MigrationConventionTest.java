@@ -171,6 +171,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111010",
                                 "delivery add hub lifecycle",
-                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"));
+                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
+                        tuple(
+                                "202611131000",
+                                "notification create tables",
+                                "notification/V202611131000__notification_create_tables.sql"));
     }
 }
