@@ -139,12 +139,19 @@ export default function AdminHubsPage() {
     }
   }
 
-  /** Changes name, city and zone; the code and the central flag stay as they are. */
-  async function saveHub(hub: Hub, changes: { name: string; city: string; zoneId: string | null }) {
+  /** Changes name, city, zone, and central flag; the code stays as it is. */
+  async function saveHub(
+    hub: Hub,
+    changes: { name: string; city: string; zoneId: string | null; central?: boolean },
+  ) {
     setBusyHub(hub.id);
     setError(null);
     try {
-      await updateHub(hub.id, { ...hub, ...changes });
+      await updateHub(hub.id, {
+        ...hub,
+        ...changes,
+        central: changes.central ?? hub.central,
+      });
       load();
       return true;
     } catch (failure) {
@@ -231,6 +238,7 @@ export default function AdminHubsPage() {
                 zones={zones}
                 takenZones={takenZones}
                 onSave={saveHub}
+                hasOtherCentralHub={false}
               />
             )}
             {branches.length > 0 && (
@@ -249,6 +257,7 @@ export default function AdminHubsPage() {
                         zones={zones}
                         takenZones={takenZones}
                         onSave={saveHub}
+                        hasOtherCentralHub={Boolean(central && central.id !== hub.id)}
                       />
                     </li>
                   ))}
@@ -500,6 +509,7 @@ function HubCard({
   zones,
   takenZones,
   onSave,
+  hasOtherCentralHub,
 }: {
   hub: Hub;
   zone: string | undefined;
@@ -510,17 +520,30 @@ function HubCard({
   zones: ZoneAdmin[];
   /** Zones that already have a hub, active or not: the database allows one hub per zone. */
   takenZones: Set<string | null>;
-  onSave: (hub: Hub, changes: { name: string; city: string; zoneId: string | null }) => Promise<boolean>;
+  onSave: (hub: Hub, changes: { name: string; city: string; zoneId: string | null; central?: boolean }) => Promise<boolean>;
+  hasOtherCentralHub: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ name: hub.name, city: hub.city, zoneId: hub.zoneId ?? "" });
+  const [draft, setDraft] = useState({
+    name: hub.name,
+    city: hub.city,
+    zoneId: hub.zoneId ?? "",
+    central: hub.central,
+  });
   const Icon = hub.central ? Warehouse : Building2;
   // Its own zone, plus the zones nobody has
   const choices = zones.filter((option) => option.id === hub.zoneId || !takenZones.has(option.id));
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (await onSave(hub, { name: draft.name, city: draft.city, zoneId: draft.zoneId || null })) {
+    if (
+      await onSave(hub, {
+        name: draft.name,
+        city: draft.city,
+        zoneId: draft.zoneId || null,
+        central: draft.central,
+      })
+    ) {
       setEditing(false);
     }
   }
@@ -548,7 +571,20 @@ function HubCard({
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing((open) => !open)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              setDraft({
+                name: hub.name,
+                city: hub.city,
+                zoneId: hub.zoneId ?? "",
+                central: hub.central,
+              });
+              setEditing((open) => !open);
+            }}
+          >
             <Pencil aria-hidden="true" /> Edit
           </Button>
           <Button variant="outline" size="sm" disabled={busy} onClick={() => onToggle(hub)}>
@@ -616,13 +652,44 @@ function HubCard({
             <select id={`edit-zone-${hub.id}`} value={draft.zoneId}
               onChange={(event) => setDraft({ ...draft, zoneId: event.target.value })}
               className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm">
-              <option value="">{hub.central ? "None (central hub only)" : "Choose a zone"}</option>
+              <option value="">{draft.central ? "None (central hub only)" : "Choose a zone"}</option>
               {choices.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
             </select>
             <p className="text-xs text-muted-foreground">The code {hub.code} cannot be changed.</p>
           </div>
+
+          {/* Promote Sub Hub to Main Central Hub */}
+          <div className="rounded-xl border p-3 space-y-1.5 transition-colors bg-muted/40 border-border/80">
+            <label className="flex items-center gap-2.5 text-xs font-semibold cursor-pointer text-foreground">
+              <input
+                type="checkbox"
+                checked={draft.central}
+                disabled={hasOtherCentralHub && !hub.central}
+                onChange={(event) => setDraft({ ...draft, central: event.target.checked })}
+                className="size-4 rounded border-input text-primary focus:ring-primary"
+              />
+              <span className="flex items-center gap-1.5">
+                <Star className={cn("size-3.5", draft.central ? "fill-primary text-primary" : "text-muted-foreground")} />
+                Designate as Main Central Hub
+              </span>
+            </label>
+            {hasOtherCentralHub && !hub.central ? (
+              <p className="text-[11px] text-muted-foreground pl-6">
+                Another hub is already active as the Main Central Hub. Delete or change that central hub first to designate this branch.
+              </p>
+            ) : !hasOtherCentralHub && !hub.central ? (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium pl-6">
+                ★ No active central hub exists! Check this box to promote this sub-hub to become the Main Central Hub.
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground pl-6">
+                This hub operates as the Main Central Hub for parcel transits across all branches.
+              </p>
+            )}
+          </div>
+
           <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={busy || (!hub.central && !draft.zoneId)}>
+            <Button type="submit" size="sm" disabled={busy || (!draft.central && !draft.zoneId)}>
               {busy && <Loader2 className="animate-spin" aria-hidden="true" />} Save
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
