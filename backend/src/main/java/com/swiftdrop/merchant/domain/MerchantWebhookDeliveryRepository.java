@@ -2,8 +2,11 @@ package com.swiftdrop.merchant.domain;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -71,6 +74,26 @@ public interface MerchantWebhookDeliveryRepository extends JpaRepository<Merchan
             @Param("status") String status, @Param("attemptIncrement") int attemptIncrement,
             @Param("nextAttemptAt") Instant nextAttemptAt, @Param("completedAt") Instant completedAt,
             @Param("lastOutcome") String lastOutcome, @Param("lastHttpStatus") Integer lastHttpStatus);
+
+    /**
+     * History page, newest first with the ID as tie-breaker so pages stay stable when timestamps are equal.
+     * {@code null} filters are ignored; merchant callers always pass their own merchant ID.
+     */
+    @Query("""
+            select d from MerchantWebhookDelivery d
+            where (:merchantId is null or d.merchantId = :merchantId)
+              and (:endpointId is null or d.endpointId = :endpointId)
+              and (:status is null or d.status = :status)
+            order by d.createdAt desc, d.id desc
+            """)
+    Page<MerchantWebhookDelivery> findHistory(@Param("merchantId") UUID merchantId,
+            @Param("endpointId") UUID endpointId, @Param("status") WebhookDeliveryStatus status, Pageable page);
+
+    Optional<MerchantWebhookDelivery> findByIdAndMerchantId(UUID id, UUID merchantId);
+
+    /** Locks the record until the transaction ends, so concurrent redeliveries start one series only. */
+    @Query(value = "SELECT * FROM merchant_webhook_deliveries WHERE id = :id FOR UPDATE", nativeQuery = true)
+    Optional<MerchantWebhookDelivery> lockById(@Param("id") UUID id);
 
     List<MerchantWebhookDelivery> findByEventIdOrderByEndpointId(UUID eventId);
 

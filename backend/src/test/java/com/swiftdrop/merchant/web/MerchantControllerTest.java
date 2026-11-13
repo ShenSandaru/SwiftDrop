@@ -104,6 +104,8 @@ class MerchantControllerTest {
     private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository merchantWebhookRedeliveries;
 
     @Test
     @DisplayName("POST /api/v1/merchants is public and returns 201 Created on valid submission")

@@ -79,6 +79,42 @@ public class MerchantWebhookDelivery {
     @Column(name = "lease_expires_at")
     private Instant leaseExpiresAt;
 
+    @Column(name = "series_start_attempts", nullable = false)
+    private int seriesStartAttempts;
+
+    @Column(name = "series_triggered_by")
+    private UUID seriesTriggeredBy;
+
+    /** Manual redeliveries allowed per record (ADR 0004 §9); each starts a new series of attempts. */
+    public static final int MAX_MANUAL_REDELIVERIES = 3;
+
+    /** A failed or parked record can be redelivered while the cap is not used up. */
+    public boolean isRedeliverable() {
+        return (status == WebhookDeliveryStatus.FAILED || status == WebhookDeliveryStatus.SECRET_UNAVAILABLE)
+                && manualRedeliveries < MAX_MANUAL_REDELIVERIES;
+    }
+
+    /**
+     * Starts the next manual series (ADR 0004 §7.5): due now, the per-series attempt limit counts from here, and
+     * any old claim is dropped so the sender's next claim gets a fresh lease token.
+     *
+     * @return the new series number, 1 to 3
+     */
+    public int redeliver(UUID requestedBy, Instant now) {
+        if (!isRedeliverable()) {
+            throw new IllegalStateException("record " + id + " cannot be redelivered in status " + status);
+        }
+        status = WebhookDeliveryStatus.PENDING;
+        nextAttemptAt = now;
+        completedAt = null;
+        leaseToken = null;
+        leaseExpiresAt = null;
+        manualRedeliveries++;
+        seriesStartAttempts = attempts;
+        seriesTriggeredBy = requestedBy;
+        return manualRedeliveries;
+    }
+
     protected MerchantWebhookDelivery() {
         // for JPA
     }
@@ -153,5 +189,13 @@ public class MerchantWebhookDelivery {
 
     public Instant getLeaseExpiresAt() {
         return leaseExpiresAt;
+    }
+
+    public int getSeriesStartAttempts() {
+        return seriesStartAttempts;
+    }
+
+    public UUID getSeriesTriggeredBy() {
+        return seriesTriggeredBy;
     }
 }

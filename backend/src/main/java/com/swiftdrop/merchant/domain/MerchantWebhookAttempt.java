@@ -44,20 +44,34 @@ public class MerchantWebhookAttempt {
     @Column(name = "triggered_by_user_id", updatable = false)
     private UUID triggeredByUserId;
 
+    /** 0 for the automatic series, 1 to 3 for the manual redelivery that started this attempt's series. */
+    @Column(nullable = false, updatable = false)
+    private int series;
+
     protected MerchantWebhookAttempt() {
         // for JPA
     }
 
     public MerchantWebhookAttempt(UUID deliveryId, int attemptNumber, Instant attemptedAt, WebhookAttemptOutcome outcome,
             Integer httpStatus, int durationMs, UUID triggeredByUserId) {
+        this(deliveryId, attemptNumber, 0, attemptedAt, outcome, httpStatus, durationMs, triggeredByUserId);
+    }
+
+    public MerchantWebhookAttempt(UUID deliveryId, int attemptNumber, int series, Instant attemptedAt,
+            WebhookAttemptOutcome outcome, Integer httpStatus, int durationMs, UUID triggeredByUserId) {
         this.id = UUID.randomUUID();
         this.deliveryId = deliveryId;
         this.attemptNumber = attemptNumber;
+        this.series = series;
         this.attemptedAt = attemptedAt;
         this.outcome = outcome;
         this.httpStatus = httpStatus;
         this.durationMs = durationMs;
         this.triggeredByUserId = triggeredByUserId;
+    }
+
+    public int getSeries() {
+        return series;
     }
 
     public UUID getId() {

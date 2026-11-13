@@ -83,7 +83,8 @@ import com.swiftdrop.delivery.api.ParcelAssignmentType;
         com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
         com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class
 })
 class CourierApiTest {
 

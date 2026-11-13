@@ -187,6 +187,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611151000",
                                 "merchant create webhook attempts",
-                                "merchant/V202611151000__merchant_create_webhook_attempts.sql"));
+                                "merchant/V202611151000__merchant_create_webhook_attempts.sql"),
+                        tuple(
+                                "202611161000",
+                                "merchant create webhook redeliveries",
+                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"));
     }
 }

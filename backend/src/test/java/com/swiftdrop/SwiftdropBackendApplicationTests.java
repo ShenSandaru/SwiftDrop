@@ -80,6 +80,8 @@ class SwiftdropBackendApplicationTests {
     private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository merchantWebhookRedeliveries;
 
     @Autowired
     private ApplicationContext context;
