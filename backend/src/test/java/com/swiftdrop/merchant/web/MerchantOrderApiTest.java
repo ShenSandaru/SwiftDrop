@@ -78,7 +78,12 @@ import com.swiftdrop.test.security.TestPrincipal;
         ZoneRepository.class, PricingRuleRepository.class, ParcelRepository.class, ParcelStatusHistoryRepository.class,
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
         MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class,
-        com.swiftdrop.delivery.domain.HubRepository.class})
+        com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
+        com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class})
 class MerchantOrderApiTest {
 
     private static final String ORDERS = "/api/v1/merchant-orders";

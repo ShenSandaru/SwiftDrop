@@ -92,6 +92,16 @@ class MerchantControllerTest {
     private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantApiKeyRepository merchantApiKeys;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventStateRepository merchantEventStates;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantProcessedEventRepository merchantProcessedEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantPendingEventRepository merchantPendingEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository merchantEventAnomalies;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
 
     @Test
     @DisplayName("POST /api/v1/merchants is public and returns 201 Created on valid submission")
