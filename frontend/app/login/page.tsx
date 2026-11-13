@@ -6,7 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
-import { getPostAuthRedirect, isNonCustomerDestination, sanitizeRedirectTarget } from "@/lib/role-redirect";
+import {
+  getPortalContext,
+  getPostAuthRedirect,
+  sanitizeRedirectTarget,
+  type PortalRole,
+} from "@/lib/role-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +24,47 @@ import {
   SocialLoginButton,
   PasswordInput,
 } from "@/components/auth";
+import { Shield, Truck, Warehouse, Store, User } from "lucide-react";
+
+interface PortalConfig {
+  badge: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const PORTAL_CONFIGS: Record<PortalRole, PortalConfig> = {
+  CUSTOMER: {
+    badge: "Customer Portal",
+    title: "Welcome Back",
+    description: "Sign in to book parcels and track your deliveries.",
+    icon: <User className="size-4" aria-hidden="true" />,
+  },
+  MERCHANT: {
+    badge: "Merchant Portal",
+    title: "Merchant Portal",
+    description: "Sign in to manage your business and deliveries.",
+    icon: <Store className="size-4" aria-hidden="true" />,
+  },
+  COURIER: {
+    badge: "Courier Portal",
+    title: "Courier Portal",
+    description: "Sign in to view and manage your assigned deliveries.",
+    icon: <Truck className="size-4" aria-hidden="true" />,
+  },
+  DISPATCHER: {
+    badge: "Dispatcher Portal",
+    title: "Dispatcher Portal",
+    description: "Sign in to coordinate and manage delivery operations.",
+    icon: <Warehouse className="size-4" aria-hidden="true" />,
+  },
+  ADMIN: {
+    badge: "Admin Portal",
+    title: "Administration Portal",
+    description: "Sign in to manage and oversee SwiftDrop operations.",
+    icon: <Shield className="size-4" aria-hidden="true" />,
+  },
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -33,9 +79,11 @@ function LoginForm() {
   const registered = searchParams.get("registered") === "true";
   const expired = searchParams.get("expired") === "true";
   const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
+  const portalContext = getPortalContext(redirectTarget);
+  const portalConfig = PORTAL_CONFIGS[portalContext];
 
   // Google button and public customer signup prompt are enabled only for customer authentication
-  const isCustomerContext = !isNonCustomerDestination(redirectTarget);
+  const isCustomerContext = portalContext === "CUSTOMER";
   const isGoogleLoginEnabled = checkGoogleLoginEnabled() && isCustomerContext;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -94,9 +142,10 @@ function LoginForm() {
     >
       <AuthFormContainer>
         <AuthHeader
-          badge="SwiftDrop Account"
-          title="Welcome back"
-          description="Sign in to access your parcel deliveries and workspaces."
+          badge={portalConfig.badge}
+          icon={portalConfig.icon}
+          title={portalConfig.title}
+          description={portalConfig.description}
         />
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">

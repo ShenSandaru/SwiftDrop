@@ -46,23 +46,27 @@ export function sanitizeRedirectTarget(
   }
 }
 
+export type PortalRole = "CUSTOMER" | "MERCHANT" | "COURIER" | "DISPATCHER" | "ADMIN";
+
+/**
+ * Resolves the portal context from the sanitized redirect destination path.
+ */
+export function getPortalContext(path: string | null | undefined): PortalRole {
+  if (!path) return "CUSTOMER";
+  const normalized = path.split("?")[0].split("#")[0];
+  if (normalized === "/admin" || normalized.startsWith("/admin/")) return "ADMIN";
+  if (normalized === "/dispatch" || normalized.startsWith("/dispatch/")) return "DISPATCHER";
+  if (normalized === "/courier" || normalized.startsWith("/courier/")) return "COURIER";
+  if (normalized === "/merchant" || normalized.startsWith("/merchant/")) return "MERCHANT";
+  return "CUSTOMER";
+}
+
 /**
  * Returns true if a given path is an internal staff or merchant destination where
  * Google OAuth is not permitted (only email/password authentication is allowed).
  */
 export function isNonCustomerDestination(path: string | null | undefined): boolean {
-  if (!path) return false;
-  const normalized = path.split("?")[0].split("#")[0];
-  return (
-    normalized === "/merchant" ||
-    normalized.startsWith("/merchant/") ||
-    normalized === "/admin" ||
-    normalized.startsWith("/admin/") ||
-    normalized === "/dispatch" ||
-    normalized.startsWith("/dispatch/") ||
-    normalized === "/courier" ||
-    normalized.startsWith("/courier/")
-  );
+  return getPortalContext(path) !== "CUSTOMER";
 }
 
 /**
