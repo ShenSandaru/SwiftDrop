@@ -85,3 +85,40 @@ export function updatePricingRule(id: string, input: PricingRuleInput): Promise<
   return api.put<PricingRuleAdmin>(`/api/v1/pricing-rules/${encodeURIComponent(id)}`, input);
 }
 
+export interface PricingConfigData {
+  id: string;
+  standardBaseFee: number;
+  freeKmAllowance: number;
+  ratePerKm: number;
+  maxCap: number;
+  perKgFee: number;
+  smallSizeSurcharge: number;
+  mediumSizeSurcharge: number;
+  largeSizeSurcharge: number;
+  currency: string;
+  updatedAt: string;
+}
+
+export interface PricingConfigInput {
+  standardBaseFee: number;
+  freeKmAllowance: number;
+  ratePerKm: number;
+  maxCap: number;
+  perKgFee: number;
+  smallSizeSurcharge: number;
+  mediumSizeSurcharge: number;
+  largeSizeSurcharge: number;
+  currency?: string;
+}
+
+/** Fetches the global pricing configuration. */
+export function getPricingConfig(): Promise<PricingConfigData> {
+  return api.get<PricingConfigData>("/api/v1/pricing-config");
+}
+
+/** Updates the global pricing configuration. */
+export function updatePricingConfig(input: PricingConfigInput): Promise<PricingConfigData> {
+  return api.put<PricingConfigData>("/api/v1/pricing-config", input);
+}
+
+

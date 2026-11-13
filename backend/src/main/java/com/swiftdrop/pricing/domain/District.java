@@ -38,6 +38,12 @@ public class District {
     @Column(name = "default_branch_name", nullable = false, length = 100)
     private String defaultBranchName;
 
+    @Column(precision = 9, scale = 6)
+    private Double latitude;
+
+    @Column(precision = 9, scale = 6)
+    private Double longitude;
+
     @OneToMany(mappedBy = "district", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("name ASC")
     private List<DistrictPostalZone> postalZones = new ArrayList<>();
@@ -47,11 +53,17 @@ public class District {
     }
 
     public District(String code, String name, String province, String postalCode, String defaultBranchName) {
+        this(code, name, province, postalCode, defaultBranchName, null, null);
+    }
+
+    public District(String code, String name, String province, String postalCode, String defaultBranchName, Double latitude, Double longitude) {
         this.code = Objects.requireNonNull(code, "code must not be null").trim().toUpperCase();
         this.name = Objects.requireNonNull(name, "name must not be null").trim();
         this.province = Objects.requireNonNull(province, "province must not be null").trim();
         this.postalCode = Objects.requireNonNull(postalCode, "postalCode must not be null").trim();
         this.defaultBranchName = Objects.requireNonNull(defaultBranchName, "defaultBranchName must not be null").trim();
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public String getCode() {
@@ -72,6 +84,14 @@ public class District {
 
     public String getDefaultBranchName() {
         return defaultBranchName;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
     }
 
     public List<DistrictPostalZone> getPostalZones() {

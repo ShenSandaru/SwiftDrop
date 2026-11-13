@@ -14,6 +14,8 @@ public record DistrictResponse(
         String province,
         String postalCode,
         String defaultBranchName,
+        Double latitude,
+        Double longitude,
         List<PostalZoneResponse> zones
 ) {
 
@@ -37,6 +39,8 @@ public record DistrictResponse(
                 district.getProvince(),
                 district.getPostalCode(),
                 district.getDefaultBranchName(),
+                district.getLatitude(),
+                district.getLongitude(),
                 zoneResponses
         );
     }
