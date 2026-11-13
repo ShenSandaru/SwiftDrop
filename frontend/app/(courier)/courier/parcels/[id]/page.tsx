@@ -13,8 +13,10 @@ import { RouteProgress } from "@/components/delivery/route-progress";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { StatusTimeline } from "@/components/delivery/status-timeline";
 import { FAILURE_REASON_LABELS, STATUS_LABELS } from "@/components/delivery/format";
+import { HANDOVERS, SETBACKS, TASK_LABELS, attemptOf } from "@/components/delivery/courier-task";
 import { formatApiError } from "@/lib/api";
 import {
+  ATTEMPT_FAILURE_REASONS,
   FAILURE_REASONS,
   MAX_PHOTO_BYTES,
   changeStatus,
@@ -37,7 +39,26 @@ const NEXT_LABELS: Partial<Record<ParcelStatus, string>> = {
   IN_TRANSIT: "Start transit",
   OUT_FOR_DELIVERY: "Out for delivery",
   DELIVERED: "Mark delivered",
+  RETURNED: "Mark returned",
 };
+
+/** Why the stop is over, once the courier has nothing more to do. */
+function closingMessage(status: ParcelStatus): { text: string; good: boolean } {
+  switch (status) {
+    case "DELIVERED":
+      return { text: "Delivered. This stop is complete.", good: true };
+    case "RETURNED":
+      return { text: "Returned to the sender. This stop is complete.", good: true };
+    case "FAILED":
+      return { text: "Marked as failed. This stop is closed.", good: false };
+    case "CANCELLED":
+      return { text: "The booking was cancelled. Nothing more to do.", good: false };
+    case "DELIVERY_ATTEMPT_FAILED":
+      return { text: "Attempt recorded. Bring the parcel back to the branch hub.", good: false };
+    default:
+      return { text: "Handed over to the hub. This stop is complete.", good: true };
+  }
+}
 
 export default function CourierParcelPage() {
   const { id } = useParams<{ id: string }>();
@@ -89,8 +110,12 @@ export default function CourierParcelPage() {
     );
   }
 
-  const next = today?.nextStatuses.find((status) => status !== "FAILED");
-  const canFail = today?.nextStatuses.includes("FAILED") ?? false;
+  const next = today?.nextStatuses.find((status) => !SETBACKS.includes(status));
+  const setback = today?.nextStatuses.find((status) => SETBACKS.includes(status));
+  // Done when the task is, or when the parcel ended some other way (cancelled, failed by the hub)
+  const closed = today ? today.taskDone || today.nextStatuses.length === 0 : isFinalStatus(detail.status);
+  const closing = closingMessage(detail.status);
+  const attempt = today ? attemptOf(today) : null;
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -100,27 +125,34 @@ export default function CourierParcelPage() {
         <div className="flex items-start justify-between gap-3">
           <RouteHeading from={detail.pickup.city} to={detail.dropoff.city} trackingNumber={detail.trackingNumber}
             className="min-w-0 flex-1" />
-          <StatusBadge status={detail.status} />
+          <div className="flex flex-col items-end gap-1.5">
+            <StatusBadge status={detail.status} />
+            {today && (
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {TASK_LABELS[today.task]}{attempt ? ` · attempt ${attempt}` : ""}
+              </span>
+            )}
+          </div>
         </div>
         <RouteProgress status={detail.status} history={detail.history} compact />
       </section>
 
-      {!isFinalStatus(detail.status) && today && (
-        <NowPanel key={detail.status} detail={detail} next={next} canFail={canFail}
+      {today && !closed && (
+        <NowPanel key={detail.status} detail={detail} next={next} setback={setback}
           proofCaptured={today.proofCaptured} onChanged={load} />
       )}
-      {isFinalStatus(detail.status) && (
+      {closed && (
         <p className={cn(
           "flex items-center gap-2 rounded-2xl p-4 text-sm font-semibold",
-          detail.status === "DELIVERED" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
+          closing.good ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
         )}>
-          {detail.status === "DELIVERED" ? <CheckCircle2 className="size-5" aria-hidden="true" /> : <AlertTriangle className="size-5" aria-hidden="true" />}
-          {detail.status === "DELIVERED" ? "Delivered. This stop is complete." : "Marked as failed. This stop is closed."}
+          {closing.good ? <CheckCircle2 className="size-5" aria-hidden="true" /> : <AlertTriangle className="size-5" aria-hidden="true" />}
+          {closing.text}
         </p>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Contact title="Pick up from" address={detail.pickup} />
+        <Contact title={today?.task === "RETURN" ? "Return to" : "Pick up from"} address={detail.pickup} />
         <Contact title="Deliver to" address={detail.dropoff} />
       </div>
 
@@ -133,10 +165,11 @@ export default function CourierParcelPage() {
 }
 
 /** Exactly one next action, sized for a thumb; reset whenever the status changes (keyed by status). */
-function NowPanel({ detail, next, canFail, proofCaptured, onChanged }: {
+function NowPanel({ detail, next, setback, proofCaptured, onChanged }: {
   detail: ParcelDetail;
   next: ParcelStatus | undefined;
-  canFail: boolean;
+  /** FAILED for parcels without a route, a failed attempt for hub parcels (ADR 0009 §3). */
+  setback: ParcelStatus | undefined;
   proofCaptured: boolean;
   onChanged: () => void;
 }) {
@@ -161,16 +194,19 @@ function NowPanel({ detail, next, canFail, proofCaptured, onChanged }: {
     <section className="space-y-4 rounded-3xl border-2 border-primary/30 bg-accent/50 p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Now</p>
 
-      {failing ? (
+      {failing && setback ? (
         <FailurePanel note={note} setNote={setNote} busy={busy} onCancel={() => setFailing(false)}
-          onConfirm={(reason) => act("FAILED", reason)} />
-      ) : next === "DELIVERED" ? (
+          attempt={setback === "DELIVERY_ATTEMPT_FAILED"} onConfirm={(reason) => act(setback, reason)} />
+      ) : next && HANDOVERS.includes(next) ? (
         <ProofStep parcelId={detail.id} proofCaptured={proofCaptured} busy={busy} note={note} setNote={setNote}
-          onProofSaved={onChanged} onDeliver={() => act("DELIVERED")} />
+          returning={next === "RETURNED"} onProofSaved={onChanged} onDeliver={() => act(next)} />
       ) : next ? (
         <div className="space-y-3">
           <p className="text-lg font-bold text-foreground">
-            {next === "PICKED_UP" ? `Collect the parcel from ${detail.pickup.contactName}` : STATUS_LABELS[next]}
+            {next === "PICKED_UP" ? `Collect the parcel from ${detail.pickup.contactName}`
+              : next === "OUT_FOR_DELIVERY" && detail.status === "AT_HUB"
+                ? "Collect the parcel at the hub and head out"
+                : STATUS_LABELS[next]}
           </p>
           <NoteField note={note} setNote={setNote} />
           <Button size="lg" className="h-12 w-full text-base" disabled={busy} onClick={() => act(next)}>
@@ -182,7 +218,7 @@ function NowPanel({ detail, next, canFail, proofCaptured, onChanged }: {
 
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
-      {canFail && !failing && (
+      {setback && !failing && (
         <button type="button" onClick={() => setFailing(true)}
           className="w-full text-center text-sm font-semibold text-destructive underline-offset-4 hover:underline">
           Couldn&apos;t deliver?
@@ -192,9 +228,11 @@ function NowPanel({ detail, next, canFail, proofCaptured, onChanged }: {
   );
 }
 
-function ProofStep({ parcelId, proofCaptured, busy, note, setNote, onProofSaved, onDeliver }: {
+function ProofStep({ parcelId, proofCaptured, busy, note, setNote, returning, onProofSaved, onDeliver }: {
   parcelId: string;
   proofCaptured: boolean;
+  /** Handing the parcel back to the sender instead of delivering it. */
+  returning: boolean;
   busy: boolean;
   note: string;
   setNote: (note: string) => void;
@@ -254,7 +292,7 @@ function ProofStep({ parcelId, proofCaptured, busy, note, setNote, onProofSaved,
         </p>
         <NoteField note={note} setNote={setNote} />
         <Button size="lg" className="h-12 w-full text-base" disabled={busy} onClick={onDeliver}>
-          {busy && <Loader2 className="animate-spin" aria-hidden="true" />} Mark delivered
+          {busy && <Loader2 className="animate-spin" aria-hidden="true" />} {returning ? "Mark returned" : "Mark delivered"}
         </Button>
       </div>
     );
@@ -262,11 +300,12 @@ function ProofStep({ parcelId, proofCaptured, busy, note, setNote, onProofSaved,
 
   return (
     <form onSubmit={save} className="space-y-3">
-      <p className="text-lg font-bold text-foreground">Capture proof of delivery</p>
+      <p className="text-lg font-bold text-foreground">{returning ? "Capture proof of return" : "Capture proof of delivery"}</p>
       <div className="space-y-1">
-        <Label htmlFor="recipient">Received by</Label>
+        <Label htmlFor="recipient">{returning ? "Handed back to" : "Received by"}</Label>
         <Input id="recipient" required maxLength={200} autoComplete="off" value={recipient}
-          onChange={(event) => setRecipient(event.target.value)} placeholder="Recipient's name" className="h-11" />
+          onChange={(event) => setRecipient(event.target.value)}
+          placeholder={returning ? "Sender's name" : "Recipient's name"} className="h-11" />
       </div>
 
       <input ref={input} type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only"
@@ -297,26 +336,35 @@ function ProofStep({ parcelId, proofCaptured, busy, note, setNote, onProofSaved,
   );
 }
 
-function FailurePanel({ note, setNote, busy, onCancel, onConfirm }: {
+function FailurePanel({ note, setNote, busy, attempt, onCancel, onConfirm }: {
   note: string;
   setNote: (note: string) => void;
   busy: boolean;
+  /** A failed attempt: the parcel goes back to the hub, and damage is not an attempt reason. */
+  attempt: boolean;
   onCancel: () => void;
   onConfirm: (reason: FailureReason) => void;
 }) {
   const [reason, setReason] = useState<FailureReason | null>(null);
+  const reasons = attempt ? ATTEMPT_FAILURE_REASONS : FAILURE_REASONS;
 
   return (
     <div className="space-y-3">
       <p className="text-lg font-bold text-destructive">Why couldn&apos;t you deliver?</p>
+      {attempt && (
+        <p className="text-sm text-muted-foreground">
+          The attempt is recorded and the parcel goes back to the branch hub for another try or a return.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Failure reason">
-        {FAILURE_REASONS.map((option) => (
+        {reasons.map((option) => (
           <button key={option} type="button" role="radio" aria-checked={reason === option}
             onClick={() => setReason(option)}
             className={cn(
               "min-h-14 rounded-xl border-2 p-3 text-left text-sm font-semibold transition-colors",
               reason === option ? "border-destructive bg-destructive/10 text-destructive" : "border-border bg-card text-foreground hover:border-destructive/40",
-              option === "OTHER" && "col-span-2",
+              // "Other" fills the last row when the reasons don't pair up
+              option === "OTHER" && reasons.length % 2 === 1 && "col-span-2",
             )}>
             {FAILURE_REASON_LABELS[option]}
           </button>
@@ -327,7 +375,7 @@ function FailurePanel({ note, setNote, busy, onCancel, onConfirm }: {
         <Button type="button" variant="outline" size="lg" className="h-12" onClick={onCancel} disabled={busy}>Back</Button>
         <Button type="button" variant="destructive" size="lg" className="h-12" disabled={!reason || busy}
           onClick={() => reason && onConfirm(reason)}>
-          {busy && <Loader2 className="animate-spin" aria-hidden="true" />} Mark failed
+          {busy && <Loader2 className="animate-spin" aria-hidden="true" />} {attempt ? "Record attempt" : "Mark failed"}
         </Button>
       </div>
     </div>

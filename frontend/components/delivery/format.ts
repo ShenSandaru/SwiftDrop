@@ -8,8 +8,13 @@ export const STATUS_LABELS: Record<ParcelStatus, string> = {
   CREATED: "Booked",
   PICKED_UP: "Picked up",
   IN_TRANSIT: "In transit",
+  AT_HUB: "At hub",
   OUT_FOR_DELIVERY: "Out for delivery",
+  DELIVERY_ATTEMPT_FAILED: "Attempt failed",
   DELIVERED: "Delivered",
+  RETURNING: "Returning to sender",
+  RETURNED: "Returned to sender",
+  CANCELLED: "Cancelled",
   FAILED: "Delivery failed",
 };
 

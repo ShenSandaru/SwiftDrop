@@ -1,6 +1,5 @@
 package com.swiftdrop.delivery.domain;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -22,6 +21,9 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "parcel_outbox_events")
 public class OutboxEvent {
+
+    /** Length of {@code last_failure_category}. */
+    static final int MAX_FAILURE_CATEGORY_LENGTH = 40;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -77,21 +79,6 @@ public class OutboxEvent {
         this.nextAttemptAt = createdAt;
     }
 
-    /** The broker confirmed the message (ADR 0004 §3). */
-    public void markPublished(Instant now) {
-        this.publishedAt = Objects.requireNonNull(now, "now");
-    }
-
-    /**
-     * A publish attempt failed: count it, remember why, and wait {@code backoff} before the next one.
-     * The row is never dropped (ADR 0004 §4.2).
-     */
-    public void recordFailure(String category, Instant now, Duration backoff) {
-        this.attempts++;
-        this.lastFailureCategory = Objects.requireNonNull(category, "category");
-        this.nextAttemptAt = now.plus(backoff);
-    }
-
     public Long getId() {
         return id;
     }
@@ -138,6 +125,37 @@ public class OutboxEvent {
 
     public String getLastFailureCategory() {
         return lastFailureCategory;
+    }
+
+    /** Whether the relay may try to publish this row now (its backoff has passed). */
+    public boolean isDue(Instant now) {
+        return !nextAttemptAt.isAfter(now);
+    }
+
+    /** Records that the broker confirmed the row (ADR 0004 §3); the last failure stays for reference. */
+    public void markPublished(Instant at) {
+        if (isPublished()) {
+            throw new IllegalStateException("Outbox row " + id + " is already published");
+        }
+        this.publishedAt = Objects.requireNonNull(at, "at");
+    }
+
+    /**
+     * Records a failed publish attempt and when to try again (ADR 0004 §4.2). The row is never
+     * dropped; it stays unpublished until a later attempt succeeds.
+     *
+     * @param category short failure category, for example {@code returned}; never message content
+     */
+    public void recordFailure(String category, Instant nextAttemptAt) {
+        if (isPublished()) {
+            throw new IllegalStateException("Outbox row " + id + " is already published");
+        }
+        if (category == null || category.isBlank() || category.length() > MAX_FAILURE_CATEGORY_LENGTH) {
+            throw new IllegalArgumentException("category must be 1 to " + MAX_FAILURE_CATEGORY_LENGTH + " characters");
+        }
+        this.attempts++;
+        this.lastFailureCategory = category;
+        this.nextAttemptAt = Objects.requireNonNull(nextAttemptAt, "nextAttemptAt");
     }
 
     @Override

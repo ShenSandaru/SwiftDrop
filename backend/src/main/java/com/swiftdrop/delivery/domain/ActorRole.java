@@ -8,5 +8,21 @@ public enum ActorRole {
     CUSTOMER,
     MERCHANT,
     COURIER,
-    DISPATCHER_ADMIN
+    DISPATCHER,
+    ADMIN,
+
+    /**
+     * @deprecated Retained exclusively for historical audit compatibility and deserialization
+     *             of past {@code parcel_status_history} records. Must not be used for new operations
+     *             or active authorization.
+     */
+    @Deprecated
+    DISPATCHER_ADMIN;
+
+    /**
+     * Returns true if this role represents an active application role rather than a legacy audit value.
+     */
+    public boolean isActive() {
+        return this != DISPATCHER_ADMIN;
+    }
 }

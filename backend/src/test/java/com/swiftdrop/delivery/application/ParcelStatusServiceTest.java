@@ -43,6 +43,7 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.pricing.api.ParcelSize;
+import com.swiftdrop.delivery.domain.HubRepository;
 
 /** The service with the real recorder and serializer; only repositories and the publisher are mocked. */
 class ParcelStatusServiceTest {
@@ -73,7 +74,9 @@ class ParcelStatusServiceTest {
         when(history.save(any())).thenAnswer(call -> call.getArgument(0));
         when(outbox.save(any())).thenAnswer(call -> call.getArgument(0));
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(), publisher);
-        service = new ParcelStatusService(parcels, assignments, proofs, recorder, Clock.fixed(NOW, ZoneOffset.UTC));
+        // No hubs: parcels are picked up without a route and follow the ADR 0006 rules
+        service = new ParcelStatusService(parcels, assignments, proofs, recorder,
+                new HubNetwork(mock(HubRepository.class)), DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
 
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID,
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(), null),

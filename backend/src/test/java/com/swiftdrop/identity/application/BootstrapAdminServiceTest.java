@@ -34,24 +34,24 @@ class BootstrapAdminServiceTest {
     @Test
     void bootstrapsAdminWhenConfiguredAndNoAdminExists() {
         BootstrapAdminProperties properties = new BootstrapAdminProperties("admin@swiftdrop.com", "secure-pass-123");
-        when(users.existsByRoles(Role.DISPATCHER_ADMIN)).thenReturn(false);
+        when(users.existsByRoles(Role.ADMIN)).thenReturn(false);
 
         BootstrapAdminService service = new BootstrapAdminService(users, accounts, properties);
         service.run(new DefaultApplicationArguments());
 
-        verify(users).existsByRoles(Role.DISPATCHER_ADMIN);
+        verify(users).existsByRoles(Role.ADMIN);
         verify(accounts).bootstrapAdmin("admin@swiftdrop.com", "secure-pass-123");
     }
 
     @Test
     void skipsBootstrapWhenAdminAlreadyExists() {
         BootstrapAdminProperties properties = new BootstrapAdminProperties("admin@swiftdrop.com", "secure-pass-123");
-        when(users.existsByRoles(Role.DISPATCHER_ADMIN)).thenReturn(true);
+        when(users.existsByRoles(Role.ADMIN)).thenReturn(true);
 
         BootstrapAdminService service = new BootstrapAdminService(users, accounts, properties);
         service.bootstrap();
 
-        verify(users).existsByRoles(Role.DISPATCHER_ADMIN);
+        verify(users).existsByRoles(Role.ADMIN);
         verify(accounts, never()).bootstrapAdmin(any(), any());
     }
 
@@ -108,7 +108,7 @@ class BootstrapAdminServiceTest {
         String longPassword = "p".repeat(73);
         BootstrapAdminProperties properties = new BootstrapAdminProperties("admin@swiftdrop.com", longPassword);
         AccountService realAccounts = new AccountService(users, encoder);
-        when(users.existsByRoles(Role.DISPATCHER_ADMIN)).thenReturn(false);
+        when(users.existsByRoles(Role.ADMIN)).thenReturn(false);
 
         BootstrapAdminService service = new BootstrapAdminService(users, realAccounts, properties);
 

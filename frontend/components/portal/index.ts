@@ -3,7 +3,8 @@ export {
   PortalShell,
   type PortalShellProps,
   type PortalNavItem,
-  DISPATCHER_ADMIN_NAV,
+  ADMIN_NAV,
+  DISPATCHER_NAV,
 } from "./portal-shell";
 export {
   PortalPlaceholderCard,

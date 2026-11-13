@@ -94,9 +94,11 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
 @AutoConfigureMockMvc
 @MockitoBean(types = {
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class
 })
 class GoogleLoginApiTest {
 

@@ -361,6 +361,11 @@ Not-owned resources return **404**, never 403, so IDs cannot be probed.
 
 ## 7. Parcel lifecycle
 
+**Superseded in part:** [ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)
+(Accepted, implemented) replaces the table below with hub statuses, delivery attempts, returns and
+cancellation; the table still applies to parcels picked up without a route. The ADR is
+authoritative; [docs/architecture.md](architecture.md) §8 lists the endpoints.
+
 **Existing (ADR 0003 §4):** statuses `CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY →
 DELIVERED / FAILED`; forward one step; `DELIVERED`, `FAILED` terminal; only the assigned courier
 makes ordinary updates; a courier must be assigned before `PICKED_UP`; each change records time
@@ -474,7 +479,7 @@ team approval recorded in `architecture.md` is enough.
 |---|---|---|---|---|
 | D-01 | Frontend → backend calling pattern | Browser calls the REST API directly with the bearer token (CORS already in place); token kept in memory + `sessionStorage`; no BFF | Yes (architecture §5 open) | SD-008 and all UI |
 | D-02 | Google sign-in token handoff | Callback stores a one-time code (SHA-256 hashed, ≥ 256-bit entropy, 60 s, atomic single use) and redirects to `SWIFTDROP_FRONTEND_BASE_URL/auth/google/callback?code=…` (or `?error=…` on failure); frontend POSTs code to `/api/v1/auth/google/exchanges`. Tokens never in URLs | Resolved ([ADR 0005](adr/0005-google-oauth-token-handoff.md)) | — |
-| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes (architecture §9 open) | SD-403–405 |
+| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes: [ADR 0008](adr/0008-merchant-api-key-authentication.md) (Accepted) | SD-403–405 |
 | D-04 | Staff account creation | Env-bootstrapped first admin; admin creates couriers/admins | No | SD-101, SD-102 |
 | D-05 | Tracking-number format | `SD` + 10 random Crockford base32 chars (no I, L, O, U), unique, retry on collision | No | SD-205 |
 | D-06 | Open lifecycle rules | Table in §7: `FAILED` from `PICKED_UP`..`OUT_FOR_DELIVERY`; proof required for `DELIVERED`; reassignment only in `CREATED`; no cancel/retry/override | Yes (extends ADR 0003 §4) | SD-301, SD-306 |
@@ -527,7 +532,13 @@ team approval recorded in `architecture.md` is enough.
 | PR-02 | All merchant queries take the merchant ID | — |
 
 Other modules can use `ParcelCreation`, `ParcelAssignment`, `ParcelQueries` and `ParcelEvents` now.
-Not implemented here: the outbox relay (WS9), the required reports (WS8), dispatch and merchant
-endpoints. Known detail: Spring validates a request body before method security runs, so a caller
+Not implemented here: the required reports (WS8), dispatch and merchant endpoints.
+
+**Outbox relay (SD-502) and delivery's publishing part of SD-501**, implemented on 2026-11-09 by
+the `delivery` owner, taken over from WS9 (Member 9 keeps the queues, dead-lettering, consumers,
+replay, SD-701 and SD-904). `delivery` declares `swiftdrop.events`; consumers bind their queues to
+`ParcelStatusChanged.EXCHANGE` with routing key `ParcelStatusChanged.EVENT_TYPE`. Behaviour and
+settings: [architecture.md](architecture.md) section 7. Until a consumer binds a queue, events are
+returned as unroutable and wait in the outbox. Known detail: Spring validates a request body before method security runs, so a caller
 without the role who sends an *invalid* body gets 400 instead of 403; nothing about parcels is
 revealed.

@@ -2,10 +2,10 @@ package com.swiftdrop.delivery.infrastructure.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,232 +14,234 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.amqp.AmqpConnectException;
+import org.mockito.InOrder;
 import org.springframework.data.domain.Limit;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
+import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.delivery.domain.OutboxEvent;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
-import com.swiftdrop.delivery.infrastructure.outbox.OutboxPublisher.Result;
 
-/** Relay ordering, blocking and crash windows of ADR 0004 §11, with a mocked publisher and repository. */
+/** Relay ordering, blocking and crash windows (ADR 0004 §4.2, §11) with a mocked broker. */
 class OutboxRelayTest {
 
-    private static final Instant NOW = Instant.parse("2026-11-09T10:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-11-09T10:15:30Z");
     private static final UUID PARCEL_A = UUID.randomUUID();
     private static final UUID PARCEL_B = UUID.randomUUID();
 
-    private OutboxEventRepository outbox;
-    private OutboxPublisher publisher;
-    private SimpleMeterRegistry registry;
+    private final OutboxEventRepository outbox = mock(OutboxEventRepository.class);
+    private final OutboxPublisher publisher = mock(OutboxPublisher.class);
+    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final Map<UUID, PublishOutcome> outcomes = new HashMap<>();
     private OutboxRelay relay;
-    private long nextId = 1;
 
     @BeforeEach
     void setUp() {
-        outbox = mock(OutboxEventRepository.class);
-        publisher = mock(OutboxPublisher.class);
-        registry = new SimpleMeterRegistry();
-        relay = relay(TransactionOperations.withoutTransaction());
-        when(outbox.tryAdvisoryTransactionLock(OutboxRelay.LOCK_KEY)).thenReturn(true);
-        when(outbox.findFirstByPublishedAtIsNullOrderByIdAsc()).thenReturn(Optional.empty());
+        relay = new OutboxRelay(outbox, publisher, TransactionOperations.withoutTransaction(),
+                OutboxRelayProperties.defaults(), clock);
+        when(outbox.tryRelayLock(OutboxRelay.LOCK_KEY)).thenReturn(true);
+        when(publisher.publish(any())).thenAnswer(invocation -> {
+            OutboxEvent row = invocation.getArgument(0);
+            return outcomes.getOrDefault(row.getEventId(), PublishOutcome.CONFIRMED);
+        });
+    }
+
+    private static OutboxEvent row(UUID parcelId, int sequence) {
+        return new OutboxEvent(UUID.randomUUID(), parcelId, sequence, ParcelStatusChanged.EVENT_TYPE, "{}",
+                NOW.minusSeconds(5));
+    }
+
+    private void unpublished(OutboxEvent... rows) {
+        when(outbox.findByPublishedAtIsNullOrderByIdAsc(any(Limit.class))).thenReturn(List.of(rows));
+    }
+
+    private List<UUID> publishedEventIds(int times) {
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(publisher, org.mockito.Mockito.times(times)).publish(captor.capture());
+        return captor.getAllValues().stream().map(OutboxEvent::getEventId).toList();
     }
 
     @Test
-    @DisplayName("Without the advisory lock the poll does nothing")
-    void lockHeldElsewhere() {
-        when(outbox.tryAdvisoryTransactionLock(OutboxRelay.LOCK_KEY)).thenReturn(false);
-
-        assertThat(relay.pollOnce()).isEqualTo(OutboxRelay.PollResult.SKIPPED);
-        verify(outbox, never()).findByPublishedAtIsNullOrderByIdAsc(any());
-        verify(publisher, never()).publish(any());
-    }
-
-    @Test
-    @DisplayName("Rows are published in outbox order and marked published")
-    void publishesInOrder() {
+    void rowsArePublishedInOutboxOrderAndMarked() {
         OutboxEvent a1 = row(PARCEL_A, 1);
         OutboxEvent b1 = row(PARCEL_B, 1);
         OutboxEvent a2 = row(PARCEL_A, 2);
-        givenUnpublished(a1, b1, a2);
-        when(publisher.publish(any())).thenReturn(Result.CONFIRMED);
+        unpublished(a1, b1, a2);
 
-        var result = relay.pollOnce();
+        relay.poll();
 
-        assertThat(result.published()).isEqualTo(3);
-        assertThat(publishedOrder()).containsExactly(a1, b1, a2);
-        assertThat(List.of(a1, b1, a2)).allMatch(OutboxEvent::isPublished);
+        InOrder order = inOrder(publisher);
+        order.verify(publisher).publish(a1);
+        order.verify(publisher).publish(b1);
+        order.verify(publisher).publish(a2);
+        assertThat(List.of(a1, b1, a2)).allSatisfy(row -> assertThat(row.getPublishedAt()).isEqualTo(NOW));
+        assertThat(relay.lastCompletedPoll()).isEqualTo(NOW);
     }
 
     @Test
-    @DisplayName("A refused or unroutable row blocks only its own parcel; other parcels continue")
-    void failingRowBlocksOnlyItsParcel() {
+    void batchSizeLimitsTheRowsRead() {
+        unpublished();
+
+        relay.poll();
+
+        verify(outbox).findByPublishedAtIsNullOrderByIdAsc(Limit.of(100));
+    }
+
+    @Test
+    void failingRowBlocksOnlyItsOwnParcel() {
         OutboxEvent a1 = row(PARCEL_A, 1);
         OutboxEvent b1 = row(PARCEL_B, 1);
         OutboxEvent a2 = row(PARCEL_A, 2);
         OutboxEvent b2 = row(PARCEL_B, 2);
-        givenUnpublished(a1, b1, a2, b2);
-        when(publisher.publish(a1)).thenReturn(Result.NACKED);
-        when(publisher.publish(b1)).thenReturn(Result.CONFIRMED);
-        when(publisher.publish(b2)).thenReturn(Result.RETURNED);
+        unpublished(a1, b1, a2, b2);
+        outcomes.put(a1.getEventId(), PublishOutcome.RETURNED);
 
-        var result = relay.pollOnce();
+        relay.poll();
 
-        assertThat(publishedOrder()).containsExactly(a1, b1, b2);
-        assertThat(result.published()).isEqualTo(1);
-        assertThat(result.failed()).isEqualTo(2);
-        assertThat(result.stopped()).isFalse();
+        verify(publisher, never()).publish(a2);
         assertThat(a1.isPublished()).isFalse();
         assertThat(a1.getAttempts()).isEqualTo(1);
-        assertThat(a1.getLastFailureCategory()).isEqualTo("NACKED");
+        assertThat(a1.getLastFailureCategory()).isEqualTo("returned");
         assertThat(a1.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
-        assertThat(b2.getLastFailureCategory()).isEqualTo("RETURNED");
         assertThat(a2.isPublished()).isFalse();
         assertThat(a2.getAttempts()).isZero();
+        assertThat(b1.isPublished()).isTrue();
+        assertThat(b2.isPublished()).isTrue();
     }
 
     @Test
-    @DisplayName("A row waiting for its retry time holds back its parcel's later rows")
-    void waitingRowBlocksItsParcel() {
+    void negativeConfirmIsRetriedLaterWithoutEndingThePoll() {
         OutboxEvent a1 = row(PARCEL_A, 1);
-        a1.recordFailure("NACKED", NOW.minusSeconds(1), Duration.ofSeconds(30));
+        OutboxEvent b1 = row(PARCEL_B, 1);
+        unpublished(a1, b1);
+        outcomes.put(a1.getEventId(), PublishOutcome.NACKED);
+
+        relay.poll();
+
+        assertThat(a1.getLastFailureCategory()).isEqualTo("nack");
+        assertThat(a1.isPublished()).isFalse();
+        assertThat(b1.isPublished()).isTrue();
+    }
+
+    @Test
+    void rowWaitingForItsRetryBlocksItsParcelButIsNotPublished() {
+        OutboxEvent a1 = row(PARCEL_A, 1);
+        a1.recordFailure("returned", NOW.plusSeconds(30));
         OutboxEvent a2 = row(PARCEL_A, 2);
         OutboxEvent b1 = row(PARCEL_B, 1);
-        givenUnpublished(a1, a2, b1);
-        when(publisher.publish(any())).thenReturn(Result.CONFIRMED);
+        unpublished(a1, a2, b1);
 
-        relay.pollOnce();
+        relay.poll();
 
-        assertThat(publishedOrder()).containsExactly(b1);
+        verify(publisher, never()).publish(a1);
+        verify(publisher, never()).publish(a2);
+        assertThat(a1.getAttempts()).isEqualTo(1);
+        assertThat(b1.isPublished()).isTrue();
     }
 
     @Test
-    @DisplayName("A broker failure ends the poll at once and records the attempt")
-    void brokerFailureStopsPoll() {
+    void brokerUnavailableEndsThePoll() {
         OutboxEvent a1 = row(PARCEL_A, 1);
         OutboxEvent b1 = row(PARCEL_B, 1);
-        givenUnpublished(a1, b1);
-        when(publisher.publish(a1)).thenThrow(new AmqpConnectException(new java.net.ConnectException("refused")));
+        unpublished(a1, b1);
+        outcomes.put(a1.getEventId(), PublishOutcome.BROKER_UNAVAILABLE);
 
-        var result = relay.pollOnce();
+        relay.poll();
 
-        assertThat(result.stopped()).isTrue();
-        assertThat(publishedOrder()).containsExactly(a1);
-        assertThat(a1.getLastFailureCategory()).isEqualTo("BROKER_UNAVAILABLE");
+        verify(publisher, never()).publish(b1);
+        assertThat(a1.getLastFailureCategory()).isEqualTo("broker-unavailable");
         assertThat(b1.getAttempts()).isZero();
+        assertThat(relay.lastCompletedPoll()).isEqualTo(NOW);
     }
 
     @Test
-    @DisplayName("A confirm timeout ends the poll and leaves the row for a later retry")
-    void confirmTimeoutStopsPoll() {
+    void confirmTimeoutEndsThePoll() {
         OutboxEvent a1 = row(PARCEL_A, 1);
         OutboxEvent b1 = row(PARCEL_B, 1);
-        givenUnpublished(a1, b1);
-        when(publisher.publish(a1)).thenReturn(Result.CONFIRM_TIMEOUT);
+        unpublished(a1, b1);
+        outcomes.put(a1.getEventId(), PublishOutcome.CONFIRM_TIMEOUT);
 
-        var result = relay.pollOnce();
+        relay.poll();
 
-        assertThat(result.stopped()).isTrue();
-        assertThat(publishedOrder()).containsExactly(a1);
-        assertThat(a1.isPublished()).isFalse();
-        assertThat(a1.getNextAttemptAt()).isAfter(NOW);
+        verify(publisher, never()).publish(b1);
+        assertThat(a1.getLastFailureCategory()).isEqualTo("confirm-timeout");
+        assertThat(a1.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
     }
 
     @Test
-    @DisplayName("Crash after the confirm, before the mark commits: the next poll publishes the same event ID again")
-    void crashAfterConfirmRepublishesSameEventId() {
-        UUID eventId = UUID.randomUUID();
-        // Each poll reads the row afresh from the database, as after a rollback.
-        when(outbox.findByPublishedAtIsNullOrderByIdAsc(any(Limit.class)))
-                .thenAnswer(invocation -> List.of(row(PARCEL_A, 1, eventId)));
-        when(publisher.publish(any())).thenReturn(Result.CONFIRMED);
-        TransactionOperations commitFailsOnce = new TransactionOperations() {
-            private boolean failed;
+    void backoffGrowsWithEachFailedAttempt() {
+        OutboxEvent a1 = row(PARCEL_A, 1);
+        a1.recordFailure("returned", NOW);
+        a1.recordFailure("returned", NOW);
+        a1.recordFailure("returned", NOW);
+        unpublished(a1);
+        outcomes.put(a1.getEventId(), PublishOutcome.RETURNED);
 
+        relay.poll();
+
+        assertThat(a1.getAttempts()).isEqualTo(4);
+        assertThat(a1.getNextAttemptAt()).isEqualTo(NOW.plus(Duration.ofSeconds(8)));
+    }
+
+    @Test
+    void secondRelayDoesNotRunWhileTheLockIsHeld() {
+        when(outbox.tryRelayLock(OutboxRelay.LOCK_KEY)).thenReturn(false);
+
+        relay.poll();
+
+        verify(outbox, never()).findByPublishedAtIsNullOrderByIdAsc(any(Limit.class));
+        verify(publisher, never()).publish(any());
+        assertThat(relay.lastCompletedPoll()).isNull();
+    }
+
+    @Test
+    void crashBeforePublishingLeavesTheRowUnpublished() {
+        OutboxEvent a1 = row(PARCEL_A, 1);
+        unpublished(a1);
+        when(outbox.tryRelayLock(anyLong())).thenThrow(new IllegalStateException("database unavailable"));
+
+        relay.poll();
+
+        verify(publisher, never()).publish(any());
+        assertThat(a1.isPublished()).isFalse();
+        assertThat(a1.getAttempts()).isZero();
+        assertThat(relay.lastCompletedPoll()).isNull();
+    }
+
+    @Test
+    void confirmFollowedByAFailedCommitPublishesTheSameEventIdAgain() {
+        UUID eventId = UUID.randomUUID();
+        List<TransactionCallback<?>> calls = new ArrayList<>();
+        // First poll: the broker confirms, then the commit that would store the mark fails
+        TransactionOperations commitFails = new TransactionOperations() {
             @Override
             public <T> T execute(TransactionCallback<T> action) {
-                T result = action.doInTransaction(null);
-                if (!failed) {
-                    failed = true;
-                    throw new IllegalStateException("commit failed");
-                }
-                return result;
+                calls.add(action);
+                action.doInTransaction(null);
+                throw new IllegalStateException("commit failed");
             }
         };
-        OutboxRelay crashing = relay(commitFailsOnce);
+        OutboxRelay failingCommit = new OutboxRelay(outbox, publisher, commitFails, OutboxRelayProperties.defaults(),
+                clock);
+        unpublished(new OutboxEvent(eventId, PARCEL_A, 1, ParcelStatusChanged.EVENT_TYPE, "{}", NOW));
 
-        crashing.poll(); // the confirm arrived, but the mark was never committed
-        crashing.poll();
+        failingCommit.poll();
 
-        ArgumentCaptor<OutboxEvent> published = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(publisher, times(2)).publish(published.capture());
-        assertThat(published.getAllValues()).extracting(OutboxEvent::getEventId).containsExactly(eventId, eventId);
-    }
+        // After the rollback the database still holds the row unpublished, so the next poll reads it again
+        unpublished(new OutboxEvent(eventId, PARCEL_A, 1, ParcelStatusChanged.EVENT_TYPE, "{}", NOW));
+        relay.poll();
 
-    @Test
-    @DisplayName("Backoff doubles from 1 s and is capped at the configured maximum")
-    void backoff() {
-        assertThat(relay.backoff(1)).isEqualTo(Duration.ofSeconds(1));
-        assertThat(relay.backoff(2)).isEqualTo(Duration.ofSeconds(2));
-        assertThat(relay.backoff(6)).isEqualTo(Duration.ofSeconds(32));
-        assertThat(relay.backoff(7)).isEqualTo(Duration.ofMinutes(1));
-        assertThat(relay.backoff(100)).isEqualTo(Duration.ofMinutes(1));
-    }
-
-    @Test
-    @DisplayName("Each poll refreshes the backlog metrics and the time of the last completed poll")
-    void metrics() {
-        OutboxEvent waiting = row(PARCEL_A, 1);
-        ReflectionTestUtils.setField(waiting, "createdAt", NOW.minusSeconds(150));
-        givenUnpublished();
-        when(outbox.countByPublishedAtIsNull()).thenReturn(4L);
-        when(outbox.findFirstByPublishedAtIsNullOrderByIdAsc()).thenReturn(Optional.of(waiting));
-        when(outbox.countByPublishedAtIsNullAndAttemptsGreaterThanEqual(anyInt())).thenReturn(1L);
-
-        relay.pollOnce();
-
-        assertThat(registry.get("swiftdrop.outbox.unpublished").gauge().value()).isEqualTo(4);
-        assertThat(registry.get("swiftdrop.outbox.oldest.unpublished.age").gauge().value()).isEqualTo(150);
-        assertThat(registry.get("swiftdrop.outbox.attempts.exceeded").gauge().value()).isEqualTo(1);
-        assertThat(registry.get("swiftdrop.outbox.last.poll").gauge().value()).isEqualTo(NOW.getEpochSecond());
-    }
-
-    private OutboxRelay relay(TransactionOperations transactions) {
-        var properties = new OutboxRelayProperties(null, null, null, null, null, null, null, null);
-        return new OutboxRelay(outbox, publisher, transactions, new OutboxRelayMetrics(registry), properties,
-                Clock.fixed(NOW, ZoneOffset.UTC));
-    }
-
-    private void givenUnpublished(OutboxEvent... rows) {
-        when(outbox.findByPublishedAtIsNullOrderByIdAsc(any(Limit.class))).thenReturn(List.of(rows));
-    }
-
-    private List<OutboxEvent> publishedOrder() {
-        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(publisher, org.mockito.Mockito.atLeast(0)).publish(captor.capture());
-        return new ArrayList<>(captor.getAllValues());
-    }
-
-    private OutboxEvent row(UUID parcelId, int sequence) {
-        return row(parcelId, sequence, UUID.randomUUID());
-    }
-
-    private OutboxEvent row(UUID parcelId, int sequence, UUID eventId) {
-        OutboxEvent row = new OutboxEvent(eventId, parcelId, sequence, "parcel.status-changed", "{}",
-                NOW.minusSeconds(5));
-        ReflectionTestUtils.setField(row, "id", nextId++);
-        return row;
+        assertThat(calls).hasSize(1);
+        assertThat(failingCommit.lastCompletedPoll()).isNull();
+        assertThat(publishedEventIds(2)).containsExactly(eventId, eventId);
     }
 }

@@ -23,9 +23,6 @@ public interface ParcelQueries {
     PageResult<DispatchParcelSummary> findDispatchParcels(
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page);
 
-    /** Parcels in the delivery handoff state that have no active courier. */
-    PageResult<DispatchParcelSummary> findAwaitingDeliveryAssignment(PageRequest page);
-
     /** Active assignment rows of one task type, oldest first. */
     PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page);
 

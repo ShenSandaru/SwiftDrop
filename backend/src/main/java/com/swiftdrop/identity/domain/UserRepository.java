@@ -1,5 +1,6 @@
 package com.swiftdrop.identity.domain;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,4 +24,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query(value = "SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r = :role",
            countQuery = "SELECT count(DISTINCT u) FROM User u JOIN u.roles r WHERE r = :role")
     Page<User> findByRole(@Param("role") Role role, Pageable pageable);
+
+    @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r = :role AND u.enabled = true ORDER BY u.fullName ASC")
+    List<User> findByRoleAndEnabledTrue(@Param("role") Role role);
 }

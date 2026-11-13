@@ -8,7 +8,7 @@ import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.swiftdrop.delivery.api.ParcelEventTopology;
+import com.swiftdrop.delivery.api.ParcelStatusChanged;
 
 /**
  * The merchant module's queue for parcel status events and its dead-letter queue (SD-501, ADR 0004 §5.1).
@@ -55,8 +55,8 @@ class MerchantEventQueueConfiguration {
 
     @Bean
     Binding merchantParcelStatusChangedBinding() {
-        return new Binding(QUEUE, Binding.DestinationType.QUEUE, ParcelEventTopology.EXCHANGE,
-                ParcelEventTopology.STATUS_CHANGED_ROUTING_KEY, null);
+        return new Binding(QUEUE, Binding.DestinationType.QUEUE, ParcelStatusChanged.EXCHANGE,
+                ParcelStatusChanged.EVENT_TYPE, null);
     }
 
     @Bean

@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,7 +33,9 @@ import com.swiftdrop.identity.domain.UserRepository;
 import com.swiftdrop.merchant.api.MerchantStatus;
 import com.swiftdrop.merchant.application.DuplicateRegistrationException;
 import com.swiftdrop.merchant.application.MerchantAdminService;
+import com.swiftdrop.merchant.application.MerchantApprovalService;
 import com.swiftdrop.merchant.application.MerchantRegistrationService;
+import com.swiftdrop.merchant.domain.IllegalStateTransitionException;
 import com.swiftdrop.merchant.domain.MerchantRepository;
 import com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository;
 import com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository;
@@ -48,7 +51,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class})
 class MerchantControllerTest {
 
     @Autowired
@@ -56,6 +59,9 @@ class MerchantControllerTest {
 
     @MockitoBean
     private MerchantRegistrationService registrationService;
+
+    @MockitoBean
+    private MerchantApprovalService approvalService;
 
     @MockitoBean
     private MerchantAdminService adminService;
@@ -84,6 +90,8 @@ class MerchantControllerTest {
     private MerchantStatusHistoryRepository merchantStatusHistory;
     @MockitoBean
     private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantApiKeyRepository merchantApiKeys;
 
     @Test
     @DisplayName("POST /api/v1/merchants is public and returns 201 Created on valid submission")
@@ -187,7 +195,7 @@ class MerchantControllerTest {
                 null,
                 null);
 
-        when(adminService.getMerchantStatusForUser(userId)).thenReturn(statusResponse);
+        when(approvalService.getMerchantStatusForUser(userId)).thenReturn(statusResponse);
 
         mvc.perform(get("/api/v1/merchants/me").with(TestPrincipal.merchant(userId).postProcessor()))
                 .andExpect(status().isOk())
@@ -214,26 +222,163 @@ class MerchantControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/merchants requires DISPATCHER_ADMIN")
+    @DisplayName("PATCH /api/v1/merchants/me updates profile for authenticated merchant")
+    void updateMyProfileSuccess() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID merchantId = UUID.randomUUID();
+
+        MerchantStatusResponse updatedResponse = new MerchantStatusResponse(
+                merchantId,
+                MerchantStatus.PENDING,
+                "Updated Supermarket",
+                "Grocery",
+                "BR-12345",
+                "+94771234567",
+                "999 Galle Road, Colombo",
+                "Upgraded items",
+                "https://updated.lk",
+                Instant.now(),
+                null,
+                null);
+
+        when(approvalService.updateProfile(eq(userId), any())).thenReturn(updatedResponse);
+
+        String body = """
+                {
+                  "businessName": "Updated Supermarket",
+                  "businessAddress": "999 Galle Road, Colombo"
+                }
+                """;
+
+        mvc.perform(patch("/api/v1/merchants/me")
+                        .with(TestPrincipal.merchant(userId).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessName").value("Updated Supermarket"))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/merchants requires ADMIN")
     void listMerchantsRequiresAdmin() throws Exception {
-        when(adminService.findMerchants(any(), any()))
+        when(approvalService.findMerchants(any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.dispatcherAdmin().postProcessor()))
+        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray());
+
+        mvc.perform(get("/api/v1/merchants").with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isForbidden());
 
         mvc.perform(get("/api/v1/merchants").with(TestPrincipal.merchant().postProcessor()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("POST /api/v1/merchants/{id}/approval requires DISPATCHER_ADMIN")
+    @DisplayName("GET /api/v1/merchants/{id} returns full merchant details and status history for DISPATCHER_ADMIN")
+    void getMerchantDetailSuccess() throws Exception {
+        UUID merchantId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+
+        MerchantDetailResponse detail = new MerchantDetailResponse(
+                merchantId,
+                UUID.randomUUID(),
+                "Acme Store",
+                "Retail",
+                "BR-55555",
+                "+94771234567",
+                "456 Main St",
+                null,
+                null,
+                MerchantStatus.APPROVED,
+                null,
+                adminId,
+                Instant.now(),
+                Instant.now(),
+                Instant.now(),
+                1L,
+                List.of(new MerchantDetailResponse.StatusHistoryItem(
+                        UUID.randomUUID(),
+                        merchantId,
+                        MerchantStatus.PENDING,
+                        MerchantStatus.APPROVED,
+                        adminId,
+                        "Approved",
+                        Instant.now())));
+
+        when(approvalService.getMerchantDetail(merchantId)).thenReturn(detail);
+
+        mvc.perform(get("/api/v1/merchants/" + merchantId).with(TestPrincipal.dispatcherAdmin(adminId).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(merchantId.toString()))
+                .andExpect(jsonPath("$.businessName").value("Acme Store"))
+                .andExpect(jsonPath("$.statusHistory").isArray())
+                .andExpect(jsonPath("$.statusHistory[0].toStatus").value("APPROVED"));
+
+        mvc.perform(get("/api/v1/merchants/" + merchantId).with(TestPrincipal.merchant().postProcessor()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/merchants/{id}/approval-decisions executes decision for DISPATCHER_ADMIN")
+    void decideApprovalSuccess() throws Exception {
+        UUID merchantId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+
+        when(approvalService.reviewDecision(eq(merchantId), any(), any()))
+                .thenReturn(new MerchantStatusResponse(
+                        merchantId, MerchantStatus.APPROVED, "Store", "Retail", "BR-1",
+                        "+94771234567", "Addr", null, null, Instant.now(), Instant.now(), null));
+
+        String body = """
+                {
+                  "decision": "APPROVE"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval-decisions")
+                        .with(TestPrincipal.dispatcherAdmin(adminId).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/merchants/{id}/approval-decisions returns 409 Conflict on illegal state transition")
+    void decideApprovalIllegalTransition() throws Exception {
+        UUID merchantId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+
+        when(approvalService.reviewDecision(eq(merchantId), any(), any()))
+                .thenThrow(new IllegalStateTransitionException(MerchantStatus.PENDING, MerchantStatus.SUSPENDED));
+
+        String body = """
+                {
+                  "decision": "SUSPEND",
+                  "reason": "Invalid"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval-decisions")
+                        .with(TestPrincipal.dispatcherAdmin(adminId).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflict"))
+                .andExpect(jsonPath("$.fromStatus").value("PENDING"))
+                .andExpect(jsonPath("$.toStatus").value("SUSPENDED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/merchants/{id}/approval requires ADMIN")
     void approvalRequiresAdmin() throws Exception {
         UUID merchantId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
 
-        when(adminService.reviewApplication(eq(merchantId), any(), any()))
+        when(approvalService.reviewDecision(eq(merchantId), any(), any()))
                 .thenReturn(new MerchantStatusResponse(
                         merchantId, MerchantStatus.APPROVED, "Store", "Retail", "BR-1",
                         "+94771234567", "Addr", null, null, Instant.now(), Instant.now(), null));
@@ -245,11 +390,17 @@ class MerchantControllerTest {
                 """;
 
         mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
-                        .with(TestPrincipal.dispatcherAdmin(adminId).postProcessor())
+                        .with(TestPrincipal.admin(adminId).postProcessor())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
+
+        mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
+                        .with(TestPrincipal.dispatcher().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/merchants/" + merchantId + "/approval")
                         .with(TestPrincipal.merchant().postProcessor())

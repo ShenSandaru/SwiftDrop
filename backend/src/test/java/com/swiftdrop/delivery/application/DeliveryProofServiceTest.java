@@ -27,6 +27,7 @@ import com.swiftdrop.delivery.domain.DeliveryProof;
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.pricing.api.ParcelSize;
 
@@ -47,7 +48,8 @@ class DeliveryProofServiceTest {
     void setUp() {
         parcels = mock(ParcelRepository.class);
         proofs = mock(DeliveryProofRepository.class);
-        service = new DeliveryProofService(parcels, proofs, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new DeliveryProofService(parcels, proofs, mock(ParcelAssignmentRepository.class),
+                Clock.fixed(NOW, ZoneOffset.UTC));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", OWNER_ID, address, address, ParcelSize.SMALL, 1000, null,
@@ -126,7 +128,10 @@ class DeliveryProofServiceTest {
         assertThat(service.photo(PARCEL_ID, Viewer.of(OWNER_ID, ActorRole.CUSTOMER))).get()
                 .satisfies(photo -> assertThat(photo.contentType()).isEqualTo("image/jpeg"));
         assertThat(service.photo(PARCEL_ID, Viewer.of(COURIER_ID, ActorRole.COURIER))).isPresent();
-        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN))).isPresent();
+        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.ADMIN))).isPresent();
+        assertThat(service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER))).isPresent();
+        assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.DISPATCHER_ADMIN)))
+                .isInstanceOf(ParcelNotFoundException.class);
         assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.CUSTOMER)))
                 .isInstanceOf(ParcelNotFoundException.class);
         assertThatThrownBy(() -> service.photo(PARCEL_ID, Viewer.of(UUID.randomUUID(), ActorRole.COURIER)))

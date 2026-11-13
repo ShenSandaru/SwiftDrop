@@ -45,9 +45,11 @@ import com.swiftdrop.test.security.TestPrincipal;
 @AutoConfigureMockMvc
 @MockitoBean(types = {
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class
 })
 class TrackingApiTest {
 
@@ -96,7 +98,8 @@ class TrackingApiTest {
                 .andExpect(jsonPath("$.history[1].occurredAt").value("2026-11-03T12:01:02Z"))
                 // Exactly the public fields: nothing else can leak
                 .andExpect(jsonPath("$.length()").value(5))
-                .andExpect(jsonPath("$.history[0].length()").value(2));
+                // status, occurredAt, hubName, attempt: never an actor or a note (ADR 0009 §7)
+                .andExpect(jsonPath("$.history[0].length()").value(4));
     }
 
     @Test
