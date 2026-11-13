@@ -45,6 +45,6 @@ class AssistantController {
         AssistantAnswer answer = assistant.reply(request.message(), request.historyOrEmpty().stream()
                 .map(turn -> new ChatTurn(turn.role(), turn.text()))
                 .toList());
-        return ResponseEntity.ok(new AssistantResponse(answer.reply(), answer.unavailable()));
+        return ResponseEntity.ok(AssistantResponse.from(answer));
     }
 }

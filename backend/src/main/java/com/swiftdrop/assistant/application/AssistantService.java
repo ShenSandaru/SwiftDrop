@@ -33,15 +33,16 @@ public class AssistantService {
         List<LlmMessage> conversation = new ArrayList<>();
         history.forEach(turn -> conversation.add(new LlmMessage.Text(turn.role(), turn.text())));
         conversation.add(new LlmMessage.Text(ChatRole.USER, message));
+        List<AssistantCard> cards = new ArrayList<>();
         try {
-            return new AssistantAnswer(answer(conversation), false);
+            return new AssistantAnswer(answer(conversation, cards), false, cards);
         } catch (LlmUnavailableException e) {
             log.warn("Assistant model unavailable: {}", e.getMessage());
             return new AssistantAnswer(AssistantPrompt.UNAVAILABLE, true);
         }
     }
 
-    private String answer(List<LlmMessage> conversation) {
+    private String answer(List<LlmMessage> conversation, List<AssistantCard> cards) {
         List<ToolSpec> specs = tools.values().stream().map(AssistantTool::spec).toList();
         int toolCalls = 0;
         while (true) {
@@ -57,10 +58,19 @@ public class AssistantService {
             }
             for (LlmMessage.ToolCall call : reply.toolCalls()) {
                 conversation.add(call);
-                conversation.add(new LlmMessage.ToolResult(call.name(), run(call)));
+                Map<String, Object> result = run(call);
+                conversation.add(new LlmMessage.ToolResult(call.name(), result));
+                if (isCardWorthy(result)) {
+                    cards.add(new AssistantCard(call.name(), result));
+                }
                 toolCalls++;
             }
         }
+    }
+
+    /** Errors and "not found" stay in the text answer; only real findings become cards. */
+    private static boolean isCardWorthy(Map<String, Object> result) {
+        return !result.containsKey("error") && !Boolean.FALSE.equals(result.get("found"));
     }
 
     private Map<String, Object> run(LlmMessage.ToolCall call) {

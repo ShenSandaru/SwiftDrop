@@ -96,6 +96,36 @@ class AssistantServiceTest {
     }
 
     @Test
+    void returnsWhatSuccessfulToolsFoundAsCardsInOrder() {
+        ScriptedLlm llm = new ScriptedLlm(
+                () -> LlmReply.toolCalls(List.of(call("track_parcel"), call("estimate_fee"), call("missing"))),
+                () -> LlmReply.answer("Here you go."));
+
+        AssistantAnswer answer = service(llm,
+                tool("track_parcel", new AtomicInteger(), Map.of("found", true, "status", "AT_HUB")),
+                tool("estimate_fee", new AtomicInteger(), Map.of("totalFee", "750.00")))
+                .reply("x", List.of());
+
+        assertThat(answer.cards()).containsExactly(
+                new AssistantCard("track_parcel", Map.of("found", true, "status", "AT_HUB")),
+                new AssistantCard("estimate_fee", Map.of("totalFee", "750.00")));
+    }
+
+    @Test
+    void errorsAndUnknownParcelsDoNotBecomeCards() {
+        ScriptedLlm llm = new ScriptedLlm(
+                () -> LlmReply.toolCalls(List.of(call("track_parcel"), call("estimate_fee"))),
+                () -> LlmReply.answer("Sorry."));
+
+        AssistantAnswer answer = service(llm,
+                tool("track_parcel", new AtomicInteger(), Map.of("found", false)),
+                tool("estimate_fee", new AtomicInteger(), Map.of("error", "No price is set for that route.")))
+                .reply("x", List.of());
+
+        assertThat(answer.cards()).isEmpty();
+    }
+
+    @Test
     void tellsTheModelWhenItAsksForAToolThatDoesNotExist() {
         ScriptedLlm llm = new ScriptedLlm(
                 () -> LlmReply.toolCalls(List.of(call("delete_everything"))),
@@ -157,6 +187,7 @@ class AssistantServiceTest {
 
         assertThat(answer.unavailable()).isTrue();
         assertThat(answer.reply()).isEqualTo(AssistantPrompt.UNAVAILABLE);
+        assertThat(answer.cards()).isEmpty();
     }
 
     @Test

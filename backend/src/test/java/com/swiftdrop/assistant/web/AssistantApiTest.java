@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.swiftdrop.assistant.application.AssistantAnswer;
+import com.swiftdrop.assistant.application.AssistantCard;
 import com.swiftdrop.assistant.application.AssistantService;
 import com.swiftdrop.assistant.application.ChatRole;
 import com.swiftdrop.assistant.application.ChatTurn;
@@ -93,13 +94,16 @@ class AssistantApiTest {
     void passesTheMessageAndHistoryToTheAssistantAndReturnsItsReply() throws Exception {
         when(rateLimiter.tryAcquire(any())).thenReturn(true);
         when(assistant.reply(eq("Where is SD1?"), eq(List.of(new ChatTurn(ChatRole.USER, "hi")))))
-                .thenReturn(new AssistantAnswer("It is in Kandy.", false));
+                .thenReturn(new AssistantAnswer("It is in Kandy.", false,
+                        List.of(new AssistantCard("track_parcel", java.util.Map.of("status", "AT_HUB")))));
 
         mvc.perform(send("""
                 {"message":"Where is SD1?","history":[{"role":"USER","text":"hi"}]}"""))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("It is in Kandy."))
-                .andExpect(jsonPath("$.unavailable").value(false));
+                .andExpect(jsonPath("$.unavailable").value(false))
+                .andExpect(jsonPath("$.cards[0].tool").value("track_parcel"))
+                .andExpect(jsonPath("$.cards[0].data.status").value("AT_HUB"));
     }
 
     @Test
