@@ -41,6 +41,7 @@ import com.swiftdrop.notification.domain.NotificationRecordRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
 
 @SpringBootTest(properties = {
+        "swiftdrop.notification.consumer.enabled=true",
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id=",
         "swiftdrop.identity.bootstrap.admin-email=",
