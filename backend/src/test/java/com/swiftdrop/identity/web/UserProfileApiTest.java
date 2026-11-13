@@ -57,7 +57,13 @@ import org.springframework.mock.web.MockMultipartFile;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class)
+@MockitoBean(types = {
+        com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
+        com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.merchant.domain.MerchantRepository.class,
+        com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+})
 class UserProfileApiTest {
 
     private static final UUID COURIER_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
@@ -114,7 +120,7 @@ class UserProfileApiTest {
         courierUser.setPhoneNumber("+94771234567");
         ReflectionTestUtils.setField(courierUser, "id", COURIER_ID);
 
-        adminUser = new User("admin@swiftdrop.lk", passwordEncoder.encode("AdminPass123!"), "Chief Dispatcher", Set.of(Role.DISPATCHER_ADMIN));
+        adminUser = new User("admin@swiftdrop.lk", passwordEncoder.encode("AdminPass123!"), "Chief Dispatcher", Set.of(Role.ADMIN));
         ReflectionTestUtils.setField(adminUser, "id", ADMIN_ID);
 
         customerUser = new User("customer@swiftdrop.lk", passwordEncoder.encode("CustomerPass123!"), "Alice Customer", Set.of(Role.CUSTOMER));
@@ -183,7 +189,7 @@ class UserProfileApiTest {
         when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         mvc.perform(post("/api/v1/users/me/password")
-                        .with(TestPrincipal.dispatcherAdmin(ADMIN_ID).postProcessor())
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -259,7 +265,11 @@ class UserProfileApiTest {
                 .andExpect(status().isForbidden());
 
         mvc.perform(get("/api/v1/users/me/addresses")
-                        .with(TestPrincipal.dispatcherAdmin(ADMIN_ID).postProcessor()))
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/v1/users/me/addresses")
+                        .with(TestPrincipal.dispatcher().postProcessor()))
                 .andExpect(status().isForbidden());
     }
 
