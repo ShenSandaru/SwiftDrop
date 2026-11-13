@@ -91,7 +91,8 @@ adding an MCP dependency needs approval.
 
 ### 6. Frontend
 
-A chat widget on `/track` and on the customer pages. It only sends text to the endpoint and shows
+A chat widget on the landing page, on `/track` and on the customer pages; not on the courier,
+dispatcher, admin or merchant pages. It only sends text to the endpoint and shows
 the reply; it contains no business rules.
 
 ## Alternatives considered
