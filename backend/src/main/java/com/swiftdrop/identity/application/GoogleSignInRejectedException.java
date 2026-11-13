@@ -10,6 +10,8 @@ public class GoogleSignInRejectedException extends RuntimeException {
         EMAIL_NOT_VERIFIED,
         /** An account with this email exists but is not linked to this Google identity. */
         EMAIL_ALREADY_REGISTERED,
+        /** The account holds roles other than or in addition to CUSTOMER. */
+        ROLE_NOT_PERMITTED,
         /** The linked account is disabled or no longer exists. */
         ACCOUNT_UNAVAILABLE,
         /** A concurrent sign-in or registration created a conflicting row. */

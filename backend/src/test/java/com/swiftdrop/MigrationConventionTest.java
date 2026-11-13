@@ -179,6 +179,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611111330",
                                 "identity user avatar",
-                                "identity/V202611111330__identity_user_avatar.sql"));
+                                "identity/V202611111330__identity_user_avatar.sql"),
+                        tuple(
+                                "202611131900",
+                                "identity add phone number to users",
+                                "identity/V202611131900__identity_add_phone_number_to_users.sql"));
     }
 }

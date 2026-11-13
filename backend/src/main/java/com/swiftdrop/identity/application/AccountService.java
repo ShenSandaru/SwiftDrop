@@ -18,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.shared.web.PageLimit;
@@ -249,7 +250,14 @@ public class AccountService implements UserDirectory {
         Set<String> roleNames = user.getRoles().stream()
                 .map(Enum::name)
                 .collect(Collectors.toUnmodifiableSet());
-        return new UserSummary(user.getId(), user.getFullName(), user.getEmail(), roleNames, user.isEnabled());
+        return new UserSummary(
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getPhoneNumber(),
+                roleNames,
+                user.isEnabled(),
+                user.isProfileCompleted());
     }
 
     private static boolean tooLong(String rawPassword) {

@@ -42,7 +42,7 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
-    @Column(name = "phone_number", length = 30)
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
     @Column(name = "avatar_photo")
@@ -53,7 +53,6 @@ public class User {
 
     @Column(name = "avatar_updated_at")
     private Instant avatarUpdatedAt;
-
     @Column(nullable = false)
     private boolean enabled;
 
@@ -117,6 +116,22 @@ public class User {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    /**
+     * Customer accounts are considered complete when they have a human name
+     * (not empty, and not defaulting to their email address) and a contact phone number.
+     * Non-customer accounts (e.g. admin or staff) are always considered complete.
+     */
+    public boolean isProfileCompleted() {
+        if (!roles.contains(Role.CUSTOMER)) {
+            return true;
+        }
+        return fullName != null
+                && !fullName.isBlank()
+                && !fullName.trim().equalsIgnoreCase(email.trim())
+                && phoneNumber != null
+                && !phoneNumber.isBlank();
     }
 
     public boolean isEnabled() {

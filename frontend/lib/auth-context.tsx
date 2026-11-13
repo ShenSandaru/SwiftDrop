@@ -12,8 +12,8 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
-  hasRole: (role: string) => boolean;
   refreshUser: () => Promise<void>;
+  hasRole: (role: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -48,7 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         const publicPaths = ["/login", "/signup", "/track", "/"];
         const currentPath = window.location.pathname;
-        const isPublic = publicPaths.includes(currentPath) || currentPath.startsWith("/track");
+        const isPublic =
+          publicPaths.includes(currentPath) ||
+          currentPath.startsWith("/track") ||
+          currentPath.startsWith("/signup");
         if (!isPublic) {
           const targetUrl = new URL(`/login?expired=true&redirect=${encodeURIComponent(currentPath)}`, window.location.origin).href;
           window.location.assign(targetUrl);
@@ -112,22 +115,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const refreshUser = useCallback(async () => {
+    const currentToken =
+      token || (typeof window !== "undefined" ? window.sessionStorage.getItem(TOKEN_STORAGE_KEY) : null);
+    if (currentToken) {
+      await loadCurrentUser(currentToken);
+    }
+  }, [token, loadCurrentUser]);
+
   const hasRole = useCallback(
     (role: string): boolean => {
       return Boolean(user?.roles?.includes(role));
     },
     [user]
   );
-
-  const refreshUser = useCallback(async () => {
-    if (!token) return;
-    try {
-      const updated = await api.get<UserResponse>("/api/v1/users/me", { token });
-      setUser(updated);
-    } catch {
-      // Keep existing user on failure
-    }
-  }, [token]);
 
   return (
     <AuthContext.Provider
@@ -138,8 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: Boolean(user && token),
         login,
         logout,
-        hasRole,
         refreshUser,
+        hasRole,
       }}
     >
       {children}

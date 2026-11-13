@@ -105,32 +105,50 @@ export function IslandMap({ className }: { className?: string }) {
   const trailRefs = useRef<(SVGPathElement | null)[]>([]);
 
   useEffect(() => {
-    const legs = legRefs.current;
-    const trails = trailRefs.current;
+    let isMounted = true;
+    const legs = legRefs.current.filter((leg): leg is SVGPathElement => Boolean(leg));
+    const trails = trailRefs.current.filter((trail): trail is SVGPathElement => Boolean(trail));
     const pin = pinRef.current;
     const host = hostRef.current;
-    if (!pin || !host || legs.length !== LEGS.length || legs.some((leg) => !leg)) {
+
+    // Ensure all required SVG paths, trails, and elements are mounted before initializing
+    if (!pin || !host || legs.length !== LEGS.length || trails.length !== LEGS.length) {
       return;
     }
-    const lengths = legs.map((leg) => (leg ? leg.getTotalLength() : 0));
+
+    const lengths = legs.map((leg) => {
+      try {
+        return leg.getTotalLength();
+      } catch {
+        return 0;
+      }
+    });
+
     trails.forEach((trail, index) => {
-      if (trail && lengths[index] !== undefined) {
+      if (trail) {
         trail.setAttribute("stroke-dasharray", `${lengths[index]}`);
       }
     });
 
     const place = (legIndex: number, progress: number) => {
+      if (!isMounted || !pin) return;
       const leg = legs[legIndex];
-      if (!leg || !pin) return;
-      const length = lengths[legIndex] ?? leg.getTotalLength();
-      const point = leg.getPointAtLength(length * progress);
-      pin.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      if (!leg || typeof leg.getPointAtLength !== "function") return;
+      try {
+        const length = lengths[legIndex] ?? 0;
+        const point = leg.getPointAtLength(length * progress);
+        pin.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      } catch {
+        // Element might be detached during navigation
+      }
     };
+
     const drawTrails = (legIndex: number, progress: number) => {
+      if (!isMounted) return;
       trails.forEach((trail, index) => {
         if (!trail) return;
-        const done = index < legIndex ? 1 : index === legIndex ? progress : 0;
         const length = lengths[index] ?? 0;
+        const done = index < legIndex ? 1 : index === legIndex ? progress : 0;
         trail.setAttribute("stroke-dashoffset", `${length * (1 - done)}`);
       });
     };
@@ -147,46 +165,52 @@ export function IslandMap({ className }: { className?: string }) {
     let elapsed = 0;
     let last = performance.now();
     let shownSegment = -1;
-    let cancelled = false;
 
     const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
+      if (!isMounted) return;
+      visible = entry ? entry.isIntersecting : true;
     });
     observer.observe(host);
 
     const tick = (now: number) => {
-      if (cancelled) return;
+      if (!isMounted) return;
       const delta = Math.min(now - last, 100);
       last = now;
       if (visible) {
         elapsed = (elapsed + delta) % CYCLE_MS;
         let time = elapsed;
         let index = 0;
-        while (time >= SEGMENTS[index]) {
+        while (index < SEGMENTS.length && time >= SEGMENTS[index]) {
           time -= SEGMENTS[index];
           index += 1;
         }
+        if (index >= SEGMENTS.length) {
+          index = SEGMENTS.length - 1;
+        }
         const travelling = index % 2 === 1;
-        const legIndex = travelling ? (index - 1) / 2 : index / 2 - 1;
-        const progress = travelling ? easeInOut(time / SEGMENTS[index]) : 1;
+        const legIndex = travelling ? Math.floor((index - 1) / 2) : Math.floor(index / 2) - 1;
+        const segmentDuration = SEGMENTS[index] || 1;
+        const progress = travelling ? easeInOut(Math.min(Math.max(time / segmentDuration, 0), 1)) : 1;
         if (legIndex < 0) {
           place(0, 0);
           drawTrails(-1, 0);
-        } else {
+        } else if (legIndex < LEGS.length) {
           place(legIndex, progress);
           drawTrails(legIndex, progress);
         }
-        if (index !== shownSegment) {
+        if (index !== shownSegment && isMounted) {
           shownSegment = index;
           setSegment(index);
         }
       }
-      frame = requestAnimationFrame(tick);
+      if (isMounted) {
+        frame = requestAnimationFrame(tick);
+      }
     };
     frame = requestAnimationFrame(tick);
 
     return () => {
-      cancelled = true;
+      isMounted = false;
       cancelAnimationFrame(frame);
       observer.disconnect();
     };

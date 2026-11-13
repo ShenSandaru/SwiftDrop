@@ -16,12 +16,13 @@ export interface UserResponse {
   id: string;
   email: string;
   fullName: string;
-  phoneNumber?: string;
+  phoneNumber?: string | null;
   roles: string[];
   enabled: boolean;
   hasAvatar?: boolean;
   avatarUpdatedAt?: string;
   createdAt?: string;
+  profileCompleted?: boolean;
 }
 
 export function getUserAvatarUrl(userId: string, avatarUpdatedAt?: string): string {

@@ -21,7 +21,7 @@ const PROMISES = [
 
 export function Hero() {
   const { hasRole } = useAuth();
-  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup/customer";
 
   return (
     <section className="relative overflow-hidden border-b border-border">

@@ -33,6 +33,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
 import com.swiftdrop.test.security.TestPrincipal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,7 +49,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.springframework.mock.web.MockMultipartFile;
-
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
@@ -322,5 +322,66 @@ class UserProfileApiTest {
                         .with(request -> { request.setMethod("PUT"); return request; })
                         .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor()))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getMeReflectsInitialIncompleteProfileStatus() throws Exception {
+        when(users.findById(CUSTOMER_ID)).thenReturn(Optional.of(customerUser));
+
+        mvc.perform(get("/api/v1/users/me").with(TestPrincipal.customer(CUSTOMER_ID).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(CUSTOMER_ID.toString()))
+                .andExpect(jsonPath("$.email").value("customer@swiftdrop.lk"))
+                .andExpect(jsonPath("$.fullName").value("Alice Customer"))
+                .andExpect(jsonPath("$.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.profileCompleted").value(false));
+    }
+
+    @Test
+    void updateProfileWithValidNameAndPhoneNumberSucceedsAndMarksCompleted() throws Exception {
+        when(users.findById(CUSTOMER_ID)).thenReturn(Optional.of(customerUser));
+        when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        mvc.perform(patch("/api/v1/users/me")
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"Jane Perera\",\"phoneNumber\":\"+94771234567\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Jane Perera"))
+                .andExpect(jsonPath("$.phoneNumber").value("+94771234567"))
+                .andExpect(jsonPath("$.profileCompleted").value(true));
+
+        assertThat(customerUser.getFullName()).isEqualTo("Jane Perera");
+        assertThat(customerUser.getPhoneNumber()).isEqualTo("+94771234567");
+        assertThat(customerUser.isProfileCompleted()).isTrue();
+    }
+
+    @Test
+    void updateProfileWithInvalidPhoneNumberFailsValidation() throws Exception {
+        mvc.perform(patch("/api/v1/users/me")
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"Jane Perera\",\"phoneNumber\":\"0771234567\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.invalidFields", contains("phoneNumber")))
+                .andExpect(jsonPath("$.detail").value("Invalid request"));
+    }
+
+    @Test
+    void updateProfileWithBlankNameFailsValidation() throws Exception {
+        mvc.perform(patch("/api/v1/users/me")
+                        .with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"   \",\"phoneNumber\":\"+94771234567\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.invalidFields", contains("fullName")));
+    }
+
+    @Test
+    void updateProfileWithoutAuthenticationIsRejected() throws Exception {
+        mvc.perform(patch("/api/v1/users/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fullName\":\"Jane Perera\",\"phoneNumber\":\"+94771234567\"}"))
+                .andExpect(status().isUnauthorized());
     }
 }

@@ -63,6 +63,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Import({AuthorizationMatrixHarnessTest.HarnessFixtureController.class,
         AuthorizationMatrixHarnessTest.TestSecurityConfig.class})
 @MockitoBean(types = {
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,

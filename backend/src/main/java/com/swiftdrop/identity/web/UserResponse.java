@@ -15,22 +15,23 @@ public record UserResponse(
         boolean enabled,
         boolean hasAvatar,
         Instant avatarUpdatedAt,
-        Instant createdAt) {
+        Instant createdAt,
+        boolean profileCompleted) {
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles) {
-        this(id, email, fullName, null, roles, true, false, null, null);
+        this(id, email, fullName, null, roles, true, false, null, null, true);
     }
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled) {
-        this(id, email, fullName, null, roles, enabled, false, null, null);
+        this(id, email, fullName, null, roles, enabled, false, null, null, true);
     }
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled, Instant createdAt) {
-        this(id, email, fullName, null, roles, enabled, false, null, createdAt);
+        this(id, email, fullName, null, roles, enabled, false, null, createdAt, true);
     }
 
     public UserResponse(UUID id, String email, String fullName, String phoneNumber, List<String> roles, boolean enabled, Instant createdAt) {
-        this(id, email, fullName, phoneNumber, roles, enabled, false, null, createdAt);
+        this(id, email, fullName, phoneNumber, roles, enabled, false, null, createdAt, true);
     }
 
     static UserResponse from(User user) {
@@ -43,6 +44,7 @@ public record UserResponse(
                 user.isEnabled(),
                 user.hasAvatar(),
                 user.getAvatarUpdatedAt(),
-                user.getCreatedAt());
+                user.getCreatedAt(),
+                user.isProfileCompleted());
     }
 }

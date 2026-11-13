@@ -43,7 +43,7 @@ export function BoardingPass() {
   const origin = CITIES.find((city) => city.code === from)!;
   const destination = CITIES.find((city) => city.code === to)!;
   const printKey = `${from}-${to}-${size}`;
-  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup/customer";
 
   const handleFromChange = (nextFrom: CityCode) => {
     if (nextFrom === to) {

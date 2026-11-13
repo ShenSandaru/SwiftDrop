@@ -1,6 +1,4 @@
--- Owner: identity module. User profile phone number and saved addresses.
-
-ALTER TABLE users ADD COLUMN phone_number VARCHAR(30);
+-- Owner: identity module. Saved user addresses (phone_number on users is added in V202611131900).
 
 CREATE TABLE user_addresses (
     id             UUID         PRIMARY KEY,
