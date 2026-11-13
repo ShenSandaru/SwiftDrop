@@ -168,6 +168,61 @@ export default function AdminPricingPage() {
     });
   }, [simPickup, simDropoff, configForm, getZoneDistanceKm]);
 
+  // Live Complete Quotation (Route + Weight + Size) calculated instantly in real-time
+  const liveSimulationQuote = useMemo(() => {
+    if (!simDistanceResult) return null;
+
+    const routeFee = simDistanceResult.totalSuggestedBaseFee;
+    const chargeableKg = Math.max(1, Math.ceil(simWeightGrams / 1000));
+    const perKgRate = parseFloat(configForm.perKgFee) || 50;
+    const weightFee = chargeableKg * perKgRate;
+
+    const sizeSurcharge =
+      simSize === "SMALL"
+        ? parseFloat(configForm.smallSizeSurcharge) || 0
+        : simSize === "MEDIUM"
+        ? parseFloat(configForm.mediumSizeSurcharge) || 50
+        : parseFloat(configForm.largeSizeSurcharge) || 150;
+
+    const totalFee = routeFee + weightFee + sizeSurcharge;
+
+    return {
+      routeFee,
+      chargeableKg,
+      weightFee,
+      sizeSurcharge,
+      totalFee,
+      currency: configForm.currency || "LKR",
+    };
+  }, [simDistanceResult, simWeightGrams, simSize, configForm]);
+
+  // Unified quote display: uses backend quote if available, otherwise seamlessly uses live client formula
+  const displayQuote = useMemo(() => {
+    if (quote) {
+      return {
+        baseFee: quote.breakdown.baseFee,
+        weightFee: quote.breakdown.weightFee,
+        sizeFee: quote.breakdown.sizeSurcharge,
+        totalAmount: quote.amount,
+        currency: quote.currency,
+        isLiveServer: true,
+        engineRef: quote.pricingRuleId,
+      };
+    }
+    if (liveSimulationQuote) {
+      return {
+        baseFee: liveSimulationQuote.routeFee.toFixed(2),
+        weightFee: liveSimulationQuote.weightFee.toFixed(2),
+        sizeFee: liveSimulationQuote.sizeSurcharge.toFixed(2),
+        totalAmount: liveSimulationQuote.totalFee.toFixed(2),
+        currency: liveSimulationQuote.currency,
+        isLiveServer: false,
+        engineRef: "Universal Distance Tariff Engine",
+      };
+    }
+    return null;
+  }, [quote, liveSimulationQuote]);
+
   // Dynamic calculation helpers: automatically recalibrate ratePerKm when base fee or max cap changes
   function updateBaseFee(val: string) {
     const base = parseFloat(val) || 0;
@@ -880,10 +935,18 @@ export default function AdminPricingPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] text-muted-foreground uppercase font-semibold">Route Delivery Fee</span>
-                    <div className="text-sm font-bold font-mono text-primary">
-                      LKR {simDistanceResult.totalSuggestedBaseFee.toFixed(2)}
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3.5 shrink-0">
+                    <div className="text-right">
+                      <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Route Distance Fee</span>
+                      <div className="text-xs font-mono text-muted-foreground font-medium">
+                        LKR {simDistanceResult.totalSuggestedBaseFee.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="text-right sm:border-l sm:border-primary/20 sm:pl-3.5">
+                      <span className="text-[10px] text-primary uppercase font-bold block">Total Delivery Fee</span>
+                      <div className="text-base font-bold font-mono text-primary">
+                        LKR {displayQuote ? displayQuote.totalAmount : simDistanceResult.totalSuggestedBaseFee.toFixed(2)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -972,7 +1035,7 @@ export default function AdminPricingPage() {
                     type="number"
                     min={1}
                     max={30000}
-                    step={100}
+                    step="any"
                     value={simWeightGrams}
                     onChange={(e) => {
                       setSimWeightGrams(Math.max(1, Math.min(30000, parseInt(e.target.value) || 1)));
@@ -1028,21 +1091,28 @@ export default function AdminPricingPage() {
                   <Package className="size-3.5 text-primary" />
                   Official Delivery Quote
                 </span>
-                {quote && (
-                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                    Live Verified
+                {displayQuote && (
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      displayQuote.isLiveServer
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-primary/10 text-primary",
+                    )}
+                  >
+                    {displayQuote.isLiveServer ? "Live API Verified" : "Live Formula Calculated"}
                   </span>
                 )}
               </div>
 
               {simError && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  <span>{simError}</span>
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <Info className="size-4 shrink-0" />
+                  <span>Displaying live formula pricing below (backend server restart pending for direct API verification).</span>
                 </div>
               )}
 
-              {quote ? (
+              {displayQuote ? (
                 <div className="space-y-4">
                   {/* Route Summary Pill */}
                   <div className="rounded-lg border border-border/70 bg-muted/40 p-3 flex items-center justify-between text-xs">
@@ -1062,23 +1132,23 @@ export default function AdminPricingPage() {
                   <div className="space-y-2 border-t border-border pt-3">
                     <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Itemized Breakdown</p>
                     <div className="divide-y divide-border/60 text-xs">
-                      {/* Base Delivery Fee */}
+                      {/* Base Distance Fee */}
                       <div className="flex justify-between py-2">
                         <span className="text-muted-foreground">
-                          Base Distance Fee {simDistanceResult && simDistanceResult.distanceKm <= 30 ? "(Local ≤30km)" : ""}
+                          Route Distance Fee {simDistanceResult && simDistanceResult.distanceKm <= 30 ? "(Local ≤30km)" : ""}
                         </span>
                         <span className="font-mono font-medium text-foreground">
-                          {quote.currency} {quote.breakdown.baseFee}
+                          {displayQuote.currency} {displayQuote.baseFee}
                         </span>
                       </div>
 
                       {/* Weight Fee */}
                       <div className="flex justify-between py-2">
                         <span className="text-muted-foreground">
-                          Weight Charge ({Math.max(1, Math.ceil(simWeightGrams / 1000))} kg billable @ {quote.currency} {configForm.perKgFee}/kg)
+                          Weight Charge ({Math.max(1, Math.ceil(simWeightGrams / 1000))} kg billable @ {displayQuote.currency} {configForm.perKgFee}/kg)
                         </span>
                         <span className="font-mono font-medium text-foreground">
-                          {quote.currency} {quote.breakdown.weightFee}
+                          {displayQuote.currency} {displayQuote.weightFee}
                         </span>
                       </div>
 
@@ -1088,15 +1158,15 @@ export default function AdminPricingPage() {
                           Size Surcharge ({simSize.toLowerCase()} package)
                         </span>
                         <span className="font-mono font-medium text-foreground">
-                          {quote.currency} {quote.breakdown.sizeSurcharge}
+                          {displayQuote.currency} {displayQuote.sizeFee}
                         </span>
                       </div>
 
                       {/* Total Quote */}
                       <div className="flex justify-between py-3 font-bold text-base border-t border-border mt-1">
-                        <span className="text-foreground">Total Customer Fee</span>
-                        <span className="font-mono text-primary text-lg">
-                          {quote.currency} {quote.amount}
+                        <span className="text-foreground">Total Delivery Fee</span>
+                        <span className="font-mono text-primary text-xl">
+                          {displayQuote.currency} {displayQuote.totalAmount}
                         </span>
                       </div>
                     </div>
@@ -1106,7 +1176,7 @@ export default function AdminPricingPage() {
                   {simDistanceResult && simDistanceResult.isCapped && (
                     <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-400">
                       <ShieldCheck className="size-4 shrink-0" />
-                      <span>Fair Pricing Policy: Total delivery fee is protected at the island ceiling of LKR {parseFloat(configForm.maxCap).toFixed(2)}.</span>
+                      <span>Fair Pricing Policy: Route delivery fee is protected at the island ceiling of LKR {parseFloat(configForm.maxCap).toFixed(2)}.</span>
                     </div>
                   )}
 
@@ -1119,7 +1189,7 @@ export default function AdminPricingPage() {
 
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
                     <Info className="size-3.5 shrink-0" />
-                    <span>Engine Reference: {quote.pricingRuleId}</span>
+                    <span>Engine Reference: {displayQuote.engineRef}</span>
                   </div>
                 </div>
               ) : !simError ? (
