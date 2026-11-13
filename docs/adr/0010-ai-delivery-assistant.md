@@ -83,11 +83,31 @@ to the model provider.
   attempts, so "how do I send a parcel?" has an answer. This is prompt text, not retrieval (RAG);
   it must be updated when those flows change. Delivery times are not stated because no rule exists.
 
-### 5. MCP (optional, after the chat works)
+### 5. MCP server
 
-The tool classes from §2 are written against a small internal interface, so an MCP endpoint can
-expose the same tools later. Whether to add it, and with which library, is decided separately;
-adding an MCP dependency needs approval.
+The same three tools are exposed as MCP tools at `POST /mcp`, so any MCP client (Claude Code,
+Claude Desktop, the MCP Inspector, a merchant's own agent) can use them. The client's own model
+does the reasoning; SwiftDrop only runs the tools, so MCP calls cost no Gemini quota.
+
+- **Hand-written, no dependency.** Only the tool part of the protocol is needed. The Spring AI MCP
+  starter would add a large dependency whose Spring Boot 4 general-availability status was unclear,
+  and the plain MCP Java SDK would need a Jackson compatibility review. The endpoint uses the JSON
+  support that is already present.
+- **Both protocol eras on one endpoint.** Requests whose `params._meta` carries
+  `io.modelcontextprotocol/protocolVersion` are served statelessly under **2026-07-28**:
+  `server/discover`, `tools/list`, `tools/call` and `ping`, with the required `MCP-Protocol-Version`,
+  `Mcp-Method` and (for `tools/call`) `Mcp-Name` headers checked against the body
+  (`400`, `-32020` on a mismatch; `-32022` for an unsupported version). An `initialize` request
+  selects the legacy flow (**2025-11-25**, also 2025-06-18 and 2025-03-26) without sessions.
+- **Plain JSON responses only**, no SSE stream: every request gets one `application/json` reply,
+  notifications get `202`, and `GET` or `DELETE` get `405`. One JSON-RPC message per request;
+  batches are rejected.
+- **Same limits as the chat:** read-only tools, public data only, the per-client rate limit applies
+  to `tools/call`. Unknown tools answer `-32602`; a failing or refusing tool answers with
+  `isError: true` and a safe message. Logs hold the method and tool name, never arguments.
+- **Public like the chat.** A request with an `Origin` header that is not an allowed frontend origin
+  is refused with `403` (protection against DNS rebinding). `/mcp` is a protocol endpoint, so it is
+  not under `/api/v1/` like the REST resources.
 
 ### 6. Frontend
 
@@ -111,6 +131,8 @@ the reply; it contains no business rules.
 
 - Easier: a demonstrable BON-2 with no new dependency, no cost and no personal data leaving the
   system; the provider can be replaced by one class.
+- MCP clients can use the same tools with their own model, at no Gemini cost; the hand-written
+  endpoint covers only the tool part of the protocol and must follow future spec revisions.
 - Harder: free-tier limits can make the live demo fail, so the fallback message and our own rate
   limit are part of the scope. Answer quality depends on the tool descriptions and needs manual
   testing of the example questions.
