@@ -11,7 +11,7 @@ import "./landing.css";
 /** The call to action band and the page footer. */
 export function Closing() {
   const { hasRole } = useAuth();
-  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup";
+  const bookingHref = hasRole("CUSTOMER") ? "/customer/new" : "/signup/customer";
 
   return (
     <>
@@ -51,7 +51,8 @@ export function Closing() {
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
             <Link href="/track" className="hover:text-foreground">Track a parcel</Link>
             <Link href="/login" className="hover:text-foreground">Sign in</Link>
-            <Link href="/signup" className="hover:text-foreground">Register</Link>
+            <Link href="/signup/customer" className="hover:text-foreground">Register</Link>
+            <Link href="/signup/merchant" className="hover:text-foreground">For Businesses</Link>
             {/* Temporary: quick links to every portal during development */}
             <Link href="/portals" className="rounded border border-dashed border-border px-1.5 hover:text-foreground">
               Developer portals

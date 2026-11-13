@@ -257,7 +257,7 @@ function LoginForm() {
           <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
-              href="/signup"
+              href="/signup/customer"
               className="font-semibold text-primary underline-offset-4 hover:underline"
             >
               Sign up

@@ -47,7 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         const publicPaths = ["/login", "/signup", "/track", "/"];
         const currentPath = window.location.pathname;
-        const isPublic = publicPaths.includes(currentPath) || currentPath.startsWith("/track");
+        const isPublic =
+          publicPaths.includes(currentPath) ||
+          currentPath.startsWith("/track") ||
+          currentPath.startsWith("/signup");
         if (!isPublic) {
           const targetUrl = new URL(`/login?expired=true&redirect=${encodeURIComponent(currentPath)}`, window.location.origin).href;
           window.location.assign(targetUrl);

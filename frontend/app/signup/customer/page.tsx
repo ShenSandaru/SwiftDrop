@@ -126,10 +126,10 @@ export default function SignupPage() {
     >
       <div className="space-y-4">
         <Link
-          href="/signup"
+          href="/login"
           className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors font-medium"
         >
-          &larr; Back to account selection
+          &larr; Back to sign in
         </Link>
 
         <AuthFormContainer>
