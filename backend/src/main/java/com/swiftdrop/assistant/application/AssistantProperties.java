@@ -19,7 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AssistantProperties(String apiKey, String model, String baseUrl, int maxToolCalls,
         int rateLimitPerMinute, Duration timeout) {
 
-    static final String DEFAULT_MODEL = "gemini-2.5-flash";
+    static final String DEFAULT_MODEL = "gemini-3.5-flash-lite";
     static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
     public AssistantProperties {
