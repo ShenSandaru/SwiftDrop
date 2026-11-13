@@ -469,7 +469,10 @@ whether springdoc and Actuator details are exposed outside local development.
   `track_parcel`, `estimate_fee` and `list_service_areas`, which use only the `api` packages of
   delivery and pricing and return public data. The API key and model come from the environment
   (`SWIFTDROP_GEMINI_API_KEY`, `SWIFTDROP_ASSISTANT_MODEL`); without a key the assistant answers
-  that it is unavailable. The server keeps no conversation state. An MCP endpoint is not built.
+  that it is unavailable. The server keeps no conversation state. The same three tools are exposed
+  to MCP clients at `POST /mcp` (hand-written, no dependency; MCP 2026-07-28 and the 2025
+  `initialize` flow; plain JSON responses; public, Origin-checked and rate limited). An MCP client's
+  own model does the reasoning, so these calls use no Gemini quota.
 
 ## 14. Open questions
 

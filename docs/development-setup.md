@@ -171,6 +171,14 @@ appears, pick a current Flash or Flash-Lite model from AI Studio. `HTTP 429` mea
 used up. The free tier may use prompts to improve Google products, so the assistant sends only
 public data (tracking status, prices, service areas), never names, phones or addresses.
 
+The same tools are available to MCP clients at `http://localhost:8080/mcp` while the backend runs;
+no key is needed, because the client's own model does the reasoning. In Claude Code:
+`claude mcp add --transport http swiftdrop http://localhost:8080/mcp`, then ask for example "Use
+swiftdrop to estimate 2 kg from Colombo to Kandy". To inspect the tools, run
+`npx @modelcontextprotocol/inspector` outside the repository, choose the Streamable HTTP transport
+and that URL, and connect through the Inspector's proxy (a direct browser connection is refused
+because its origin is not an allowed frontend origin).
+
 Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
 a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the
 admin and create, under **Hub Network**, one central hub (Colombo) and a branch hub for each
