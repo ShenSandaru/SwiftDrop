@@ -232,6 +232,54 @@ class WebhookSenderTest {
     }
 
     @Test
+    @DisplayName("The attempt limit counts the current series only: a manual series gets 8 attempts again")
+    void limitPerSeries() {
+        respond(Outcome.RESPONDED, 503, null);
+        UUID requestedBy = UUID.randomUUID();
+        // Series 1 started after 8 automatic attempts; this is its 3rd attempt (attempt 11 overall)
+        when(delivery.getAttempts()).thenReturn(10);
+        when(delivery.getSeriesStartAttempts()).thenReturn(8);
+        when(delivery.getManualRedeliveries()).thenReturn(1);
+        when(delivery.getSeriesTriggeredBy()).thenReturn(requestedBy);
+
+        sender(NO_JITTER).send(delivery, token);
+
+        // 3rd attempt of the series: backoff 30 s × 2² = 120 s, not the overall attempt 11's cap
+        verifyFinished(WebhookDeliveryStatus.PENDING, 1, NOW.plusSeconds(120), null, WebhookAttemptOutcome.HTTP_ERROR,
+                503);
+        MerchantWebhookAttempt attempt = savedAttempt();
+        assertThat(attempt.getAttemptNumber()).isEqualTo(11);
+        assertThat(attempt.getSeries()).isEqualTo(1);
+        assertThat(attempt.getTriggeredByUserId()).isEqualTo(requestedBy);
+    }
+
+    @Test
+    @DisplayName("The 8th attempt of a manual series fails the record")
+    void limitReachedInManualSeries() {
+        respond(Outcome.RESPONDED, 503, null);
+        when(delivery.getAttempts()).thenReturn(15);
+        when(delivery.getSeriesStartAttempts()).thenReturn(8);
+        when(delivery.getManualRedeliveries()).thenReturn(1);
+
+        sender(NO_JITTER).send(delivery, token);
+
+        verifyFinished(WebhookDeliveryStatus.FAILED, 1, NOW.minusSeconds(5), NOW, WebhookAttemptOutcome.HTTP_ERROR, 503);
+        assertThat(savedAttempt().getAttemptNumber()).isEqualTo(16);
+    }
+
+    @Test
+    @DisplayName("Automatic attempts are series 0 without a requesting user")
+    void automaticSeries() {
+        respond(Outcome.RESPONDED, 200, null);
+
+        sender(NO_JITTER).send(delivery, token);
+
+        MerchantWebhookAttempt attempt = savedAttempt();
+        assertThat(attempt.getSeries()).isZero();
+        assertThat(attempt.getTriggeredByUserId()).isNull();
+    }
+
+    @Test
     @DisplayName("Retry-After in seconds or as an HTTP-date is honored up to the 1 h cap; invalid or past values are ignored")
     void retryAfter() {
         WebhookSender sender = sender(NO_JITTER);

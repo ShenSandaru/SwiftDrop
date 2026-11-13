@@ -158,9 +158,13 @@ public class WebhookSender {
         Instant completedAt = now;
         if (outcome == WebhookAttemptOutcome.SUCCEEDED) {
             status = WebhookDeliveryStatus.SUCCEEDED;
-        } else if (result != null && isRetryable(result) && attemptNumber < properties.maxAttempts()) {
+        } else if (result != null && isRetryable(result)
+                && attemptNumber - delivery.getSeriesStartAttempts() < properties.maxAttempts()) {
+            // The limit applies per series: a manual redelivery starts a new series (ADR 0004 §7.5)
             status = WebhookDeliveryStatus.PENDING;
-            nextAttemptAt = now.plus(nextDelay(attemptNumber, result.retryAfter(), now));
+            // Backoff restarts with each series, like the limit
+            nextAttemptAt = now.plus(nextDelay(attemptNumber - delivery.getSeriesStartAttempts(), result.retryAfter(),
+                    now));
             completedAt = null;
         } else {
             status = WebhookDeliveryStatus.FAILED;
@@ -174,8 +178,10 @@ public class WebhookSender {
             if (updated == 0) {
                 return false;
             }
-            attempts.save(new MerchantWebhookAttempt(delivery.getId(), attemptNumber, now, outcome, httpStatus,
-                    (int) Math.min(duration.toMillis(), Integer.MAX_VALUE), null));
+            int series = delivery.getManualRedeliveries();
+            attempts.save(new MerchantWebhookAttempt(delivery.getId(), attemptNumber, series, now, outcome, httpStatus,
+                    (int) Math.min(duration.toMillis(), Integer.MAX_VALUE),
+                    series == 0 ? null : delivery.getSeriesTriggeredBy()));
             return true;
         });
         if (!Boolean.TRUE.equals(stored)) {
