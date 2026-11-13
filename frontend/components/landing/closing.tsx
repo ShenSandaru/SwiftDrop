@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
@@ -53,9 +53,12 @@ export function Closing() {
             <Link href="/login" className="hover:text-foreground">Sign in</Link>
             <Link href="/signup/customer" className="hover:text-foreground">Register</Link>
             <Link href="/signup/merchant" className="hover:text-foreground">For Businesses</Link>
-            {/* Temporary: quick links to every portal during development */}
-            <Link href="/portals" className="rounded border border-dashed border-border px-1.5 hover:text-foreground">
-              Developer portals
+            <Link
+              href="/portals"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-accent px-2.5 py-0.5 text-xs font-semibold text-primary hover:border-primary/40 hover:bg-primary/10 transition-colors"
+            >
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
+              Staff Login
             </Link>
           </nav>
         </div>
