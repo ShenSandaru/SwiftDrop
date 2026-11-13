@@ -55,7 +55,10 @@ class GeminiLlmClient implements LlmClient {
                     .body(JSON_OBJECT);
         } catch (RestClientResponseException e) {
             HttpStatusCode status = e.getStatusCode();
-            throw new LlmUnavailableException("Gemini answered HTTP " + status.value(), e);
+            // The model name is not a secret, and it shows at once when the setting was not picked up
+            String hint = status.value() == 404 ? " (is SWIFTDROP_ASSISTANT_MODEL a model your key can use?)" : "";
+            throw new LlmUnavailableException("Gemini answered HTTP " + status.value()
+                    + " for model " + properties.model() + hint, e);
         } catch (RestClientException e) {
             throw new LlmUnavailableException("Gemini request failed: " + e.getClass().getSimpleName(), e);
         }

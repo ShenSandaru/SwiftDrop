@@ -138,7 +138,17 @@ class GeminiLlmClientTest {
 
         assertThatThrownBy(() -> client.generate("p", question(), List.of()))
                 .isInstanceOf(LlmUnavailableException.class)
-                .hasMessage("Gemini answered HTTP 429");
+                .hasMessage("Gemini answered HTTP 429 for model test-model");
+    }
+
+    @Test
+    void hintsAtTheModelSettingWhenGeminiDoesNotKnowTheModel() {
+        server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatThrownBy(() -> client.generate("p", question(), List.of()))
+                .isInstanceOf(LlmUnavailableException.class)
+                .hasMessageContaining("HTTP 404 for model test-model")
+                .hasMessageContaining("SWIFTDROP_ASSISTANT_MODEL");
     }
 
     @Test
