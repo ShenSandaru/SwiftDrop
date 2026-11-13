@@ -53,7 +53,10 @@ to the model provider.
 
 - **Gemini API, free tier**, using a Flash-class model with function calling. The model name is an
   environment variable (`SWIFTDROP_ASSISTANT_MODEL`), because Google renames and retires models.
-  Current model names and free-tier limits are verified when the code is written.
+  The default is `gemini-3.5-flash-lite`: `gemini-2.5-flash` returned 404 for a new key in
+  November 2026 although the API listed it, because Google limits older models to accounts that
+  already used them. Gemini 3 models need the `thoughtSignature` of a tool call sent back with its
+  result, so the client keeps and returns it.
 - Called with Spring's `RestClient` against the `generateContent` REST endpoint. No SDK and no new
   dependency.
 - The provider sits behind an `LlmClient` interface with one `GeminiLlmClient`. Tests use a fake
@@ -75,7 +78,10 @@ to the model provider.
 - Logs contain the tool name, duration and outcome only, never the message text, tracking numbers
   or the key.
 - The system prompt tells the model to answer only about SwiftDrop parcels and prices, to use the
-  tools for facts instead of guessing, and to say so when it cannot find something.
+  tools for facts instead of guessing, and to say so when it cannot find something. It also holds
+  about a dozen plain-text facts on how to book, track and cancel a parcel and on delivery
+  attempts, so "how do I send a parcel?" has an answer. This is prompt text, not retrieval (RAG);
+  it must be updated when those flows change. Delivery times are not stated because no rule exists.
 
 ### 5. MCP (optional, after the chat works)
 
