@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -112,6 +113,24 @@ class GoogleSignInServiceTest {
         when(identities.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("uq"));
 
         assertRejected(new GoogleIdentity(SUBJECT, "alice@example.com", true, "Alice"), Reason.CONFLICT);
+    }
+
+    @Test
+    void nonCustomerLinkedAccountIsRejectedWithRoleNotPermitted() {
+        for (Role role : List.of(Role.MERCHANT, Role.COURIER, Role.DISPATCHER, Role.ADMIN)) {
+            User staffOrMerchant = linkedUser(role);
+            assertRejected(new GoogleIdentity(SUBJECT, "alice@example.com", true, "Alice"), Reason.ROLE_NOT_PERMITTED);
+        }
+    }
+
+    @Test
+    void accountWithCustomerAndOtherRoleIsRejectedWithRoleNotPermitted() {
+        User dualRoleUser = withId(new User("alice@example.com", null, "Alice", Set.of(Role.CUSTOMER, Role.ADMIN)));
+        when(identities.findByProviderAndSubject(IdentityProvider.GOOGLE, SUBJECT))
+                .thenReturn(Optional.of(new ExternalIdentity(IdentityProvider.GOOGLE, SUBJECT, dualRoleUser.getId())));
+        when(users.findById(dualRoleUser.getId())).thenReturn(Optional.of(dualRoleUser));
+
+        assertRejected(new GoogleIdentity(SUBJECT, "alice@example.com", true, "Alice"), Reason.ROLE_NOT_PERMITTED);
     }
 
     @Test

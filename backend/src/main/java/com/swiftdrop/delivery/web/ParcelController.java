@@ -57,7 +57,8 @@ class ParcelController {
     @PreAuthorize("hasRole('CUSTOMER')")
     ResponseEntity<ParcelCreatedResponse> create(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateParcelRequest request) {
-        Parcel parcel = booking.bookForCustomer(Callers.userId(jwt), request.toBooking());
+        UUID callerId = Callers.userId(jwt);
+        Parcel parcel = booking.bookForCustomer(callerId, request.toBooking());
         return ResponseEntity.created(URI.create("/api/v1/parcels/" + parcel.getId()))
                 .body(ParcelCreatedResponse.from(parcel));
     }

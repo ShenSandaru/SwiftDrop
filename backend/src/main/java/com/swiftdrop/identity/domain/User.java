@@ -42,6 +42,9 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -89,6 +92,34 @@ public class User {
 
     public String getFullName() {
         return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = Objects.requireNonNull(fullName, "fullName").trim();
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber == null ? null : phoneNumber.trim();
+    }
+
+    /**
+     * Customer accounts are considered complete when they have a human name
+     * (not empty, and not defaulting to their email address) and a contact phone number.
+     * Non-customer accounts (e.g. admin or staff) are always considered complete.
+     */
+    public boolean isProfileCompleted() {
+        if (!roles.contains(Role.CUSTOMER)) {
+            return true;
+        }
+        return fullName != null
+                && !fullName.isBlank()
+                && !fullName.trim().equalsIgnoreCase(email.trim())
+                && phoneNumber != null
+                && !phoneNumber.isBlank();
     }
 
     public boolean isEnabled() {
