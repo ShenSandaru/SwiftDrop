@@ -72,7 +72,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class
 })
 class ParcelApiTest {
 
@@ -150,6 +151,42 @@ class ParcelApiTest {
                         .content(bookingJson("0771234567", 30_001)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.invalidFields", contains("dropoff.phone", "pickup.phone", "weightGrams")))
+                .andExpect(jsonPath("$.detail").value("Invalid request"));
+        verify(booking, never()).bookForCustomer(any(), any());
+    }
+
+    @Test
+    void customerWithoutAccountPhoneNumberCanCreateParcel() throws Exception {
+        when(booking.bookForCustomer(eq(CUSTOMER_ID), any())).thenReturn(parcel);
+
+        mvc.perform(post("/api/v1/parcels").with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bookingJson("+94771234567", 2000)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.trackingNumber").value("SD7K3M9Q2XWB"))
+                .andExpect(jsonPath("$.status").value("CREATED"));
+
+        verify(booking).bookForCustomer(eq(CUSTOMER_ID), any());
+    }
+
+    @Test
+    void invalidPickupPhoneIsRejectedWhileDropoffIsValid() throws Exception {
+        mvc.perform(post("/api/v1/parcels").with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bookingJson("0771234567", "+94779876543", 2000)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.invalidFields", contains("pickup.phone")))
+                .andExpect(jsonPath("$.detail").value("Invalid request"));
+        verify(booking, never()).bookForCustomer(any(), any());
+    }
+
+    @Test
+    void invalidDropoffPhoneIsRejectedWhilePickupIsValid() throws Exception {
+        mvc.perform(post("/api/v1/parcels").with(TestPrincipal.customer(CUSTOMER_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bookingJson("+94771234567", "invalid-phone", 2000)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.invalidFields", contains("dropoff.phone")))
                 .andExpect(jsonPath("$.detail").value("Invalid request"));
         verify(booking, never()).bookForCustomer(any(), any());
     }
@@ -261,9 +298,15 @@ class ParcelApiTest {
     }
 
     private static String bookingJson(String phone, int weightGrams) {
-        String address = "{\"contactName\":\"Nimal Perera\",\"phone\":\"" + phone + "\",\"line1\":\"12 Temple Rd\","
+        return bookingJson(phone, phone, weightGrams);
+    }
+
+    private static String bookingJson(String pickupPhone, String dropoffPhone, int weightGrams) {
+        String pickup = "{\"contactName\":\"Nimal Perera\",\"phone\":\"" + pickupPhone + "\",\"line1\":\"12 Temple Rd\","
                 + "\"city\":\"Colombo\",\"zoneId\":\"" + ZONE + "\"}";
-        return "{\"pickup\":" + address + ",\"dropoff\":" + address + ",\"size\":\"MEDIUM\",\"weightGrams\":"
+        String dropoff = "{\"contactName\":\"Sunil Silva\",\"phone\":\"" + dropoffPhone + "\",\"line1\":\"45 Galle Rd\","
+                + "\"city\":\"Colombo\",\"zoneId\":\"" + ZONE + "\"}";
+        return "{\"pickup\":" + pickup + ",\"dropoff\":" + dropoff + ",\"size\":\"MEDIUM\",\"weightGrams\":"
                 + weightGrams + ",\"description\":\"Books\"}";
     }
 }

@@ -154,12 +154,17 @@ export function NavHeader() {
   ) : (
     <>
       <Link href="/login" onClick={close} className={linkClass("/login")}>Sign In</Link>
-      <Link href="/signup" onClick={close}
+      <Link href="/signup/customer" onClick={close}
         className="shrink-0 whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
         Register
       </Link>
     </>
   );
+
+  // Do not render the main website navbar on authentication routes (e.g. /login, /signup/customer)
+  if (pathname === "/login" || pathname.startsWith("/signup")) {
+    return null;
+  }
 
   return (
     // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit. The 3.5rem pill

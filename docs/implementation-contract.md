@@ -508,7 +508,7 @@ team approval recorded in `architecture.md` is enough.
 | D-29 | Shared consumer helper | `shared.messaging` technical helper (§8.5) | No (fits ADR 0003 `shared` rule; confirm) | SD-503 |
 | D-30 | Containerization | Backend and frontend Dockerfiles; app services in `compose.yaml` under a Compose profile `app` so `docker compose up -d` keeps starting only infrastructure | Approval (infra change) | SD-801–803 |
 | D-31 | Frontend test tooling | None beyond lint/build unless the team wants Playwright for the demo flows (new dependency) | Approval | — |
-| D-32 | Bonuses BON-1 / BON-2 | Not planned; each needs its own ADR | Yes | SD-911 |
+| D-32 | Bonuses BON-1 / BON-2 | BON-1 not planned (own ADR). BON-2: AI assistant in [ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md) (Proposed, implemented) | BON-1 yes; BON-2 ADR review | SD-911 |
 
 ## 12. Implementation status: delivery and live tracking
 

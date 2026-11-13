@@ -204,10 +204,10 @@ export default function MerchantSignupPage() {
         {/* Navigation & Step Indicator Header */}
         <div className="flex items-center justify-between">
           <Link
-            href="/signup"
+            href="/"
             className="text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
           >
-            &larr; Back to account selection
+            &larr; Back to home
           </Link>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-xs font-semibold uppercase tracking-wider text-primary">
             <span className="size-1.5 rounded-full bg-primary" />

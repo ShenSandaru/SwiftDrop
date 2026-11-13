@@ -1,125 +1,134 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { Truck, Warehouse, ShieldCheck, ArrowRight, Lock } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const PORTALS = [
-  {
-    title: "Customer Portal",
-    role: "CUSTOMER",
-    description: "Book parcel pickups, manage delivery addresses, and view order history.",
-    href: "/customer",
-    action: "Access Customer Portal",
-  },
-  {
-    title: "Merchant Portal",
-    role: "MERCHANT",
-    description: "Bulk shipment booking, cash on delivery (COD) settlements, and store integration.",
-    href: "/merchant",
-    action: "Access Merchant Portal",
-  },
-  {
-    title: "Courier Portal",
-    role: "COURIER",
-    description: "Assigned delivery runs, optimized routes, and digital proof of delivery.",
-    href: "/courier",
-    action: "Access Courier Portal",
-  },
-  {
-    title: "Dispatcher Portal",
-    role: "DISPATCHER",
-    description: "Fleet tracking, parcel assignment, route monitoring, and exception handling.",
-    href: "/dispatch",
-    action: "Access Dispatch Portal",
-  },
-  {
-    title: "Admin Portal",
-    role: "ADMIN",
-    description: "User management, staff onboarding, delivery zone setup, and system configuration.",
-    href: "/admin",
-    action: "Access Admin Portal",
-  },
-];
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "cn";
 
 export const metadata: Metadata = {
-  title: "Portals & Workspaces · SwiftDrop",
+  title: "Staff Operations Portal · SwiftDrop",
+  description: "Secure workspace sign-in for SwiftDrop couriers, dispatchers, and system administrators.",
   robots: { index: false },
 };
 
+interface StaffPortalCard {
+  id: string;
+  role: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  href: string;
+  icon: typeof Truck;
+  tagColor: string;
+}
+
+const STAFF_PORTALS: StaffPortalCard[] = [
+  {
+    id: "courier",
+    role: "COURIER WORKSPACE",
+    title: "Courier Portal",
+    description: "Access your assigned deliveries, manage delivery progress, and update parcel statuses.",
+    ctaText: "Courier Login",
+    href: "/login?redirect=/courier",
+    icon: Truck,
+    tagColor: "border-primary/20 bg-accent text-primary",
+  },
+  {
+    id: "dispatcher",
+    role: "DISPATCH WORKSPACE",
+    title: "Dispatcher Portal",
+    description: "Coordinate delivery operations, manage parcel assignments, and monitor courier activities.",
+    ctaText: "Dispatcher Login",
+    href: "/login?redirect=/dispatch",
+    icon: Warehouse,
+    tagColor: "border-primary/20 bg-accent text-primary",
+  },
+  {
+    id: "admin",
+    role: "SYSTEM ADMIN",
+    title: "Admin Portal",
+    description: "Manage users, merchants, delivery operations, and SwiftDrop platform settings.",
+    ctaText: "Admin Login",
+    href: "/login?redirect=/admin",
+    icon: ShieldCheck,
+    tagColor: "border-primary/20 bg-accent text-primary",
+  },
+];
+
 /**
- * Temporary development page: quick links to every role portal while the portals are being built.
- * Remove it (and the footer link on the landing page) before the final release.
+ * Dedicated SwiftDrop Staff Portal selection page.
+ * Allows authorized Couriers, Dispatchers, and Administrators to select their operational
+ * workspace and navigate to the corresponding role-specific login view.
  */
 export default function PortalsPage() {
   return (
-    <main className="container mx-auto flex-1 px-4 py-12 md:py-16 space-y-12 max-w-6xl">
-      <p className="mx-auto w-fit rounded-full border border-dashed border-primary/40 bg-accent px-3 py-1 text-xs font-semibold text-primary">
-        Temporary page for development
-      </p>
-      {/* Role Portals Grid */}
-      <section className="space-y-6">
-        <div className="text-center space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Portals & Workspaces</h2>
-          <p className="text-sm text-muted-foreground">
-            Role-specific workspaces for participants across the logistics lifecycle.
-          </p>
+    <main className="container mx-auto flex-1 px-4 py-12 md:py-20 max-w-6xl space-y-12 sm:space-y-16">
+      {/* Header section */}
+      <section className="text-center space-y-4 max-w-2xl mx-auto">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
+          <ShieldCheck className="size-3.5" aria-hidden="true" />
+          Authorized Operations
         </div>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-foreground">
+          SwiftDrop Staff Portal
+        </h1>
+        <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+          Welcome to the SwiftDrop Operations Portal. Select your workspace to securely access your account.
+        </p>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {PORTALS.map((portal) => (
+      {/* Staff Workspace Cards Grid */}
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8" aria-label="Staff Workspaces">
+        {STAFF_PORTALS.map((portal) => {
+          const Icon = portal.icon;
+          return (
             <Card
-              key={portal.href}
-              className="flex flex-col justify-between rounded-xl bg-card border-border shadow-xs hover:border-primary/40 hover:shadow-sm transition-all duration-200"
+              key={portal.id}
+              className="group flex flex-col justify-between rounded-2xl border border-border bg-card shadow-sm hover:border-primary/40 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
             >
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base font-bold text-foreground">{portal.title}</CardTitle>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent text-primary border border-primary/20 uppercase tracking-wider">
+              <CardHeader className="space-y-4 p-6 sm:p-7">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
+                    <Icon className="size-6" aria-hidden="true" />
+                  </div>
+                  <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded-full border uppercase tracking-wider", portal.tagColor)}>
                     {portal.role}
                   </span>
                 </div>
-                <CardDescription className="text-sm text-muted-foreground">
-                  {portal.description}
-                </CardDescription>
+                <div className="space-y-2">
+                  <CardTitle className="text-xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">
+                    {portal.title}
+                  </CardTitle>
+                  <CardDescription className="text-sm text-muted-foreground leading-relaxed">
+                    {portal.description}
+                  </CardDescription>
+                </div>
               </CardHeader>
-              <CardContent className="pt-0">
+
+              <CardFooter className="p-6 sm:p-7 pt-0">
                 <Link
                   href={portal.href}
-                  className={
-                    buttonVariants({ variant: "outline", size: "sm" }) +
-                    " w-full font-medium hover:border-primary hover:text-primary transition-colors"
-                  }
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "w-full h-11 justify-between font-semibold border-border bg-background hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-200"
+                  )}
                 >
-                  {portal.action}
+                  <span>{portal.ctaText}</span>
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
-              </CardContent>
+              </CardFooter>
             </Card>
-          ))}
-          {/* Public Tracking Card */}
-          <Card className="flex flex-col justify-between rounded-xl bg-card border-primary/20 shadow-xs hover:border-primary/40 hover:shadow-sm transition-all duration-200">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base font-bold text-foreground">Public Tracking</CardTitle>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground uppercase tracking-wider">
-                  PUBLIC
-                </span>
-              </div>
-              <CardDescription className="text-sm text-muted-foreground">
-                Track shipments in real time without creating an account or signing in.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <Link
-                href="/track"
-                className={
-                  buttonVariants({ variant: "default", size: "sm" }) +
-                  " w-full font-semibold shadow-xs"
-                }
-              >
-                Go to Tracking Page
-              </Link>
-            </CardContent>
-          </Card>
+          );
+        })}
+      </section>
+
+      {/* Security notice footer */}
+      <section className="mx-auto max-w-xl text-center">
+        <div className="inline-flex items-center gap-2 rounded-xl border border-border/80 bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+          <Lock className="size-4 text-primary shrink-0" aria-hidden="true" />
+          <span>
+            This portal is restricted to authorized SwiftDrop logistics personnel. All login attempts and operations are audited.
+          </span>
         </div>
       </section>
     </main>

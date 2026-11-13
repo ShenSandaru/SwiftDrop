@@ -18,6 +18,8 @@ export interface UserResponse {
   fullName: string;
   roles: string[];
   enabled: boolean;
+  phoneNumber?: string | null;
+  profileCompleted?: boolean;
 }
 
 export interface PageResponse<T> {
