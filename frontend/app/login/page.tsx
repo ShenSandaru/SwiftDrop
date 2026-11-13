@@ -6,9 +6,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, formatApiError, getApiBaseUrl, type AccessTokenResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AuthLayout,
+  AuthBrandingPanel,
+  AuthFormContainer,
+  AuthHeader,
+  AuthDivider,
+  SocialLoginButton,
+  PasswordInput,
+} from "@/components/auth";
 
 /**
  * Validates and sanitizes a post-login redirect path to prevent open redirect vulnerabilities.
@@ -139,23 +147,37 @@ function LoginForm() {
     }
   }
 
-  return (
-    <Card className="w-full max-w-md rounded-xl bg-card border-border shadow-xs">
-      <CardHeader className="space-y-1 text-center">
-        <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2 text-xs font-semibold uppercase tracking-wider text-primary">
-          <span className="size-1.5 rounded-full bg-primary" />
-          SwiftDrop Account
-        </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-          Welcome back
-        </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Sign in to access your parcel deliveries and workspaces.
-        </CardDescription>
-      </CardHeader>
+  function handleGoogleSignIn() {
+    if (typeof window !== "undefined") {
+      const rawRedirect = searchParams.get("redirect");
+      const targetPath = sanitizeRedirectTarget(rawRedirect);
+      if (targetPath && targetPath !== "/" && targetPath !== "/login") {
+        window.sessionStorage.setItem("swiftdrop_auth_redirect", targetPath);
+      } else {
+        window.sessionStorage.removeItem("swiftdrop_auth_redirect");
+      }
+    }
+    const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
+    window.location.assign(target);
+  }
 
-      <form onSubmit={handleSubmit} noValidate>
-        <CardContent className="space-y-4">
+  return (
+    <AuthLayout
+      branding={
+        <AuthBrandingPanel
+          headline="From your door to anywhere on the island."
+          description="Book in a minute. Track every stop. Delivered with proof."
+        />
+      }
+    >
+      <AuthFormContainer>
+        <AuthHeader
+          badge="SwiftDrop Account"
+          title="Welcome back"
+          description="Sign in to access your parcel deliveries and workspaces."
+        />
+
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {registered && (
             <div
               role="status"
@@ -194,7 +216,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               required
-              className="bg-background text-sm"
+              className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
             />
           </div>
 
@@ -202,60 +224,37 @@ function LoginForm() {
             <div className="flex items-center justify-between">
               <Label htmlFor="login-password">Password</Label>
             </div>
-            <Input
+            <PasswordInput
               id="login-password"
-              type="password"
               autoComplete="current-password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
               required
-              className="bg-background text-sm"
             />
           </div>
 
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full font-semibold shadow-xs mt-2"
+            className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-[#0c5f59] hover:shadow-[0_8px_20px_-4px_rgba(15,118,110,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none cursor-pointer mt-2"
           >
             {isLoading ? "Signing in..." : "Sign in"}
           </Button>
 
           {isGoogleLoginEnabled && (
-            <div className="pt-2">
-              <div className="relative flex items-center justify-center my-3 text-xs uppercase text-muted-foreground">
-                <span className="w-full border-t border-border" />
-                <span className="bg-card px-2">or</span>
-                <span className="w-full border-t border-border" />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full font-medium"
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    const rawRedirect = searchParams.get("redirect");
-                    const targetPath = sanitizeRedirectTarget(rawRedirect);
-                    if (targetPath && targetPath !== "/" && targetPath !== "/login") {
-                      window.sessionStorage.setItem("swiftdrop_auth_redirect", targetPath);
-                    } else {
-                      window.sessionStorage.removeItem("swiftdrop_auth_redirect");
-                    }
-                  }
-                  const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
-                  window.location.assign(target);
-                }}
-              >
-                Sign in with Google
-              </Button>
+            <div className="pt-1">
+              <AuthDivider text="or" />
+              <SocialLoginButton
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                label="Sign in with Google"
+              />
             </div>
           )}
-        </CardContent>
 
-        <CardFooter className="flex flex-col gap-2 pt-2 border-t border-border/60 text-center text-xs text-muted-foreground">
-          <p>
+          <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
               href="/signup"
@@ -263,19 +262,23 @@ function LoginForm() {
             >
               Sign up
             </Link>
-          </p>
-        </CardFooter>
-      </form>
-    </Card>
+          </div>
+        </form>
+      </AuthFormContainer>
+    </AuthLayout>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="container mx-auto flex-1 flex items-center justify-center px-4 py-12 min-h-[calc(100vh-3.5rem)]">
-      <Suspense fallback={<div className="h-96 w-full max-w-md animate-pulse rounded-xl bg-card border border-border" />}>
-        <LoginForm />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center min-h-screen">
+          <div className="h-96 w-full max-w-md animate-pulse rounded-2xl bg-card border border-border" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

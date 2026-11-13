@@ -161,6 +161,11 @@ export function NavHeader() {
     </>
   );
 
+  // Do not render the main website navbar on authentication routes (e.g. /login, /signup/customer)
+  if (pathname === "/login" || pathname.startsWith("/signup")) {
+    return null;
+  }
+
   return (
     // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit. The 3.5rem pill
     // sits 0.5rem from the top and overhangs the slot slightly; pages start with more padding than that
