@@ -13,8 +13,11 @@ import {
   AuthBrandingPanel,
   AuthFormContainer,
   AuthHeader,
+  AuthDivider,
+  SocialLoginButton,
   PasswordInput,
 } from "@/components/auth";
+import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_PASSWORD_BYTES = 72;
@@ -30,6 +33,12 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isConflict, setIsConflict] = useState(false);
+
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled();
+
+  function handleGoogleSignIn() {
+    initiateGoogleAuth("/customer");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -138,6 +147,18 @@ export default function SignupPage() {
             title="Create an account"
             description="Get started with SwiftDrop parcel bookings and live delivery tracking."
           />
+
+          {isGoogleLoginEnabled && (
+            <div className="space-y-4">
+              <SocialLoginButton
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                label="Continue with Google"
+              />
+
+              <AuthDivider text="or register with email" />
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {errorMessage && (

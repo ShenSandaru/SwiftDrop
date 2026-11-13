@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, Package, Receipt, Ticket as TicketIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Package, Receipt, Ticket as TicketIcon } from "lucide-react";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { RouteHeading } from "@/components/delivery/route-heading";
 import { Ticket } from "@/components/delivery/ticket";
 import { SIZE_LABELS, formatMoney, formatWeight } from "@/components/delivery/format";
 import { ApiError, formatApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import {
   MAX_WEIGHT_GRAMS,
   PARCEL_SIZES,
@@ -34,6 +35,7 @@ const SIZE_BOXES: Record<ParcelSize, { box: string; hint: string }> = {
 };
 
 export default function BookDeliveryPage() {
+  const { user } = useAuth();
   const [zones, setZones] = useState<Zone[]>([]);
   const [pricingMissing, setPricingMissing] = useState(false);
   const [pickup, setPickup] = useState<AddressInput>(EMPTY_ADDRESS);
@@ -124,6 +126,32 @@ export default function BookDeliveryPage() {
   return (
     <form onSubmit={confirm} className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="space-y-6">
+        {user && user.profileCompleted === false && (
+          <div
+            role="status"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-xs"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-primary" />
+              <div className="space-y-0.5 text-sm">
+                <p className="font-semibold text-foreground">Tip: Complete your customer profile</p>
+                <p className="text-xs text-muted-foreground">
+                  Add your contact phone number to your profile for streamlined parcel tracking and recipient handovers.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/customer/profile"
+              className={cn(
+                buttonVariants({ size: "sm", variant: "outline" }),
+                "shrink-0 self-start sm:self-auto font-medium"
+              )}
+            >
+              Update Profile &rarr;
+            </Link>
+          </div>
+        )}
+
         {pricingMissing && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
             Pricing isn&apos;t available yet, so zones and estimates can&apos;t be loaded. The fee is calculated when

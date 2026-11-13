@@ -3,8 +3,10 @@
 import React, { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, formatApiError, getApiBaseUrl, type AccessTokenResponse } from "@/lib/api";
+import { api, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
+import { getPostAuthRedirect, sanitizeRedirectTarget } from "@/lib/role-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,49 +19,6 @@ import {
   SocialLoginButton,
   PasswordInput,
 } from "@/components/auth";
-
-/**
- * Validates and sanitizes a post-login redirect path to prevent open redirect vulnerabilities.
- * Accepts only safe relative paths starting with a single '/' (e.g. "/customer", "/track?code=123").
- * Rejects protocol-relative URLs ('//'), backslash tricks ('/\'), scheme prefixes ('https:', 'javascript:'),
- * and control characters, falling back to the default home path.
- */
-function sanitizeRedirectTarget(target: string | null | undefined): string {
-  if (!target || typeof target !== "string") {
-    return "/";
-  }
-
-  const trimmed = target.trim();
-
-  if (trimmed === "/") {
-    return "/";
-  }
-
-  // Must begin with a single '/' and not be followed by '/' or '\'
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
-    return "/";
-  }
-
-  // Reject CRLF or control characters
-  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
-    return "/";
-  }
-
-  try {
-    const parsed = new URL(trimmed, "http://localhost");
-    // Ensure the host authority was not parsed, origin remains unchanged, and destination is not a login loop
-    if (
-      parsed.origin !== "http://localhost" ||
-      !parsed.pathname.startsWith("/") ||
-      parsed.pathname === "/login"
-    ) {
-      return "/";
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return "/";
-  }
-}
 
 function LoginForm() {
   const router = useRouter();
@@ -76,7 +35,7 @@ function LoginForm() {
   const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
 
   // Google button is enabled only when explicitly configured via environment flag (AC-2)
-  const isGoogleLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true";
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -106,37 +65,9 @@ function LoginForm() {
       await login(response.accessToken);
 
       try {
-        const currentUser = await api.get<{ roles?: string[] }>("/api/v1/users/me", { token: response.accessToken });
-        if (currentUser.roles?.includes("MERCHANT")) {
-          try {
-            const statusRes = await api.get<{ status: string }>("/api/v1/merchants/me", { token: response.accessToken });
-            if (statusRes.status === "APPROVED") {
-              router.push(redirectTarget === "/" ? "/merchant" : redirectTarget);
-            } else {
-              router.push("/merchant/status");
-            }
-            return;
-          } catch {
-            router.push("/merchant/status");
-            return;
-          }
-        } else if (currentUser.roles?.includes("ADMIN")) {
-          router.push(redirectTarget === "/" ? "/admin" : redirectTarget);
-          return;
-        } else if (currentUser.roles?.includes("DISPATCHER")) {
-          const safeTarget =
-            redirectTarget === "/" || redirectTarget.startsWith("/admin")
-              ? "/dispatch"
-              : redirectTarget;
-          router.push(safeTarget);
-          return;
-        } else if (currentUser.roles?.includes("COURIER")) {
-          router.push(redirectTarget === "/" ? "/courier" : redirectTarget);
-          return;
-        } else {
-          router.push(redirectTarget === "/" ? "/customer" : redirectTarget);
-          return;
-        }
+        const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
+        const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
+        router.push(destination);
       } catch {
         router.push(redirectTarget);
       }
@@ -148,17 +79,7 @@ function LoginForm() {
   }
 
   function handleGoogleSignIn() {
-    if (typeof window !== "undefined") {
-      const rawRedirect = searchParams.get("redirect");
-      const targetPath = sanitizeRedirectTarget(rawRedirect);
-      if (targetPath && targetPath !== "/" && targetPath !== "/login") {
-        window.sessionStorage.setItem("swiftdrop_auth_redirect", targetPath);
-      } else {
-        window.sessionStorage.removeItem("swiftdrop_auth_redirect");
-      }
-    }
-    const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
-    window.location.assign(target);
+    initiateGoogleAuth(searchParams.get("redirect"));
   }
 
   return (

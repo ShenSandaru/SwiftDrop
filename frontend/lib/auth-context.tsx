@@ -12,6 +12,7 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   hasRole: (role: string) => boolean;
 }
 
@@ -114,6 +115,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const refreshUser = useCallback(async () => {
+    const currentToken =
+      token || (typeof window !== "undefined" ? window.sessionStorage.getItem(TOKEN_STORAGE_KEY) : null);
+    if (currentToken) {
+      await loadCurrentUser(currentToken);
+    }
+  }, [token, loadCurrentUser]);
+
   const hasRole = useCallback(
     (role: string): boolean => {
       return Boolean(user?.roles?.includes(role));
@@ -130,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: Boolean(user && token),
         login,
         logout,
+        refreshUser,
         hasRole,
       }}
     >
