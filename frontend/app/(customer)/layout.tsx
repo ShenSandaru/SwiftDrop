@@ -6,7 +6,7 @@ const CUSTOMER_NAV: PortalNavItem[] = [
   { href: "/customer", label: "Overview", exact: true },
   { href: "/customer/new", label: "Book Delivery", exact: true },
   { href: "/customer/history", label: "Delivery History", exact: true },
-  { href: "/customer/profile", label: "Profile", exact: true },
+  { href: "/profile", label: "My Profile" },
 ];
 
 export default function CustomerPortalLayout({ children }: { children: React.ReactNode }) {

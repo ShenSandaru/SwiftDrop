@@ -16,10 +16,62 @@ export interface UserResponse {
   id: string;
   email: string;
   fullName: string;
+  phoneNumber?: string | null;
   roles: string[];
   enabled: boolean;
-  phoneNumber?: string | null;
+  hasAvatar?: boolean;
+  avatarUpdatedAt?: string;
+  createdAt?: string;
   profileCompleted?: boolean;
+}
+
+export function getUserAvatarUrl(userId: string, avatarUpdatedAt?: string): string {
+  const baseUrl = getApiBaseUrl().replace(/\/+$/, "");
+  const versionParam = avatarUpdatedAt ? `?v=${encodeURIComponent(avatarUpdatedAt)}` : "";
+  return `${baseUrl}/api/v1/users/${userId}/avatar${versionParam}`;
+}
+
+export interface UpdateProfileRequest {
+  fullName: string;
+  phoneNumber?: string;
+}
+
+export interface UserAddressResponse {
+  id: string;
+  userId: string;
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface CreateAddressRequest {
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault?: boolean;
+}
+
+export interface UpdateAddressRequest {
+  label: string;
+  recipientName: string;
+  phoneNumber: string;
+  streetAddress: string;
+  city: string;
+  postalCode?: string;
+  isDefault?: boolean;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface PageResponse<T> {
@@ -160,6 +212,21 @@ export const api = {
   /** Downloads a file (for example a proof photo) with the same token and error handling. */
   blob(endpoint: string, options?: RequestOptions): Promise<Blob> {
     return apiFetch<Blob>(endpoint, { ...options, method: "GET", responseType: "blob" });
+  },
+  uploadAvatar(file: File, options?: RequestOptions): Promise<UserResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch<UserResponse>("/api/v1/users/me/avatar", {
+      ...options,
+      method: "PUT",
+      body: formData,
+    });
+  },
+  deleteAvatar(options?: RequestOptions): Promise<UserResponse> {
+    return apiFetch<UserResponse>("/api/v1/users/me/avatar", {
+      ...options,
+      method: "DELETE",
+    });
   },
 };
 

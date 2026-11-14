@@ -96,7 +96,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(20);
+        assertThat(rows).hasSize(22);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -148,22 +148,29 @@ class DatabaseMigrationIT {
                         tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
                         tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true));
 
-        assertThat(rows.subList(14, 16))
+        assertThat(rows.get(14))
+                .containsEntry("script", "identity/V202611081400__identity_user_profiles_and_addresses.sql")
+                .containsEntry("success", true);
+
+        assertThat(rows.subList(15, 17))
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql", true),
                         tuple("delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql", true));
 
-        assertThat(rows.get(16))
+        assertThat(rows.get(17))
                 .containsEntry("script", "delivery/V202611111000__delivery_create_hubs.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(17))
+        assertThat(rows.get(18))
                 .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(18))
+        assertThat(rows.get(19))
+                .containsEntry("script", "identity/V202611111330__identity_user_avatar.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(20))
                 .containsEntry("script", "notification/V202611131000__notification_create_tables.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(19))
+        assertThat(rows.get(21))
                 .containsEntry("script", "identity/V202611131900__identity_add_phone_number_to_users.sql")
                 .containsEntry("success", true);
 
