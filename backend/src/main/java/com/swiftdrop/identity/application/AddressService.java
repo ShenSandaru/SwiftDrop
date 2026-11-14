@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.identity.domain.UserAddress;
@@ -15,6 +16,7 @@ import com.swiftdrop.identity.web.CreateAddressRequest;
 import com.swiftdrop.identity.web.UpdateAddressRequest;
 
 @Service
+@Transactional
 public class AddressService {
 
     private final UserAddressRepository addresses;
@@ -25,6 +27,7 @@ public class AddressService {
         this.users = users;
     }
 
+    @Transactional(readOnly = true)
     public List<UserAddress> getAddresses(UUID userId) {
         return addresses.findByUserIdOrderByIsDefaultDescCreatedAtDesc(userId);
     }

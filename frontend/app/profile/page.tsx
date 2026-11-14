@@ -144,16 +144,20 @@ export default function ProfilePage() {
     );
   }
 
-  const dashboardHref = hasRole("DISPATCHER_ADMIN")
+  const dashboardHref = hasRole("ADMIN")
     ? "/admin"
+    : hasRole("DISPATCHER")
+    ? "/dispatch"
     : hasRole("COURIER")
     ? "/courier"
     : hasRole("CUSTOMER")
     ? "/customer"
     : "/";
 
-  const profileBadgeLabel = hasRole("DISPATCHER_ADMIN")
-    ? "Dispatcher & Admin Profile"
+  const profileBadgeLabel = hasRole("ADMIN")
+    ? "Administrator Profile"
+    : hasRole("DISPATCHER")
+    ? "Dispatcher Profile"
     : hasRole("COURIER")
     ? "Courier Fleet Profile"
     : hasRole("CUSTOMER")
@@ -363,6 +367,22 @@ export default function ProfilePage() {
         </span>
       </div>
 
+      {/* Incomplete profile warning banner for customers */}
+      {isCustomer && user.profileCompleted === false && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+        >
+          <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold">Complete your profile for streamlined deliveries</p>
+            <p className="text-xs opacity-90">
+              SwiftDrop uses your full name and contact phone number to coordinate parcel pickups and recipient handovers across the island.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header Profile Identity Card */}
       <Card className="overflow-hidden border-border bg-gradient-to-r from-card via-card to-accent/20">
         <CardContent className="p-6 sm:p-8">
@@ -429,13 +449,23 @@ export default function ProfilePage() {
                       </span>
                     );
                   }
-                  if (r === "DISPATCHER_ADMIN") {
+                  if (r === "ADMIN") {
+                    return (
+                      <span
+                        key={r}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20 px-2.5 py-1 text-xs font-semibold"
+                      >
+                        <Shield className="size-3.5" /> Administrator
+                      </span>
+                    );
+                  }
+                  if (r === "DISPATCHER") {
                     return (
                       <span
                         key={r}
                         className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-1 text-xs font-semibold"
                       >
-                        <Shield className="size-3.5" /> Dispatcher & Admin
+                        <Shield className="size-3.5" /> Dispatcher
                       </span>
                     );
                   }
