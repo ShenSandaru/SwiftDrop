@@ -133,4 +133,79 @@ class DispatchServiceTest {
         verify(hubOperations).markFailed(parcel, FailureReason.DAMAGED, "Crushed", staff);
         verify(hubOperations).cancel(parcel, staff);
     }
+
+    @Test
+    void hubAssignedDispatcherOnlySeesCouriersAndWorkloadsInTheirHub() {
+        UUID dispatcherHub = UUID.randomUUID();
+        UUID otherHub = UUID.randomUUID();
+        UUID otherCourierId = UUID.randomUUID();
+        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
+                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
+        UserSummary hubCourier = new UserSummary(COURIER_ID, "Colombo Courier", "c1@example.com",
+                null, Set.of("COURIER"), true, true, dispatcherHub);
+        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+        when(users.findEnabledCouriersByHub(dispatcherHub)).thenReturn(List.of(hubCourier));
+        when(parcels.countActiveParcelsByCourier()).thenReturn(java.util.Map.of(COURIER_ID, 3L, otherCourierId, 5L));
+
+        Staff caller = Staff.dispatcher(DISPATCHER_ID);
+        assertThat(service.activeCouriers(otherHub, caller)).containsExactly(hubCourier);
+        assertThat(service.courierWorkloads(otherHub, caller)).containsExactlyEntriesOf(java.util.Map.of(COURIER_ID, 3L));
+        verify(users, never()).findEnabledCouriersByHub(otherHub);
+    }
+
+    @Test
+    void hubAssignedDispatcherCannotAssignCourierOrParcelFromAnotherHub() {
+        UUID dispatcherHub = UUID.randomUUID();
+        UUID otherHub = UUID.randomUUID();
+        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
+                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
+        UserSummary otherCourier = new UserSummary(COURIER_ID, "Kandy Courier", "kandy@example.com",
+                null, Set.of("COURIER"), true, true, otherHub);
+        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+        when(users.findUser(COURIER_ID)).thenReturn(Optional.of(otherCourier));
+
+        Staff caller = Staff.dispatcher(DISPATCHER_ID);
+        assertThatThrownBy(() -> service.assign(PARCEL_ID, COURIER_ID, caller, ParcelAssignmentType.PICKUP))
+                .isInstanceOf(DispatchCourierUnavailableException.class)
+                .hasMessageContaining("not assigned to your hub");
+
+        UserSummary sameHubCourier = new UserSummary(COURIER_ID, "Colombo Courier", "cmb@example.com",
+                null, Set.of("COURIER"), true, true, dispatcherHub);
+        when(users.findUser(COURIER_ID)).thenReturn(Optional.of(sameHubCourier));
+        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.assign(PARCEL_ID, COURIER_ID, caller, ParcelAssignmentType.PICKUP))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
+                .hasMessageContaining("does not belong to your hub");
+
+        verify(assignments, never()).assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+    }
+
+    @Test
+    void hubAssignedDispatcherCannotScanAtAnotherHub() {
+        UUID dispatcherHub = UUID.randomUUID();
+        UUID otherHub = UUID.randomUUID();
+        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
+                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
+        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+
+        Staff caller = Staff.dispatcher(DISPATCHER_ID);
+        assertThatThrownBy(() -> service.scanAtHub(PARCEL_ID, otherHub, caller))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
+                .hasMessageContaining("assigned hub");
+        verify(hubOperations, never()).scanAtHub(PARCEL_ID, otherHub, caller);
+    }
+
+    @Test
+    void adminCanQueryAcrossAllHubsOrFilterByRequestedHub() {
+        UUID adminId = UUID.randomUUID();
+        UUID requestedHub = UUID.randomUUID();
+        Staff admin = Staff.admin(adminId);
+
+        service.activeCouriers(null, admin);
+        verify(users).findEnabledCouriers();
+
+        service.activeCouriers(requestedHub, admin);
+        verify(users).findEnabledCouriersByHub(requestedHub);
+    }
 }
