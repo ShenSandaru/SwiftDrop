@@ -51,6 +51,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
         com.swiftdrop.delivery.domain.ParcelRepository.class,
         com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository.class,
         com.swiftdrop.delivery.domain.DeliveryProofRepository.class,
