@@ -13,8 +13,11 @@ are ISO-8601 in UTC, for example `2026-11-16T10:15:30Z`.
    it. Until then the merchant API, API keys and webhooks are unavailable.
 2. Sign in to the portal. The portal and the management endpoints below use your user login (a bearer
    token from `POST /api/v1/auth/tokens`); only order creation uses an API key.
-3. Look up the delivery zones you ship from and to (`GET /api/v1/zones` while signed in). Orders need a
+3. Look up the delivery zones you ship from and to with `GET /api/v1/zones`, using either your portal
+   login or your `X-Api-Key` (the same key you use for orders — see section 2). Orders need a
    `zoneId` for pickup and drop-off; a zone that no SwiftDrop hub serves is refused with `409`.
+   `POST /api/v1/price-quotes` accepts the same two credential types, to estimate a fee before
+   creating an order. Send only one credential per request: sending both answers `400`.
 
 ## 2. API keys
 

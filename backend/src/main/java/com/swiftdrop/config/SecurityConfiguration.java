@@ -24,8 +24,11 @@ import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -75,6 +78,39 @@ class SecurityConfiguration {
                 .cors(Customizer.withDefaults())
                 .requestCache(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        return http.build();
+    }
+
+    /**
+     * Pricing quote and active-zone lookup (ADR 0008 addendum): accepts either a bearer token
+     * (dashboard/customer users) or a merchant API key (server-to-server integrations), never both
+     * at once. Scoped to exactly {@code POST /api/v1/price-quotes} and {@code GET /api/v1/zones}
+     * (which also covers the admin {@code ?all=true} listing on the same path and method; that
+     * variant stays {@code ADMIN}-only through its own {@code @PreAuthorize}, unaffected by which
+     * chain authenticated the caller). Ordered after the merchant-order chain, before the catch-all
+     * API chain, so neither existing chain's behavior changes.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 2)
+    SecurityFilterChain pricingAndZonesSecurity(HttpSecurity http, MerchantAuthentication merchants) throws Exception {
+        AmbiguousCredentialsFilter ambiguousCredentials = new AmbiguousCredentialsFilter();
+        http
+                .securityMatcher(new OrRequestMatcher(
+                        PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/v1/price-quotes"),
+                        PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/api/v1/zones")))
+                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                // Runs before both authentication filters, so a request carrying both credentials is
+                // refused as malformed rather than letting filter order decide which one wins.
+                .addFilterBefore(ambiguousCredentials, BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(new MerchantApiKeyAuthenticationFilter(merchants), AmbiguousCredentialsFilter.class)
+                .csrf(AbstractHttpConfigurer::disable)
+                // X-Api-Key is still not an allowed CORS header (see corsConfigurationSource): a
+                // browser can authenticate here only with a bearer token, never a merchant key.
+                .cors(Customizer.withDefaults())
+                .requestCache(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
         return http.build();
     }
 

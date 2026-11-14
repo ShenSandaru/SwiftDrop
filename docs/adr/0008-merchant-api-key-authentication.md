@@ -117,6 +117,38 @@ so a timing difference between a known and an unknown prefix reveals nothing use
 - No key or secret appears in logs or error responses; `last_used_at` is written at most once per
   minute.
 
+### 9. Addendum (2026-11-14): pricing quotes and zone lookup
+
+Independent e-commerce platforms integrating with the merchant order API (MER-2) also need the
+fee-quote and zone-lookup endpoints to plan an order before creating it, but those endpoints
+(`POST /api/v1/price-quotes`, `GET /api/v1/zones`) previously accepted only a bearer token, so a
+server-to-server integration had to also hold a merchant-portal user login just to call them. This
+addendum extends the mechanism of this ADR, unchanged, to those two endpoints only:
+
+- A third `SecurityFilterChain`, `pricingAndZonesSecurity`
+  (`backend/src/main/java/com/swiftdrop/config/SecurityConfiguration.java`), scoped by
+  `securityMatcher` to exactly `POST /api/v1/price-quotes` and `GET /api/v1/zones` (method and path
+  both), accepts **either** a bearer token **or** the same `X-Api-Key` mechanism as
+  `/api/v1/merchant-orders/**`, reusing `MerchantApiKeyAuthenticationFilter` and
+  `MerchantApiKeyAuthenticator` unmodified. Merchant approval and revocation are re-checked exactly
+  as in section 3; nothing about key issuance, storage or management changes.
+- **A request must use exactly one of the two credentials.** If both `X-Api-Key` and
+  `Authorization: Bearer ...` are present, a new filter (`AmbiguousCredentialsFilter`), ordered
+  before both the bearer-token filter and the API-key filter, rejects the request with `400 Bad
+  Request` before either credential is checked, rather than letting filter order decide a winner.
+  If neither is present, the usual `401` applies.
+- `GET /api/v1/zones` also serves an `ADMIN`-only `?all=true` listing on the same path and HTTP
+  method; that variant is unaffected because its own `@PreAuthorize("hasRole('ADMIN')")` still
+  applies regardless of which chain authenticated the caller — a merchant API key grants only the
+  `MERCHANT_API_KEY` authority, never a role, so it cannot reach that variant.
+- `/api/v1/merchant-orders/**` and every other existing endpoint are untouched: the new chain's
+  `securityMatcher` does not overlap either of them, and `jwtAuthenticationConverter()` (the same
+  method `apiSecurity` already used) is reused as-is, not duplicated.
+- The browser-side CORS posture is unchanged: `X-Api-Key` remains outside the allowed CORS headers
+  (`corsConfigurationSource`), so a browser can authenticate on these two endpoints only with a
+  bearer token, never a merchant key.
+- Rate limiting and per-key scopes remain out of scope, as in the rest of this ADR.
+
 ## Alternatives considered
 
 - **OAuth 2.0 client credentials:** an authorization server (Spring Authorization Server, a new

@@ -433,6 +433,14 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   may not use `pricing` (ADR 0003), it passes the size by name through
   `NewMerchantParcel.withSizeName` in `delivery.api`. Webhook signing is decided in
   [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
+- **Implemented ([ADR 0008](adr/0008-merchant-api-key-authentication.md) §9):** `POST
+  /api/v1/price-quotes` and `GET /api/v1/zones` accept either a bearer token or a merchant API key,
+  through a third `config` filter chain (`pricingAndZonesSecurity`) scoped to exactly those two
+  method-and-path combinations; a request presenting both credentials gets `400` before either is
+  checked, and one presenting neither gets the usual `401`. Merchant
+  approval and revocation are re-checked exactly as for `/api/v1/merchant-orders/**`; the admin
+  `GET /api/v1/zones?all=true` listing stays `ADMIN`-only through its own `@PreAuthorize`
+  regardless of which chain authenticated the caller.
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
   - How courier and dispatcher/admin accounts are created.
