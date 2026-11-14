@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.swiftdrop.assistant.application.AssistantAnswer;
 import com.swiftdrop.assistant.application.AssistantService;
 import com.swiftdrop.assistant.application.ChatTurn;
-import com.swiftdrop.assistant.application.ClientRateLimiter;
+import com.swiftdrop.shared.web.ClientRateLimiter;
 
 /**
  * The AI delivery assistant (ADR 0010 §4). The server keeps no conversation: the browser sends the
