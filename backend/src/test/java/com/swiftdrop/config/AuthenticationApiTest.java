@@ -73,6 +73,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
 @AutoConfigureMockMvc
 @Import(AuthenticationApiTest.RoleFixtureController.class)
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
