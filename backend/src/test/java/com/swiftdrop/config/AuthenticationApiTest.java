@@ -196,7 +196,7 @@ class AuthenticationApiTest {
         String body = login("ALICE@example.com", "correct horse")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.accessToken");
 
