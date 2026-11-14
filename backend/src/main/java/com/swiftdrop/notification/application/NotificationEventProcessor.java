@@ -18,6 +18,8 @@ import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
+import com.swiftdrop.merchant.api.MerchantLookup;
+import com.swiftdrop.merchant.api.MerchantView;
 import com.swiftdrop.notification.domain.NotificationChannel;
 import com.swiftdrop.notification.domain.NotificationConsumerState;
 import com.swiftdrop.notification.domain.NotificationConsumerStateRepository;
@@ -47,6 +49,7 @@ public class NotificationEventProcessor {
     private final ParcelStatusEventParser eventParser;
     private final ParcelEvents parcelEvents;
     private final UserDirectory userDirectory;
+    private final MerchantLookup merchantLookup;
 
     public NotificationEventProcessor(
             NotificationConsumerStateRepository consumerStateRepository,
@@ -55,7 +58,8 @@ public class NotificationEventProcessor {
             NotificationTemplateResolver templateResolver,
             ParcelStatusEventParser eventParser,
             ParcelEvents parcelEvents,
-            UserDirectory userDirectory) {
+            UserDirectory userDirectory,
+            MerchantLookup merchantLookup) {
         this.consumerStateRepository = consumerStateRepository;
         this.pendingEventRepository = pendingEventRepository;
         this.recordRepository = recordRepository;
@@ -63,6 +67,7 @@ public class NotificationEventProcessor {
         this.eventParser = eventParser;
         this.parcelEvents = parcelEvents;
         this.userDirectory = userDirectory;
+        this.merchantLookup = Objects.requireNonNull(merchantLookup, "merchantLookup must not be null");
     }
 
     /**
@@ -221,32 +226,43 @@ public class NotificationEventProcessor {
                 throw new EventParsingException("CUSTOMER parcel event must have non-null ownerCustomerId (parcelId="
                         + event.data().parcelId() + ")");
             }
-
-            Optional<UserSummary> customer = userDirectory.findUser(customerId);
-            if (customer.isPresent() && customer.get().enabled()) {
-                templateResolver.resolve(event).ifPresent(content -> {
-                    // Check idempotency pre-insert
-                    if (!recordRepository.existsByEventIdAndChannelAndRecipientUserId(
-                            event.eventId(), NotificationChannel.IN_APP, customerId)) {
-                        NotificationRecord record = NotificationRecord.forParcel(
-                                event.eventId(),
-                                customerId,
-                                event.data().parcelId(),
-                                event.data().trackingNumber(),
-                                content.title(),
-                                content.message(),
-                                NotificationChannel.IN_APP,
-                                NotificationDeliveryStatus.NOT_APPLICABLE,
-                                event.occurredAt());
-                        recordRepository.save(record);
-                    }
-                });
-            } else {
-                log.debug("Customer account {} missing or disabled for parcel {}. Skipping notification creation.",
-                        customerId, event.data().parcelId());
+            createInAppNotification(event, customerId);
+        } else if (event.data().source() == ParcelSource.MERCHANT) {
+            UUID merchantId = event.data().ownerMerchantId();
+            if (merchantId == null) {
+                throw new EventParsingException("MERCHANT parcel event must have non-null ownerMerchantId (parcelId="
+                        + event.data().parcelId() + ")");
             }
+
+            Optional<MerchantView> merchant = merchantLookup.findById(merchantId);
+            if (merchant.isEmpty()) {
+                log.debug("Merchant {} not found for parcel {}. Skipping notification creation.",
+                        merchantId, event.data().parcelId());
+                return;
+            }
+            createInAppNotification(event, merchant.get().userId());
         }
-        // For MERCHANT parcels, ownerMerchantId is never passed to UserDirectory and no customer notification is emitted.
+    }
+
+    private void createInAppNotification(ParcelStatusChanged event, UUID recipientUserId) {
+        Optional<UserSummary> user = userDirectory.findUser(recipientUserId);
+        if (user.isEmpty() || !user.get().enabled()) {
+            log.debug("Recipient account {} missing or disabled for parcel {}. Skipping notification creation.",
+                    recipientUserId, event.data().parcelId());
+            return;
+        }
+
+        templateResolver.resolve(event).ifPresent(content -> recordRepository.insertIfAbsent(
+                UUID.randomUUID(),
+                event.eventId(),
+                recipientUserId,
+                event.data().parcelId(),
+                event.data().trackingNumber(),
+                content.title(),
+                content.message(),
+                NotificationChannel.IN_APP.name(),
+                NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                event.occurredAt()));
     }
 
     private NotificationConsumerState updateWatermark(

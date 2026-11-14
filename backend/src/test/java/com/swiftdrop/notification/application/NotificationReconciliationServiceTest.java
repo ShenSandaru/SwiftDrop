@@ -66,7 +66,8 @@ class NotificationReconciliationServiceTest {
                 templateResolver,
                 eventParser,
                 parcelEvents,
-                userDirectory);
+                userDirectory,
+                org.mockito.Mockito.mock(com.swiftdrop.merchant.api.MerchantLookup.class));
 
         NotificationReconciliationProperties properties = new NotificationReconciliationProperties(
                 true,

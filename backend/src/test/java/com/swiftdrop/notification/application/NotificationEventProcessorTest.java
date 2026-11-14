@@ -68,6 +68,9 @@ class NotificationEventProcessorTest {
     @Mock
     private UserDirectory userDirectory;
 
+    @Mock
+    private com.swiftdrop.merchant.api.MerchantLookup merchantLookup;
+
     private NotificationEventProcessor processor;
 
     private final UUID parcelId = UUID.randomUUID();
@@ -84,7 +87,8 @@ class NotificationEventProcessorTest {
                 templateResolver,
                 eventParser,
                 parcelEvents,
-                userDirectory);
+                userDirectory,
+                merchantLookup);
     }
 
     private ParcelStatusChanged createCustomerEvent(int sequence, ParcelStatus newStatus) {
@@ -149,13 +153,10 @@ class NotificationEventProcessorTest {
         assertThat(stateCaptor.getValue().getParcelId()).isEqualTo(parcelId);
         assertThat(stateCaptor.getValue().getLastAppliedSequence()).isEqualTo(1);
 
-        ArgumentCaptor<NotificationRecord> recordCaptor = ArgumentCaptor.forClass(NotificationRecord.class);
-        verify(recordRepository).save(recordCaptor.capture());
-        assertThat(recordCaptor.getValue().getRecipientUserId()).isEqualTo(customerId);
-        assertThat(recordCaptor.getValue().getParcelId()).isEqualTo(parcelId);
-        assertThat(recordCaptor.getValue().getTitle()).isEqualTo("Parcel Booked");
-        assertThat(recordCaptor.getValue().getChannel()).isEqualTo(NotificationChannel.IN_APP);
-        assertThat(recordCaptor.getValue().getDeliveryStatus()).isEqualTo(NotificationDeliveryStatus.NOT_APPLICABLE);
+        verify(recordRepository).insertIfAbsent(
+                any(), eq(event.eventId()), eq(customerId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel Booked"), eq("Your parcel SD1234567890 has been booked."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
     }
 
     @Test
@@ -184,7 +185,7 @@ class NotificationEventProcessorTest {
         verify(pendingEventRepository).delete(existingPending);
         verify(consumerStateRepository).save(existingState);
         assertThat(existingState.getLastAppliedSequence()).isEqualTo(2);
-        verify(recordRepository).save(any(NotificationRecord.class));
+        verify(recordRepository).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -308,7 +309,7 @@ class NotificationEventProcessorTest {
         processor.process(event3, rawJson3);
 
         // Sequence 2, 3, and 4 should all have been applied
-        verify(recordRepository, times(3)).save(any(NotificationRecord.class));
+        verify(recordRepository, times(3)).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verify(pendingEventRepository).delete(pending4);
         assertThat(existingState.getLastAppliedSequence()).isEqualTo(4);
     }
@@ -340,7 +341,7 @@ class NotificationEventProcessorTest {
                 .isInstanceOf(EventParsingException.class)
                 .hasMessageContaining("must have non-null ownerCustomerId");
 
-        verify(recordRepository, never()).save(any());
+        verify(recordRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verify(consumerStateRepository, never()).save(any());
     }
 
@@ -460,5 +461,187 @@ class NotificationEventProcessorTest {
         verify(pendingEventRepository, never()).delete(unresolvedPending);
         // Sequence 4 should never be queried
         verify(pendingEventRepository, never()).findByParcelIdAndSequence(parcelId, 4);
+    }
+
+    @Test
+    @DisplayName("Merchant parcel event creates in-app notification for owning merchant user")
+    void merchantParcelCreatesNotificationForOwnerUser() {
+        UUID merchantId = UUID.randomUUID();
+        UUID merchantUserId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, ParcelStatus.CREATED, ParcelStatus.DELIVERED,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        com.swiftdrop.merchant.api.MerchantView merchantView = new com.swiftdrop.merchant.api.MerchantView(
+                merchantId, merchantUserId, "Acme Shop", "Retail", "REG-1", "+94770000000",
+                "123 Main St", null, null, com.swiftdrop.merchant.api.MerchantStatus.APPROVED, null, now);
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.of(merchantView));
+        when(userDirectory.findUser(merchantUserId)).thenReturn(
+                Optional.of(new UserSummary(merchantUserId, "merchant@acme.com", "Acme Owner", Set.of("MERCHANT"), true)));
+        when(templateResolver.resolve(event)).thenReturn(Optional.of(new NotificationContent("Parcel Delivered", "Delivered")));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(
+                event.eventId(), NotificationChannel.IN_APP, merchantUserId)).thenReturn(false);
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verify(recordRepository).insertIfAbsent(
+                any(), eq(event.eventId()), eq(merchantUserId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel Delivered"), eq("Delivered"),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+        verify(recordRepository, never()).insertIfAbsent(
+                any(), any(), eq(merchantId), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Merchant parcel event with null ownerMerchantId throws EventParsingException")
+    void merchantParcelWithNullOwnerMerchantIdThrows() {
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.MERCHANT, null, null, "ORD-123", null));
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> processor.process(event, "{\"sequence\":1}"))
+                .isInstanceOf(EventParsingException.class)
+                .hasMessageContaining("ownerMerchantId");
+    }
+
+    @Test
+    @DisplayName("Merchant parcel event skips notification when merchant is not found")
+    void merchantParcelSkipsWhenMerchantNotFound() {
+        UUID merchantId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.empty());
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verifyNoInteractions(userDirectory, recordRepository);
+    }
+
+    @Test
+    @DisplayName("Merchant parcel event skips notification when owning user is disabled")
+    void merchantParcelSkipsWhenOwnerUserDisabled() {
+        UUID merchantId = UUID.randomUUID();
+        UUID merchantUserId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        com.swiftdrop.merchant.api.MerchantView merchantView = new com.swiftdrop.merchant.api.MerchantView(
+                merchantId, merchantUserId, "Acme Shop", "Retail", "REG-1", "+94770000000",
+                "123 Main St", null, null, com.swiftdrop.merchant.api.MerchantStatus.APPROVED, null, now);
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.of(merchantView));
+        when(userDirectory.findUser(merchantUserId)).thenReturn(
+                Optional.of(new UserSummary(merchantUserId, "merchant@acme.com", "Acme Owner", Set.of("MERCHANT"), false)));
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verifyNoInteractions(recordRepository);
+    }
+
+    @Test
+    @DisplayName("Merchant parcel IN_TRANSIT status remains suppressed")
+    void merchantParcelInTransitRemainsSuppressed() {
+        UUID merchantId = UUID.randomUUID();
+        UUID merchantUserId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, ParcelStatus.PICKED_UP, ParcelStatus.IN_TRANSIT,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        com.swiftdrop.merchant.api.MerchantView merchantView = new com.swiftdrop.merchant.api.MerchantView(
+                merchantId, merchantUserId, "Acme Shop", "Retail", "REG-1", "+94770000000",
+                "123 Main St", null, null, com.swiftdrop.merchant.api.MerchantStatus.APPROVED, null, now);
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.of(merchantView));
+        when(userDirectory.findUser(merchantUserId)).thenReturn(
+                Optional.of(new UserSummary(merchantUserId, "merchant@acme.com", "Acme Owner", Set.of("MERCHANT"), true)));
+        when(templateResolver.resolve(event)).thenReturn(Optional.empty());
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verifyNoInteractions(recordRepository);
+    }
+
+    @Test
+    @DisplayName("Merchant parcel event skips notification when owning user is not found")
+    void merchantParcelSkipsWhenOwnerUserNotFound() {
+        UUID merchantId = UUID.randomUUID();
+        UUID merchantUserId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        com.swiftdrop.merchant.api.MerchantView merchantView = new com.swiftdrop.merchant.api.MerchantView(
+                merchantId, merchantUserId, "Acme Shop", "Retail", "REG-1", "+94770000000",
+                "123 Main St", null, null, com.swiftdrop.merchant.api.MerchantStatus.APPROVED, null, now);
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.of(merchantView));
+        when(userDirectory.findUser(merchantUserId)).thenReturn(Optional.empty());
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verifyNoInteractions(recordRepository);
+    }
+
+    @Test
+    @DisplayName("Duplicate merchant parcel event does not create duplicate notifications")
+    void merchantParcelDoesNotCreateDuplicateNotifications() {
+        UUID merchantId = UUID.randomUUID();
+        UUID merchantUserId = UUID.randomUUID();
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.MERCHANT, null, merchantId, "ORD-123", null));
+
+        com.swiftdrop.merchant.api.MerchantView merchantView = new com.swiftdrop.merchant.api.MerchantView(
+                merchantId, merchantUserId, "Acme Shop", "Retail", "REG-1", "+94770000000",
+                "123 Main St", null, null, com.swiftdrop.merchant.api.MerchantStatus.APPROVED, null, now);
+
+        NotificationConsumerState stateAfterFirst = new NotificationConsumerState(parcelId, 1, now);
+        when(consumerStateRepository.findById(parcelId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(stateAfterFirst));
+        when(merchantLookup.findById(merchantId)).thenReturn(Optional.of(merchantView));
+        when(userDirectory.findUser(merchantUserId)).thenReturn(
+                Optional.of(new UserSummary(merchantUserId, "merchant@acme.com", "Acme Owner", Set.of("MERCHANT"), true)));
+        when(templateResolver.resolve(event)).thenReturn(Optional.of(new NotificationContent("Parcel Booked", "Booked")));
+
+        processor.process(event, "{\"sequence\":1}");
+        processor.process(event, "{\"sequence\":1}");
+
+        verify(recordRepository, times(1)).insertIfAbsent(
+                any(), eq(event.eventId()), eq(merchantUserId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel Booked"), eq("Booked"),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
     }
 }
