@@ -76,6 +76,13 @@ public interface NotificationRecordRepository extends JpaRepository<Notification
      */
     long countByRecipientUserIdAndChannelAndIsReadFalse(UUID recipientUserId, NotificationChannel channel);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+            "UPDATE NotificationRecord r SET r.deliveryStatus = :status WHERE r.id = :id")
+    int updateDeliveryStatus(
+            @org.springframework.data.repository.query.Param("id") UUID id,
+            @org.springframework.data.repository.query.Param("status") NotificationDeliveryStatus status);
+
     /**
      * Atomically inserts an in-app notification record if one does not already exist for the event and recipient.
      * Uses PostgreSQL's ON CONFLICT DO NOTHING against constraint uq_notification_records_event_channel_user.
