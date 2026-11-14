@@ -26,6 +26,13 @@ public interface UserDirectory {
     List<UserSummary> findEnabledCouriers();
 
     /**
+     * Retrieves all enabled users having the {@code ADMIN} role.
+     *
+     * @return list of enabled admin user summaries
+     */
+    List<UserSummary> findEnabledAdmins();
+
+    /**
      * Creates a new user with the {@code MERCHANT} role.
      *
      * @param fullName the user's full name

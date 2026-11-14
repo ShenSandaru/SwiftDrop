@@ -246,6 +246,13 @@ public class AccountService implements UserDirectory {
                 .toList();
     }
 
+    @Override
+    public List<UserSummary> findEnabledAdmins() {
+        return users.findByRoleAndEnabledTrue(Role.ADMIN).stream()
+                .map(AccountService::toSummary)
+                .toList();
+    }
+
     private static UserSummary toSummary(User user) {
         Set<String> roleNames = user.getRoles().stream()
                 .map(Enum::name)
