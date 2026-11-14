@@ -38,10 +38,10 @@ public class District {
     @Column(name = "default_branch_name", nullable = false, length = 100)
     private String defaultBranchName;
 
-    @Column(precision = 9, scale = 6)
+    @Column(columnDefinition = "NUMERIC(9,6)")
     private Double latitude;
 
-    @Column(precision = 9, scale = 6)
+    @Column(columnDefinition = "NUMERIC(9,6)")
     private Double longitude;
 
     @OneToMany(mappedBy = "district", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
