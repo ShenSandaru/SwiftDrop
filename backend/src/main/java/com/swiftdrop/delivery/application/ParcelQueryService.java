@@ -49,6 +49,7 @@ class ParcelQueryService implements ParcelQueries {
 
     private static final Sort OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "createdAt");
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
+    private static final Sort LONGEST_WAITING_FIRST = Sort.by(Sort.Direction.ASC, "updatedAt");
     private static final Sort ASSIGNED_OLDEST_FIRST = Sort.by(Sort.Direction.ASC, "assignedAt");
     /** Final statuses (ADR 0009 §2): no task can follow. */
     private static final EnumSet<ParcelStatus> TERMINAL = EnumSet.of(ParcelStatus.DELIVERED, ParcelStatus.RETURNED,
@@ -98,6 +99,18 @@ class ParcelQueryService implements ParcelQueries {
         Page<Parcel> found = normalizedSearch == null
                 ? parcels.findForDispatch(status, source, assigned, pageable)
                 : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, pageable);
+        Map<UUID, String> hubCodes = found.isEmpty() ? Map.of()
+                : hubs.findAll().stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
+        return PageResult.of(found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes)).toList(),
+                page, found.getTotalElements());
+    }
+
+    @Override
+    public PageResult<DispatchParcelSummary> findStaleParcels(Instant inactiveSince, PageRequest page) {
+        Objects.requireNonNull(inactiveSince, "inactiveSince");
+        Objects.requireNonNull(page, "page");
+        Page<Parcel> found = parcels.findByStatusNotInAndUpdatedAtBefore(TERMINAL, inactiveSince,
+                pageable(page, LONGEST_WAITING_FIRST));
         Map<UUID, String> hubCodes = found.isEmpty() ? Map.of()
                 : hubs.findAll().stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
         return PageResult.of(found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes)).toList(),

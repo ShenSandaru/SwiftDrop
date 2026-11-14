@@ -55,6 +55,15 @@ class DispatchController {
         return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
     }
 
+    /** Unfinished parcels with no scan, status change or assignment for too long; longest waiting first. */
+    @GetMapping("/stale-parcels")
+    PageResponse<DispatchParcelSummary> staleParcels(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
+        return toResponse(dispatch.staleParcels(request), request);
+    }
+
     @GetMapping("/active-assignments")
     PageResponse<ParcelAssignmentSummary> activeAssignments(
             @RequestParam ParcelAssignmentType type,

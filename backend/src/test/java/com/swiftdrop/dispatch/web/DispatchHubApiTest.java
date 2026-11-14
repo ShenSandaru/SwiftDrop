@@ -159,4 +159,24 @@ class DispatchHubApiTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(hubOperations);
     }
+
+    @Test
+    void dispatchersAndTheAdminSeeStaleParcels() throws Exception {
+        org.mockito.Mockito.when(parcels.findByStatusNotInAndUpdatedAtBefore(any(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+        String path = "/api/v1/dispatch/stale-parcels";
+
+        for (TestPrincipal caller : java.util.List.of(TestPrincipal.dispatcher(), TestPrincipal.admin())) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                            .with(caller.postProcessor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty())
+                    .andExpect(jsonPath("$.totalItems").value(0));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                        .with(TestPrincipal.courier().postProcessor()))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path))
+                .andExpect(status().isUnauthorized());
+    }
 }

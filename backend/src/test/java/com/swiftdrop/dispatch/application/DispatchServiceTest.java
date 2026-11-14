@@ -45,7 +45,8 @@ class DispatchServiceTest {
         assignments = mock(ParcelAssignment.class);
         hubOperations = mock(ParcelHubOperations.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, hubOperations, users);
+        service = new DispatchService(parcels, assignments, hubOperations, users, java.time.Duration.ofHours(24),
+                java.time.Clock.fixed(Instant.parse("2026-11-14T08:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
     @Test
@@ -132,5 +133,22 @@ class DispatchServiceTest {
         verify(hubOperations).startReturn(parcel, staff);
         verify(hubOperations).markFailed(parcel, FailureReason.DAMAGED, "Crushed", staff);
         verify(hubOperations).cancel(parcel, staff);
+    }
+
+    @Test
+    void staleParcelsAreThoseUntouchedForTheConfiguredTime() {
+        com.swiftdrop.delivery.api.PageRequest page = new com.swiftdrop.delivery.api.PageRequest(0, 20);
+        com.swiftdrop.delivery.api.PageResult<com.swiftdrop.delivery.api.DispatchParcelSummary> expected =
+                com.swiftdrop.delivery.api.PageResult.of(List.of(), page, 0);
+        // 24 hours before the fixed clock
+        when(parcels.findStaleParcels(Instant.parse("2026-11-13T08:00:00Z"), page)).thenReturn(expected);
+
+        assertThat(service.staleParcels(page)).isSameAs(expected);
+    }
+
+    @Test
+    void theStaleTimeMustBePositive() {
+        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, users, 0))
+                .isInstanceOf(IllegalStateException.class);
     }
 }

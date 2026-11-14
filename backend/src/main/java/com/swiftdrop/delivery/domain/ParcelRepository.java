@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.domain;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,10 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
     /** Parcels waiting for a courier (ADM-1); uses the partial index {@code ix_parcels_unassigned}. */
     Page<Parcel> findByStatusAndAssignedCourierIdIsNull(ParcelStatus status, Pageable pageable);
+
+    /** Parcels outside the given statuses that were last changed or assigned before a time (stale parcels). */
+    Page<Parcel> findByStatusNotInAndUpdatedAtBefore(Collection<ParcelStatus> statuses, Instant before,
+            Pageable pageable);
 
     @Query("""
             SELECT p FROM Parcel p

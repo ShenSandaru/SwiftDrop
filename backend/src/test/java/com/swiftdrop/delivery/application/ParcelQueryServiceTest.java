@@ -247,4 +247,22 @@ class ParcelQueryServiceTest {
     private static Sort.Order sortOf(Pageable pageable) {
         return pageable.getSort().getOrderFor("createdAt");
     }
+
+    @Test
+    void staleParcelsAreUnfinishedOnesLongestWaitingFirst() {
+        Instant cutoff = NOW.minusSeconds(86_400);
+        ArgumentCaptor<Collection<ParcelStatus>> finished = ArgumentCaptor.captor();
+        ArgumentCaptor<org.springframework.data.domain.Pageable> pageable = ArgumentCaptor.captor();
+        when(parcels.findByStatusNotInAndUpdatedAtBefore(any(), eq(cutoff), any()))
+                .thenReturn(new PageImpl<>(List.of(parcel)));
+
+        PageResult<DispatchParcelSummary> result = service.findStaleParcels(cutoff, new PageRequest(0, 10));
+
+        assertThat(result.items()).singleElement()
+                .satisfies(summary -> assertThat(summary.trackingNumber()).isEqualTo("SD7K3M9Q2XWB"));
+        verify(parcels).findByStatusNotInAndUpdatedAtBefore(finished.capture(), eq(cutoff), pageable.capture());
+        assertThat(finished.getValue()).containsExactlyInAnyOrder(ParcelStatus.DELIVERED, ParcelStatus.RETURNED,
+                ParcelStatus.CANCELLED, ParcelStatus.FAILED);
+        assertThat(pageable.getValue().getSort().getOrderFor("updatedAt").isAscending()).isTrue();
+    }
 }

@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.api;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,12 @@ public interface ParcelQueries {
      * no active parcels are absent from the map.
      */
     Map<UUID, Long> countActiveParcelsByCourier();
+
+    /**
+     * Unfinished parcels with no status change and no assignment since the given time, longest
+     * waiting first: a missed scan, a parcel nobody collected, or one that is lost.
+     */
+    PageResult<DispatchParcelSummary> findStaleParcels(Instant inactiveSince, PageRequest page);
 
     /** Dispatcher parcel list with explicit current-assignment and source/status filtering. */
     PageResult<DispatchParcelSummary> findDispatchParcels(

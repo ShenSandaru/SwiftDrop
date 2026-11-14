@@ -1,10 +1,14 @@
 package com.swiftdrop.dispatch.application;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,13 +37,35 @@ public class DispatchService {
     private final ParcelAssignment assignments;
     private final ParcelHubOperations hubOperations;
     private final UserDirectory users;
+    private final Duration staleAfter;
+    private final Clock clock;
 
+    @Autowired
     public DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users) {
+            UserDirectory users, @Value("${swiftdrop.dispatch.stale-after-hours:24}") int staleAfterHours) {
+        this(parcels, assignments, hubOperations, users, Duration.ofHours(staleAfterHours), Clock.systemUTC());
+    }
+
+    DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
+            UserDirectory users, Duration staleAfter, Clock clock) {
+        if (staleAfter.isZero() || staleAfter.isNegative()) {
+            throw new IllegalStateException("swiftdrop.dispatch.stale-after-hours must be at least 1");
+        }
         this.parcels = parcels;
         this.assignments = assignments;
         this.hubOperations = hubOperations;
         this.users = users;
+        this.staleAfter = staleAfter;
+        this.clock = clock;
+    }
+
+    /**
+     * Unfinished parcels nobody has touched for the configured time, longest waiting first, so a
+     * missed scan or a lost parcel does not stay hidden.
+     */
+    @Transactional(readOnly = true)
+    public PageResult<DispatchParcelSummary> staleParcels(PageRequest page) {
+        return parcels.findStaleParcels(clock.instant().minus(staleAfter), page);
     }
 
     @Transactional(readOnly = true)
