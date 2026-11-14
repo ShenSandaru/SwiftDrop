@@ -366,11 +366,18 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+    Both are rate limited per client address (60 requests a minute by default, then `429` with
+    `Retry-After`), and one client may hold at most 30 open streams. The view carries an
+    `estimatedDelivery` day worked out from the route (1, 2 or 3 days by default for one branch, two
+    hubs, or through the central hub), counted from pickup, or from booking while the parcel waits.
   - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
     (ADMIN). Direct links (ADR 0011): `GET /api/v1/hubs/links` (ADMIN, DISPATCHER), `POST
     /api/v1/hubs/links` and `DELETE /api/v1/hubs/links/{hubId}/{otherHubId}` (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
     the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
     task (`PICKUP`, `DELIVERY`, `RETURN`).
+  - Stale parcels: `GET /api/v1/dispatch/stale-parcels` (DISPATCHER, ADMIN) lists unfinished parcels
+    with no status change or assignment for `swiftdrop.dispatch.stale-after-hours` (24 by default),
+    longest waiting first.
   - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,
     `.../return`, `.../failure` and `.../cancellation` (DISPATCHER, ADMIN); the dispatch list
     offers each parcel's allowed actions. Customer cancellation before pickup:

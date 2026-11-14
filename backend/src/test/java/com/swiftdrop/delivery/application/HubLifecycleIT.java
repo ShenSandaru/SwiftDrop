@@ -7,6 +7,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,11 +26,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.DeliveryContact;
+import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.delivery.api.Staff;
@@ -69,6 +75,8 @@ class HubLifecycleIT {
     private DeliveryProofService proofs;
     @Autowired
     private HubAdministration hubAdministration;
+    @Autowired
+    private ParcelQueries queries;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -150,6 +158,44 @@ class HubLifecycleIT {
         pickUp(later);
         assertThat(jdbc.queryForObject("SELECT via_hub_id = (SELECT id FROM hubs WHERE code = 'CMB') FROM parcels "
                 + "WHERE id = ?", Boolean.class, later)).as("a parcel picked up after the link was removed").isTrue();
+    }
+
+    @Test
+    void publicTrackingEstimatesTheDeliveryDayFromTheRoute() {
+        UUID parcel = bookGalleToKandy();
+        String number = jdbc.queryForObject("SELECT tracking_number FROM parcels WHERE id = ?", String.class, parcel);
+        LocalDate booked = jdbc.queryForObject(
+                "SELECT (created_at AT TIME ZONE 'Asia/Colombo')::date FROM parcels WHERE id = ?", LocalDate.class,
+                parcel);
+
+        // Galle to Kandy passes through the central hub: three days by default
+        assertThat(queries.findPublicTrackingView(number).orElseThrow().estimatedDelivery())
+                .isEqualTo(booked.plusDays(3));
+
+        hubOperations.cancel(parcel, dispatcher);
+        assertThat(queries.findPublicTrackingView(number).orElseThrow().estimatedDelivery())
+                .as("a finished parcel has no estimate").isNull();
+    }
+
+    @Test
+    void parcelsWithNoRecentActivityAreStaleUntilTheyFinish() {
+        UUID parcel = bookGalleToKandy();
+        Instant anHourAgo = Instant.now().minus(1, ChronoUnit.HOURS);
+
+        assertThat(staleIds(anHourAgo)).doesNotContain(parcel);
+
+        jdbc.update("UPDATE parcels SET updated_at = now() - interval '2 days' WHERE id = ?", parcel);
+        assertThat(staleIds(anHourAgo)).contains(parcel);
+        assertThat(staleIds(Instant.now().minus(3, ChronoUnit.DAYS))).doesNotContain(parcel);
+
+        hubOperations.cancel(parcel, dispatcher);
+        jdbc.update("UPDATE parcels SET updated_at = now() - interval '2 days' WHERE id = ?", parcel);
+        assertThat(staleIds(anHourAgo)).as("a finished parcel is never stale").doesNotContain(parcel);
+    }
+
+    private List<UUID> staleIds(Instant inactiveSince) {
+        return queries.findStaleParcels(inactiveSince, new PageRequest(0, 100)).items().stream()
+                .map(DispatchParcelSummary::id).toList();
     }
 
     @Test
