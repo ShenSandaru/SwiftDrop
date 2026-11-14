@@ -157,6 +157,10 @@ class MigrationConventionTest {
                                 "delivery add parcel assignment version",
                                 "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"),
                         tuple(
+                                "202611081400",
+                                "identity user profiles and addresses",
+                                "identity/V202611081400__identity_user_profiles_and_addresses.sql"),
+                        tuple(
                                 "202611101200",
                                 "identity replace dispatcher admin with admin and dispatcher",
                                 "identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql"),
@@ -172,6 +176,10 @@ class MigrationConventionTest {
                                 "202611111010",
                                 "delivery add hub lifecycle",
                                 "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
+                        tuple(
+                                "202611111330",
+                                "identity user avatar",
+                                "identity/V202611111330__identity_user_avatar.sql"),
                         tuple(
                                 "202611131000",
                                 "notification create tables",

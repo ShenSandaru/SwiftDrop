@@ -1,5 +1,6 @@
 package com.swiftdrop.identity.web;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,15 +13,25 @@ public record UserResponse(
         String phoneNumber,
         List<String> roles,
         boolean enabled,
-        boolean profileCompleted
-) {
+        boolean hasAvatar,
+        Instant avatarUpdatedAt,
+        Instant createdAt,
+        boolean profileCompleted) {
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles) {
-        this(id, email, fullName, null, roles, true, true);
+        this(id, email, fullName, null, roles, true, false, null, null, true);
     }
 
     public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled) {
-        this(id, email, fullName, null, roles, enabled, true);
+        this(id, email, fullName, null, roles, enabled, false, null, null, true);
+    }
+
+    public UserResponse(UUID id, String email, String fullName, List<String> roles, boolean enabled, Instant createdAt) {
+        this(id, email, fullName, null, roles, enabled, false, null, createdAt, true);
+    }
+
+    public UserResponse(UUID id, String email, String fullName, String phoneNumber, List<String> roles, boolean enabled, Instant createdAt) {
+        this(id, email, fullName, phoneNumber, roles, enabled, false, null, createdAt, true);
     }
 
     static UserResponse from(User user) {
@@ -31,7 +42,9 @@ public record UserResponse(
                 user.getPhoneNumber(),
                 user.getRoles().stream().map(Enum::name).sorted().toList(),
                 user.isEnabled(),
-                user.isProfileCompleted()
-        );
+                user.hasAvatar(),
+                user.getAvatarUpdatedAt(),
+                user.getCreatedAt(),
+                user.isProfileCompleted());
     }
 }
