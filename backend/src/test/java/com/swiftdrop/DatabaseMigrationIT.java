@@ -102,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(32);
+        assertThat(rows).hasSize(33);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -203,6 +203,9 @@ class DatabaseMigrationIT {
                 .containsEntry("success", true);
         assertThat(rows.get(31))
                 .containsEntry("script", "delivery/V202611171000__delivery_create_hub_links.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(32))
+                .containsEntry("script", "delivery/V202611171100__delivery_create_hub_staff.sql")
                 .containsEntry("success", true);
 
         // Assert tables exist in the isolated test database
