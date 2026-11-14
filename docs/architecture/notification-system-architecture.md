@@ -1,7 +1,7 @@
 # SwiftDrop Notification System Architecture
 
 - **Document:** `docs/architecture/notification-system-architecture.md`
-- **Status:** Proposed Architecture & Design Specification
+- **Status:** Implemented Architecture & Design Specification (supports both parcel lifecycle events and `MerchantStatusChanged` events via `notificationMerchantStatusEventListener`)
 - **Date:** 2026-11-13
 - **Branch:** `feat/dev-notifications`
 - **Scope:** Complete architectural blueprint for the `com.swiftdrop.notification` module within the Modular Monolith

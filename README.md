@@ -4,32 +4,28 @@ SwiftDrop is a parcel delivery and courier management system, built as a univers
 Enterprise Application Development project by a team of 10 students. The assignment requirements
 are summarized in [docs/project-requirements.md](docs/project-requirements.md).
 
-## User groups
+## User groups and portals
 
-Required capabilities per role, from the assignment. **None of them is implemented yet.**
-
-| Role | Required capabilities |
+| Role | Implemented capabilities & portals |
 |---|---|
-| Customer | Sign up and log in (including Google login), create delivery requests, see a fee estimate before confirming, track parcels in real time, view history and download receipts; anyone can track by public tracking number |
-| Merchant | Register (with admin approval), create delivery orders through a secured API, receive status webhooks, view a dashboard of orders |
-| Courier | Log in, view the day's assigned deliveries, update status with a note or proof, mark failed deliveries with a reason |
-| Dispatcher/Admin | Assign unassigned parcels, monitor courier workloads, manage users, merchants, zones and pricing, view reports (deliveries per day, success/failure rate) |
+| **Customer** | Sign up and log in (email/password or Google OAuth2), manage profile/addresses, create delivery requests with fee estimates, track parcels in real time (SSE), view history and receipts (`/customer`, `/customer/new`, `/customer/history`, `/customer/profile`, `/track`) |
+| **Merchant** | Register (with admin approval), manage API keys (`sdk_...`), create delivery orders via REST API, configure SSRF-safe webhook endpoints with HMAC signing and retries (`/merchant`, `/merchant/orders`, `/merchant/api-keys`, `/merchant/webhooks`, `/merchant/status`) |
+| **Courier** | View assigned deliveries, update parcel status with notes or proof of delivery, mark failed deliveries (`/courier`, `/courier/parcels/[id]`) |
+| **Dispatcher** | Assign unassigned parcels to couriers, manage hub handoffs and workloads (`/dispatch`) |
+| **Admin** | Approve/suspend merchants, manage users, hubs, zones, and pricing rules, view reports (`/admin`, `/admin/merchants`, `/admin/users`, `/admin/hubs`, `/admin/pricing`, `/admin/reports`) |
 
 ## Architecture at a glance
 
-- **Single Git monorepo** containing the frontend, backend, documentation and local infrastructure.
-- **Backend:** Spring Boot **modular monolith** (not microservices). It owns all business rules,
-  authorization, persistence and integrations. The business modules are decided in
-  [ADR 0003](docs/adr/0003-backend-modules-and-boundaries.md); none of them is implemented yet.
-- **Frontend:** Next.js App Router. It handles presentation only and calls the backend REST API.
-- **Database:** PostgreSQL, with the schema managed exclusively by Flyway migrations.
-- **Messaging:** RabbitMQ (via Spring AMQP) for asynchronous events, notifications and merchant
-  webhook retries (planned; only the connection is configured).
-- **Real-time tracking:** Server-Sent Events (SSE) (planned; not implemented).
-- **Local infrastructure:** Docker Compose.
+- **Single Git monorepo** containing the frontend, backend, documentation, local infrastructure, and webhook test receiver.
+- **Backend:** Spring Boot **modular monolith** (`com.swiftdrop`) with 10 modules (`identity`, `pricing`, `delivery`, `dispatch`, `tracking`, `merchant`, `notification`, `assistant`, `config`, `shared`).
+- **Frontend:** Next.js App Router (`frontend/`). Presentation-only, communicating with the backend REST API and SSE streams.
+- **Database:** PostgreSQL 18, with schema managed exclusively by **28 Flyway migrations**.
+- **Messaging:** RabbitMQ 4.3 (via Spring AMQP) with a transactional outbox relay (`swiftdrop.events`) for asynchronous parcel/merchant notifications and webhook deliveries.
+- **Real-time tracking:** Server-Sent Events (SSE) in `tracking` and `/track`.
+- **AI Assistant:** Gemini-powered delivery assistant and MCP server (`assistant`).
+- **Local infrastructure:** Docker Compose (`compose.yaml`) for PostgreSQL and RabbitMQ.
 
-See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md) for the reasoning and
-[docs/architecture.md](docs/architecture.md) for what is implemented, decided, proposed and open.
+See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md), [docs/architecture.md](docs/architecture.md), and [docs/project-status.md](docs/project-status.md).
 
 ## Technology baseline
 
@@ -37,32 +33,27 @@ See [ADR 0001](docs/adr/0001-modular-monolith-in-a-monorepo.md) for the reasonin
 |---|---|
 | Backend | Java 21 (Temurin LTS), Spring Boot 4.1.x, Maven (via Maven Wrapper) |
 | Persistence | Spring Data JPA, Hibernate ORM 7, Flyway, PostgreSQL 18 |
-| Security | Spring Security 7 (default configuration). Planned, not yet configured: Google OAuth 2.0 / OpenID Connect sign-in and a JWT resource server |
-| Messaging | Spring AMQP, RabbitMQ 4.3 |
+| Security | Spring Security 7, JWT resource server, Google OAuth2 / OIDC, Merchant API keys (`sdk_...`) |
+| Messaging | Spring AMQP, RabbitMQ 4.3 (transactional outbox + consumers) |
 | API docs | springdoc-openapi 3.2.0 |
-| Backend tests | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test (Boot-managed). Testcontainers is not declared; it is a candidate for future integration tests |
-| Frontend | Node.js 24 LTS, npm, Next.js 16.4.x, React 19, TypeScript 6.0.x, Tailwind CSS 4, shadcn/ui |
+| Backend tests | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test, Testcontainers (PostgreSQL & RabbitMQ via `-Pintegration`) |
+| Frontend | Node.js 24 LTS, npm, Next.js 16.4.x (Turbopack), React 19, TypeScript 6.0.x, Tailwind CSS 4, shadcn/ui |
 
-Exact versions and the evidence for them are in
-[ADR 0002](docs/adr/0002-technology-and-version-baseline.md).
+Exact versions and rationale are in [ADR 0002](docs/adr/0002-technology-and-version-baseline.md).
 
 ## Repository layout
 
 ```text
 .
 ├── .github/workflows/    GitHub Actions CI
-├── backend/              Spring Boot application (created in Stage 4)
-├── frontend/             Next.js application (created in Stage 3)
-├── docs/
-│   ├── adr/              Architecture decision records
-│   ├── architecture.md   Architecture and implementation status
-│   ├── project-requirements.md  Summary of the assignment requirements
-│   ├── ai-agent-guidelines.md  Rules for AI agents and project rules for everyone
-│   └── development-setup.md
-├── compose.yaml          Local PostgreSQL and RabbitMQ (created in Stage 5)
+├── backend/              Spring Boot modular monolith
+├── frontend/             Next.js App Router application
+├── tools/                Local development tools (e.g., webhook-receiver)
+├── docs/                 Architecture, ADRs, contracts, requirements, status & reviews
+├── compose.yaml          Local PostgreSQL and RabbitMQ
 ├── .env.example          Template for the git-ignored local .env file
 ├── AGENTS.md             Entry point for AI coding agents
-├── CLAUDE.md             Claude Code entry point (imports AGENTS.md and the guidelines)
+├── CLAUDE.md             Claude Code entry point
 └── CONTRIBUTING.md       Task workflow and team conventions
 ```
 
@@ -71,16 +62,13 @@ Each application has its own README: [backend/README.md](backend/README.md) and
 
 ## Current status
 
-**Works today:** the project skeleton. The frontend builds and serves a placeholder start page, the
-backend starts and connects to PostgreSQL and RabbitMQ, Flyway creates the identity tables, the
-Actuator health endpoint reports both services, and CI runs lint, build and tests. The backend has
-email/password customer registration (`POST /api/v1/users`), login returning a JWT access token
-(`POST /api/v1/auth/tokens`) and `GET /api/v1/users/me`; every other endpoint except
-`/actuator/health` requires a valid bearer token.
+Core backend modules, database migrations, RabbitMQ eventing, and frontend portals are implemented and verified (see [docs/project-status.md](docs/project-status.md) for details). External SMS/email delivery currently uses a mock channel, and production hosting is not yet configured.
 
-**Not implemented yet:** every business feature, including Google login, refresh tokens, merchant,
-courier and admin accounts, parcels and delivery requests, pricing, tracking, courier assignment,
-notifications, merchant API and webhooks, and reports. The frontend does not call the backend yet.
+### Running tests
+
+- **Backend unit tests:** `cd backend && .\mvnw.cmd test`
+- **Backend integration tests (requires Docker):** `cd backend && .\mvnw.cmd verify -Pintegration`
+- **Frontend checks:** `cd frontend && npm ci && npx tsc --noEmit && npm run lint && npm run build`
 
 ## Getting started
 

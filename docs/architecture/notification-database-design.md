@@ -6,6 +6,7 @@
 - **Date:** 2026-11-13
 - **Branch:** `feat/dev-notifications`
 - **Owning Module:** `com.swiftdrop.notification` (ADR 0003)
+- **Migrations:** `V202611131000__notification_create_tables.sql` and `V202611141000__notification_allow_non_parcel_notifications.sql` (allows nullable `parcel_id` for non-parcel notifications such as merchant account status events).
 
 ---
 

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,25 +24,29 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.merchant.api.MerchantStatus;
 import com.swiftdrop.merchant.application.MerchantAdminService;
+import com.swiftdrop.merchant.application.MerchantApprovalService;
 import com.swiftdrop.merchant.application.MerchantRegistrationService;
 import com.swiftdrop.merchant.security.MerchantAccessSecurity;
 import com.swiftdrop.shared.web.PageLimit;
 import com.swiftdrop.shared.web.PageResponse;
 
 /**
- * REST controller for merchant registration, status, and admin approval workflows (MER-1).
+ * REST controller for merchant registration, profile self-service, and admin approval workflows (Phase 2 & 3).
  */
 @RestController
 @RequestMapping("/api/v1/merchants")
 public class MerchantController {
 
     private final MerchantRegistrationService registrationService;
+    private final MerchantApprovalService approvalService;
     private final MerchantAdminService adminService;
 
     public MerchantController(
             MerchantRegistrationService registrationService,
+            MerchantApprovalService approvalService,
             MerchantAdminService adminService) {
         this.registrationService = registrationService;
+        this.approvalService = approvalService;
         this.adminService = adminService;
     }
 
@@ -62,11 +67,25 @@ public class MerchantController {
     @PreAuthorize("hasRole('MERCHANT')")
     public ResponseEntity<MerchantStatusResponse> getMyStatus(Authentication authentication) {
         UUID userId = MerchantAccessSecurity.extractUserId(authentication);
-        MerchantStatusResponse status = adminService.getMerchantStatusForUser(userId);
+        MerchantStatusResponse status = approvalService.getMerchantStatusForUser(userId);
         if (status == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant profile not found for user");
         }
         return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Merchant self-service: update profile.
+     * If the merchant is in REJECTED status, this update automatically resubmits the application to PENDING.
+     */
+    @PatchMapping("/me")
+    @PreAuthorize("hasRole('MERCHANT')")
+    public ResponseEntity<MerchantStatusResponse> updateMyProfile(
+            @Valid @RequestBody MerchantProfileUpdateRequest request,
+            Authentication authentication) {
+        UUID userId = MerchantAccessSecurity.extractUserId(authentication);
+        MerchantStatusResponse updated = approvalService.updateProfile(userId, request);
+        return ResponseEntity.ok(updated);
     }
 
     /**
@@ -81,12 +100,34 @@ public class MerchantController {
         int boundedPage = PageLimit.clampPage(page);
         int boundedSize = PageLimit.clampSize(size);
         Pageable pageable = PageRequest.of(boundedPage, boundedSize);
-        Page<MerchantStatusResponse> resultPage = adminService.findMerchants(status, pageable);
+        Page<MerchantStatusResponse> resultPage = approvalService.findMerchants(status, pageable);
         return PageResponse.of(resultPage.getContent(), resultPage.getNumber(), resultPage.getSize(), resultPage.getTotalElements());
     }
 
     /**
-     * Admin approval or rejection endpoint for a merchant application.
+     * Retrieves full merchant details including status audit history (Admin only).
+     */
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public MerchantDetailResponse getMerchantDetail(@PathVariable UUID id) {
+        return approvalService.getMerchantDetail(id);
+    }
+
+    /**
+     * Admin decision endpoint for approving, rejecting, or suspending a merchant application (Phase 3).
+     */
+    @PostMapping("/{id}/approval-decisions")
+    @PreAuthorize("hasRole('ADMIN')")
+    public MerchantStatusResponse decideApproval(
+            @PathVariable UUID id,
+            @Valid @RequestBody ApprovalDecisionRequest request,
+            Authentication authentication) {
+        UUID adminUserId = MerchantAccessSecurity.extractUserId(authentication);
+        return approvalService.reviewDecision(id, request, adminUserId);
+    }
+
+    /**
+     * Backward-compatible endpoint for existing approval actions (Phase 2 review modal).
      */
     @PostMapping("/{merchantId}/approval")
     @PreAuthorize("hasRole('ADMIN')")
@@ -95,6 +136,9 @@ public class MerchantController {
             @Valid @RequestBody MerchantApprovalRequest request,
             Authentication authentication) {
         UUID adminUserId = MerchantAccessSecurity.extractUserId(authentication);
-        return adminService.reviewApplication(merchantId, request, adminUserId);
+        ApprovalDecisionRequest.Decision decision = request.decision() == MerchantApprovalRequest.Decision.APPROVE
+                ? ApprovalDecisionRequest.Decision.APPROVE
+                : ApprovalDecisionRequest.Decision.REJECT;
+        return approvalService.reviewDecision(merchantId, new ApprovalDecisionRequest(decision, request.reason()), adminUserId);
     }
 }
