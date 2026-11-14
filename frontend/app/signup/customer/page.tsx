@@ -6,9 +6,18 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AuthLayout,
+  AuthBrandingPanel,
+  AuthFormContainer,
+  AuthHeader,
+  AuthDivider,
+  SocialLoginButton,
+  PasswordInput,
+} from "@/components/auth";
+import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_PASSWORD_BYTES = 72;
@@ -24,6 +33,12 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isConflict, setIsConflict] = useState(false);
+
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled();
+
+  function handleGoogleSignIn() {
+    initiateGoogleAuth("/customer");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -110,33 +125,42 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="container mx-auto flex-1 flex flex-col items-center justify-center px-4 py-12 min-h-[calc(100vh-3.5rem)]">
-      <div className="w-full max-w-md space-y-4">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/signup"
-            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors font-medium"
-          >
-            &larr; Back to account selection
-          </Link>
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-            <span className="size-1.5 rounded-full bg-primary" />
-            Customer
-          </div>
-        </div>
+    <AuthLayout
+      branding={
+        <AuthBrandingPanel
+          headline="From your door to anywhere on the island."
+          description="Create an account to calculate instant courier fares, schedule doorstep pickups, and track packages in real time."
+        />
+      }
+    >
+      <div className="space-y-4">
+        <Link
+          href="/login"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors font-medium"
+        >
+          &larr; Back to sign in
+        </Link>
 
-        <Card className="w-full rounded-xl bg-card border-border shadow-xs">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-              Create an account
-            </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground">
-              Get started with SwiftDrop parcel bookings and live delivery tracking.
-            </CardDescription>
-          </CardHeader>
+        <AuthFormContainer>
+          <AuthHeader
+            badge="Customer"
+            title="Create an account"
+            description="Get started with SwiftDrop parcel bookings and live delivery tracking."
+          />
 
-        <form onSubmit={handleSubmit} noValidate>
-          <CardContent className="space-y-4">
+          {isGoogleLoginEnabled && (
+            <div className="space-y-4">
+              <SocialLoginButton
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                label="Continue with Google"
+              />
+
+              <AuthDivider text="or register with email" />
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {errorMessage && (
               <div
                 role="alert"
@@ -168,7 +192,7 @@ export default function SignupPage() {
                 disabled={isLoading}
                 maxLength={200}
                 required
-                className="bg-background text-sm"
+                className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
               />
             </div>
 
@@ -184,22 +208,20 @@ export default function SignupPage() {
                 disabled={isLoading}
                 maxLength={320}
                 required
-                className="bg-background text-sm"
+                className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="signup-password">Password</Label>
-              <Input
+              <PasswordInput
                 id="signup-password"
-                type="password"
                 autoComplete="new-password"
                 placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
                 required
-                className="bg-background text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
                 Minimum 8 characters, maximum 72 bytes.
@@ -208,30 +230,26 @@ export default function SignupPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="signup-confirm-password">Confirm password</Label>
-              <Input
+              <PasswordInput
                 id="signup-confirm-password"
-                type="password"
                 autoComplete="new-password"
                 placeholder="Re-enter your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={isLoading}
                 required
-                className="bg-background text-sm"
               />
             </div>
 
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full font-semibold shadow-xs mt-2"
+              className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-[#0c5f59] hover:shadow-[0_8px_20px_-4px_rgba(15,118,110,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none cursor-pointer mt-2"
             >
               {isLoading ? "Creating account..." : "Create customer account"}
             </Button>
-          </CardContent>
 
-          <CardFooter className="flex flex-col gap-2 pt-2 border-t border-border/60 text-center text-xs text-muted-foreground">
-            <p>
+            <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
               Already have an account?{" "}
               <Link
                 href="/login"
@@ -239,11 +257,10 @@ export default function SignupPage() {
               >
                 Sign in
               </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
+            </div>
+          </form>
+        </AuthFormContainer>
       </div>
-    </main>
+    </AuthLayout>
   );
 }

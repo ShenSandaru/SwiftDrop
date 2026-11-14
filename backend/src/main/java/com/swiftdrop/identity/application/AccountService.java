@@ -16,6 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.shared.web.PageLimit;
@@ -149,11 +150,34 @@ public class AccountService implements UserDirectory {
                 .toList();
     }
 
+    @Transactional
+    public User updateProfile(UUID userId, String fullName, String phoneNumber) {
+        User user = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is disabled");
+        }
+        if (fullName != null && !fullName.isBlank()) {
+            user.setFullName(fullName);
+        }
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            user.setPhoneNumber(phoneNumber);
+        }
+        return users.saveAndFlush(user);
+    }
+
     private static UserSummary toSummary(User user) {
         Set<String> roleNames = user.getRoles().stream()
                 .map(Enum::name)
                 .collect(Collectors.toUnmodifiableSet());
-        return new UserSummary(user.getId(), user.getFullName(), user.getEmail(), roleNames, user.isEnabled());
+        return new UserSummary(
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getPhoneNumber(),
+                roleNames,
+                user.isEnabled(),
+                user.isProfileCompleted());
     }
 
     private static boolean tooLong(String rawPassword) {

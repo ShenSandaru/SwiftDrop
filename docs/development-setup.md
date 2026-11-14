@@ -149,8 +149,12 @@ On startup Flyway connects, applies the migrations under
 then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
-configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
-(see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
+configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` and
+`SWIFTDROP_WEBHOOK_SECRET_KEY` (the key that encrypts merchant webhook signing secrets) each hold at
+least 32 bytes (see `.env.example`). If you created webhook endpoints before the key became required,
+set it to the old built-in value `swiftdrop-local-dev-webhook-secret-key-32bytes!` to keep their
+secrets readable, or rotate their secrets after choosing a new key.
+`.\mvnw.cmd clean verify` does not need the containers.
 
 Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
 create a Google OAuth client of type "Web application" with the authorized redirect URI
@@ -164,6 +168,33 @@ your own machine, set `SWIFTDROP_WEBHOOK_ALLOW_LOCAL=true` in your `.env` and re
 this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
 `http://localhost:9000/hook`), and the backend logs a warning at startup. Private addresses stay
 refused. Never enable it outside local development.
+
+The merchant event consumer turns every merchant parcel's status change into webhook delivery records
+(`merchant_webhook_deliveries`), and the webhook sender signs and sends them (attempts in
+`merchant_webhook_attempts`). Both are on by default; set
+`SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED=false` to leave events waiting in the
+`merchant.parcel-status-changed` queue (visible in the RabbitMQ management UI), or
+`SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED=false` to leave the records `PENDING`.
+
+### AI assistant (optional)
+
+The chat assistant on the Track Parcel and customer pages
+([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)) needs a Gemini API key; without one it answers that
+it is unavailable and everything else works. Create a free key at <https://aistudio.google.com>,
+put it in your `.env` as `SWIFTDROP_GEMINI_API_KEY` (never commit or share it) and restart the
+backend, which reads `.env` only at startup. The model is optional (`SWIFTDROP_ASSISTANT_MODEL`);
+Google retires models, so if the log line `Assistant model unavailable: ... HTTP 404 for model ...`
+appears, pick a current Flash or Flash-Lite model from AI Studio. `HTTP 429` means the free quota is
+used up. The free tier may use prompts to improve Google products, so the assistant sends only
+public data (tracking status, prices, service areas), never names, phones or addresses.
+
+The same tools are available to MCP clients at `http://localhost:8080/mcp` while the backend runs;
+no key is needed, because the client's own model does the reasoning. In Claude Code:
+`claude mcp add --transport http swiftdrop http://localhost:8080/mcp`, then ask for example "Use
+swiftdrop to estimate 2 kg from Colombo to Kandy". To inspect the tools, run
+`npx @modelcontextprotocol/inspector` outside the repository, choose the Streamable HTTP transport
+and that URL, and connect through the Inspector's proxy (a direct browser connection is refused
+because its origin is not an allowed frontend origin).
 
 Bookings need a hub network ([ADR 0009](adr/0009-hub-network-delivery-attempts-and-returns.md)):
 a booking from or to a zone without an active hub is rejected. On a fresh database, sign in as the

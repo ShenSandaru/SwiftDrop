@@ -85,6 +85,10 @@ class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/tokens", "/api/v1/auth/google/exchanges", "/api/v1/merchants").permitAll()
                         // Public tracking by tracking number (CUS-6); delivery returns no personal data there
                         .requestMatchers(HttpMethod.GET, "/api/v1/tracked-parcels/**").permitAll()
+                        // AI assistant (ADR 0010): its tools return only public data, like tracking
+                        .requestMatchers(HttpMethod.POST, "/api/v1/assistant/messages").permitAll()
+                        // MCP endpoint (ADR 0010 §5): the same public, read-only tools; GET and DELETE answer 405
+                        .requestMatchers("/mcp").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         // OpenAPI / Swagger UI: public for development; to be protected or restricted under SD-702
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()

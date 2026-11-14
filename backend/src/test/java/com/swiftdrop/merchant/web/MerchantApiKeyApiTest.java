@@ -85,7 +85,15 @@ import com.swiftdrop.test.security.TestPrincipal;
 @MockitoBean(types = {ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
         ZoneRepository.class, PricingRuleRepository.class, ParcelRepository.class, ParcelStatusHistoryRepository.class,
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
-        HubRepository.class, MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class})
+        HubRepository.class, MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
+        com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class})
 class MerchantApiKeyApiTest {
 
     private static final String KEYS = "/api/v1/merchants/me/api-keys";

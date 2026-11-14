@@ -177,8 +177,28 @@ class MigrationConventionTest {
                                 "delivery add hub lifecycle",
                                 "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
                         tuple(
+                                "202611131000",
+                                "notification create tables",
+                                "notification/V202611131000__notification_create_tables.sql"),
+                        tuple(
                                 "202611131200",
                                 "merchant extend webhook event types",
-                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"));
+                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"),
+                        tuple(
+                                "202611131900",
+                                "identity add phone number to users",
+                                "identity/V202611131900__identity_add_phone_number_to_users.sql"),
+                        tuple(
+                                "202611141000",
+                                "merchant create event consumer tables",
+                                "merchant/V202611141000__merchant_create_event_consumer_tables.sql"),
+                        tuple(
+                                "202611151000",
+                                "merchant create webhook attempts",
+                                "merchant/V202611151000__merchant_create_webhook_attempts.sql"),
+                        tuple(
+                                "202611161000",
+                                "merchant create webhook redeliveries",
+                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"));
     }
 }

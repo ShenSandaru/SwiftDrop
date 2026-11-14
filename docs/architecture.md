@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; no consumers yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant consumer creates webhook delivery records; webhook sender signs, sends and retries them) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -110,6 +110,7 @@ The frontend and backend share no code. They communicate only over HTTP.
 | `merchant` | Registration and approval, API credentials, order intake, dashboard queries, webhook delivery and retries | merchants, API credentials, webhook endpoints, webhook delivery records |
 | `notification` | Notifications triggered by status events | notification messages |
 | `tracking` | Live SSE connections; no history of its own | nothing persistent |
+| `assistant` (Proposed, [ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md); implemented) | AI delivery assistant: chat endpoint, read-only tools over public tracking and pricing data, Gemini client | nothing persistent |
 
 `reporting` is deferred: the required reports (ADM-4) and workload counts (ADM-2) use data owned by
 `delivery`. ADR 0003 lists what each module must not own.
@@ -126,6 +127,7 @@ dispatch     → identity, delivery
 merchant     → identity, delivery
 notification → identity, delivery
 tracking     → delivery
+assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced by ModuleBoundaryTest)
 ```
 
 - No module depends on `notification` or `tracking`; `delivery` never calls `dispatch`,
@@ -211,8 +213,40 @@ tracking     → delivery
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
-  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5. **No queues or consumers
-  exist yet** (`notification`, `merchant`).
+  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5.
+- **Implemented (ADR 0004 §5.1, `merchant.infrastructure.messaging`):** `merchant` declares the durable
+  quorum queue `merchant.parcel-status-changed`, bound to `swiftdrop.events` with
+  `parcel.status-changed`, with dead-letter exchange `swiftdrop.dead-letter` (routing key = queue
+  name), delivery limit 5, maximum length 100,000, `reject-publish` and `at-least-once`
+  dead-lettering, plus its dead-letter queue `merchant.parcel-status-changed.dlq`.
+  `MerchantEventQueueIT` verifies on RabbitMQ 4.3 that the `stream_queue` feature flag is on, the
+  arguments are accepted and a rejected message is dead-lettered. `notification` has no queue yet.
+- **Implemented (SD-410, ADR 0004 §4.3, §6, §7.1):** the merchant consumer (`MerchantEventListener`,
+  `MerchantEventProcessor`) reads that queue. Customer parcels are ignored; for a merchant parcel it locks
+  the parcel's state row, recognizes duplicates in processed and pending events, applies events in
+  sequence order, keeps early events pending and quarantines contradicting events in
+  `merchant_event_anomalies`. Applying an event creates one `PENDING` row in
+  `merchant_webhook_deliveries` per enabled endpoint subscribed to the new status, if the merchant is
+  `APPROVED` when the event is processed. Listener retries: 3 attempts in total, invalid messages to
+  the `.dlq` at once. A reconciler closes gaps after 60 s from `ParcelEvents.eventsBetween` (contiguous
+  sequences only, `SKIP LOCKED` per parcel) and marks a parcel stuck after 5 failed attempts; processed
+  IDs are deleted after 30 days. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`. Details:
+  `docs/merchant-contracts.md` §4.8.
+- **Implemented (SD-411, ADR 0004 §7.1, §7.2):** the webhook sender claims due records every 5 s with
+  `SKIP LOCKED` and a per-claim lease token (2 min), checks endpoint and merchant at send time, decrypts the
+  signing secret, signs `"<timestamp>.<body>"` with HMAC-SHA256 (`X-SwiftDrop-Signature: v1=…`) and posts
+  the stored payload through the SSRF-safe client. 2xx succeeds; timeouts, network errors, 5xx, 408 and
+  429 are retried (30 s × 2, ±20 % jitter, 1 h cap, `Retry-After` honored, 8 attempts); other outcomes
+  fail. Every attempt is stored in `merchant_webhook_attempts` without bodies or secrets; an
+  undecryptable secret parks the record as `SECRET_UNAVAILABLE`. Switch:
+  `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED`. Details: `docs/merchant-contracts.md` §4.9.
+- **Implemented (SD-412, SD-413, ADR 0004 §7.5):** merchants list and inspect their own webhook
+  deliveries (`/api/v1/merchants/me/webhook-deliveries`, attempts grouped by series, no payloads or
+  secrets) and redeliver `FAILED` or `SECRET_UNAVAILABLE` records up to 3 times, each a new series of up
+  to 8 attempts; admins (`ADMIN`) do the same for all merchants at `/api/v1/webhook-deliveries`. Every
+  redelivery is audited in `merchant_webhook_redeliveries`. The portal screens are Member A's; the demo
+  receiver is `tools/webhook-receiver` and the merchant guide `docs/merchant-integration-guide.md`.
+  Details: `docs/merchant-contracts.md` §4.10.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
@@ -228,14 +262,15 @@ tracking     → delivery
   `swiftdrop.outbox.*` gauges and logs one `ERROR` line (IDs only) when an ADR §9 threshold is
   crossed and one line when it clears; a daily job deletes published rows older than 7 days.
   Settings are `swiftdrop.outbox.relay.*` with the ADR defaults; the relay is switched off on the
-  test classpath and on with `swiftdrop.outbox.relay.enabled`. Until a consumer binds a queue,
-  every event is returned as unroutable and waits in the outbox, which the monitor reports.
+  test classpath and on with `swiftdrop.outbox.relay.enabled`. Events with no bound queue are
+  returned as unroutable and wait in the outbox, which the monitor reports; the merchant queue
+  (below) is bound at startup.
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).** The
-  publishing side (outbox, relay, exchange) is implemented as above; **the consumer side
-  (queues, dead-lettering, consumers, webhooks, notifications) is not**, and the decision is not an
+  publishing side (outbox, relay, exchange) and the merchant queue are implemented as above; **the
+  rest of the consumer side (consumers, webhooks, notifications) is not**, and the decision is not an
   authorization to implement it without an approved task:
   - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
     Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
@@ -384,8 +419,14 @@ tracking     → delivery
   that accepts only `X-Api-Key` through `merchant.api.MerchantAuthentication` and answers every
   failure with the same `401` (`WWW-Authenticate: ApiKey`); its principal
   (`AuthenticatedMerchant`) carries only the merchant and key IDs with the authority
-  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute. The order endpoints
-  themselves (SD-405) are not implemented yet. Webhook signing is decided in
+  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute.
+- **Implemented (SD-405):** `POST /api/v1/merchant-orders` takes the customer booking body plus
+  `merchantOrderReference` (letters, digits and `. _ : -`, at most 100) and calls
+  `delivery.api.ParcelCreation`: `201` with `Location` for a new order, `200` with the existing parcel
+  for a repeated reference (D-25). `GET /api/v1/merchant-orders/{merchantOrderReference}` returns the
+  caller's own order, `404` otherwise. The merchant always comes from the API key. Because `merchant`
+  may not use `pricing` (ADR 0003), it passes the size by name through
+  `NewMerchantParcel.withSizeName` in `delivery.api`. Webhook signing is decided in
   [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
@@ -479,8 +520,17 @@ whether springdoc and Actuator details are exposed outside local development.
 - **Decided:** Kubernetes is excluded by the project rules and was rejected in
   [ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)'s alternatives. The brief offers
   Kubernetes only as an optional bonus (BON-1); pursuing it needs
-  a separate, explicitly reviewed ADR. The AI assistant bonus (BON-2) likewise needs its own
-  decision.
+  a separate, explicitly reviewed ADR.
+- **Proposed and implemented ([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)):** the AI delivery
+  assistant (BON-2). `POST /api/v1/assistant/messages` (public, rate limited per client) sends the
+  conversation to the Gemini API with function calling. The model may call three read-only tools,
+  `track_parcel`, `estimate_fee` and `list_service_areas`, which use only the `api` packages of
+  delivery and pricing and return public data. The API key and model come from the environment
+  (`SWIFTDROP_GEMINI_API_KEY`, `SWIFTDROP_ASSISTANT_MODEL`); without a key the assistant answers
+  that it is unavailable. The server keeps no conversation state. The same three tools are exposed
+  to MCP clients at `POST /mcp` (hand-written, no dependency; MCP 2026-07-28 and the 2025
+  `initialize` flow; plain JSON responses; public, Origin-checked and rate limited). An MCP client's
+  own model does the reasoning, so these calls use no Gemini quota.
 
 ## 14. Open questions
 

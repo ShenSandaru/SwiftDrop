@@ -28,6 +28,7 @@ import org.apache.hc.client5.http.ssl.TlsSocketStrategy;
 import org.apache.hc.core5.http.URIScheme;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.util.Timeout;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -92,13 +93,19 @@ public class WebhookHttpClient implements AutoCloseable {
             return WebhookCallResult.failed(WebhookCallResult.Outcome.NETWORK_ERROR, since(start));
         }
         try {
-            int status = restClient.post()
+            return restClient.post()
                     .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .headers(httpHeaders -> headers.forEach(httpHeaders::set))
                     .body(body)
-                    .exchange((request, response) -> response.getStatusCode().value());
-            return WebhookCallResult.responded(status, since(start));
+                    .exchange((request, response) -> {
+                        int status = response.getStatusCode().value();
+                        // Only these statuses ask the client to wait (RFC 9110 §10.2.3)
+                        String retryAfter = status == 429 || status == 503
+                                ? response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)
+                                : null;
+                        return WebhookCallResult.responded(status, since(start), retryAfter);
+                    });
         } catch (RestClientException e) {
             return WebhookCallResult.failed(classify(e), since(start));
         }

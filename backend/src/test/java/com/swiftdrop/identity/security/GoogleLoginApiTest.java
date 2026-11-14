@@ -98,7 +98,15 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
-        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
+        com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class
 })
 class GoogleLoginApiTest {
 
@@ -247,6 +255,23 @@ class GoogleLoginApiTest {
                         "http://localhost:3000/auth/google/callback?error=conflict_email_exists"));
         verify(users, never()).saveAndFlush(any());
         verify(identities, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void nonCustomerLinkedAccountIsRejectedWithRoleNotPermittedErrorRedirect() throws Exception {
+        for (Role nonCustomerRole : List.of(Role.MERCHANT, Role.COURIER, Role.DISPATCHER, Role.ADMIN)) {
+            User staffOrMerchant = withId(new User("staff@example.com", null, "Staff", Set.of(nonCustomerRole)));
+            when(identities.findByProviderAndSubject(IdentityProvider.GOOGLE, SUBJECT))
+                    .thenReturn(Optional.of(new ExternalIdentity(IdentityProvider.GOOGLE, SUBJECT, staffOrMerchant.getId())));
+            when(users.findById(staffOrMerchant.getId())).thenReturn(Optional.of(staffOrMerchant));
+
+            callback(claims -> { })
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string(HttpHeaders.LOCATION,
+                            "http://localhost:3000/auth/google/callback?error=role_not_permitted"));
+            verify(users, never()).saveAndFlush(any());
+        }
     }
 
     @Test

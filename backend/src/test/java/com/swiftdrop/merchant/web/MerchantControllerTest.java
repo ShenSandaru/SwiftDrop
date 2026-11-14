@@ -51,7 +51,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = {com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class})
+@MockitoBean(types = {com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class, com.swiftdrop.notification.domain.NotificationRecordRepository.class})
 class MerchantControllerTest {
 
     @Autowired
@@ -92,6 +92,20 @@ class MerchantControllerTest {
     private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantApiKeyRepository merchantApiKeys;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventStateRepository merchantEventStates;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantProcessedEventRepository merchantProcessedEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantPendingEventRepository merchantPendingEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository merchantEventAnomalies;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository merchantWebhookRedeliveries;
 
     @Test
     @DisplayName("POST /api/v1/merchants is public and returns 201 Created on valid submission")
