@@ -392,8 +392,11 @@ export default function AdminUsersPage() {
     }
 
     if (staffRole === "DISPATCHER") {
+      const selectedHub = hubs.find((h) => h.id === staffHubId);
       if (!staffHubId) {
         errors.hubId = "Please select an assigned hub for this dispatcher.";
+      } else if (selectedHub && !selectedHub.active) {
+        errors.hubId = "Cannot assign a dispatcher to an inactive hub.";
       } else if (assignedDispatcherHubIds.has(staffHubId)) {
         errors.hubId = "This hub already has an assigned dispatcher.";
       }
@@ -1165,13 +1168,17 @@ export default function AdminUsersPage() {
                     <option value="">
                       {hubsLoading ? "Loading hubs..." : "Select a hub for this dispatcher"}
                     </option>
-                    {activeHubs.map((hub) => {
+                    {hubs.map((hub) => {
                       const alreadyAssigned = assignedDispatcherHubIds.has(hub.id);
                       const roleTag = hub.central ? "Main Hub" : "Sub-hub";
+                      const statusTags: string[] = [];
+                      if (!hub.active) statusTags.push("Inactive");
+                      if (alreadyAssigned) statusTags.push("Dispatcher assigned");
+                      const statusSuffix = statusTags.length > 0 ? ` (${statusTags.join(" · ")})` : "";
                       return (
-                        <option key={hub.id} value={hub.id} disabled={alreadyAssigned}>
+                        <option key={hub.id} value={hub.id} disabled={!hub.active || alreadyAssigned}>
                           {hub.name} — {hub.city} ({hub.code}) · {roleTag}
-                          {alreadyAssigned ? " (Dispatcher assigned)" : ""}
+                          {statusSuffix}
                         </option>
                       );
                     })}
@@ -1183,11 +1190,11 @@ export default function AdminUsersPage() {
                   </p>
                 ) : !hubsLoading && !hubsError && activeHubs.length === 0 ? (
                   <p id="staff-hub-hint" className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    No active hubs found. Create hubs in Admin &rarr; Hubs (/admin/hubs) first.
+                    No active hubs available. Activate or create hubs in Admin &rarr; Hubs (/admin/hubs) first.
                   </p>
                 ) : (
                   <p id="staff-hub-hint" className="text-[11px] text-muted-foreground">
-                    Each hub can have one dispatcher. Already-assigned hubs are disabled.
+                    Each active hub can have one dispatcher. Inactive or already-assigned hubs are disabled.
                   </p>
                 )}
               </div>
