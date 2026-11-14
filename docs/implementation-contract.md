@@ -1,5 +1,7 @@
 # SwiftDrop implementation contract
 
+> **Historical Notice:** This is an early-stage planning contract preserved for historical reference. For the current implemented architecture and contracts, see [docs/architecture.md](architecture.md) and [docs/merchant-contracts.md](merchant-contracts.md).
+
 > **Status: Proposed — awaiting team review.** This document is a planning contract, not an ADR.
 > Items labeled **Existing** restate what is already implemented or accepted and link to the
 > authoritative source. Items labeled **Proposed** are recommendations so that parallel work does
