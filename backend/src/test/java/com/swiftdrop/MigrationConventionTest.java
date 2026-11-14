@@ -223,6 +223,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611161000",
                                 "merchant create webhook redeliveries",
-                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"));
+                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"),
+                        tuple(
+                                "202611171000",
+                                "identity add hub id to users",
+                                "identity/V202611171000__identity_add_hub_id_to_users.sql"));
     }
 }

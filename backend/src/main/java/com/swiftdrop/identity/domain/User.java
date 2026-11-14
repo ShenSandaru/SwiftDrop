@@ -53,6 +53,10 @@ public class User {
 
     @Column(name = "avatar_updated_at")
     private Instant avatarUpdatedAt;
+
+    @Column(name = "hub_id")
+    private UUID hubId;
+
     @Column(nullable = false)
     private boolean enabled;
 
@@ -148,6 +152,14 @@ public class User {
 
     public Set<Role> getRoles() {
         return Collections.unmodifiableSet(roles);
+    }
+
+    public UUID getHubId() {
+        return hubId;
+    }
+
+    public void setHubId(UUID hubId) {
+        this.hubId = hubId;
     }
 
     public byte[] getAvatarPhoto() {

@@ -27,4 +27,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r = :role AND u.enabled = true ORDER BY u.fullName ASC")
     List<User> findByRoleAndEnabledTrue(@Param("role") Role role);
+
+    @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u JOIN u.roles r WHERE u.hubId = :hubId AND r = :role")
+    boolean existsByHubIdAndRole(@Param("hubId") UUID hubId, @Param("role") Role role);
 }

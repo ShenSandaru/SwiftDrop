@@ -74,13 +74,25 @@ public class AccountService implements UserDirectory {
 
     /** Registers a staff account (COURIER or DISPATCHER). Rejects ADMIN. */
     public User registerStaff(String fullName, String email, String rawPassword, Role role) {
+        return registerStaff(fullName, email, rawPassword, role, null);
+    }
+
+    /** Registers a staff account (COURIER or DISPATCHER) with an optional hub assignment. */
+    public User registerStaff(String fullName, String email, String rawPassword, Role role, UUID hubId) {
         if (role != Role.COURIER && role != Role.DISPATCHER) {
             throw new InvalidRoleException("Staff account role must be COURIER or DISPATCHER");
         }
-        return registerUser(fullName, email, rawPassword, EnumSet.of(role));
+        if (role == Role.DISPATCHER && hubId != null && users.existsByHubIdAndRole(hubId, Role.DISPATCHER)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This hub already has an assigned dispatcher");
+        }
+        return registerUser(fullName, email, rawPassword, EnumSet.of(role), role == Role.DISPATCHER ? hubId : null);
     }
 
     private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles) {
+        return registerUser(fullName, email, rawPassword, roles, null);
+    }
+
+    private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles, UUID hubId) {
         if (tooLong(rawPassword)) {
             throw new InvalidPasswordException("Password must be at most " + MAX_PASSWORD_BYTES + " bytes");
         }
@@ -89,6 +101,7 @@ public class AccountService implements UserDirectory {
             throw new EmailAlreadyRegisteredException();
         }
         User user = new User(normalizedEmail, passwordEncoder.encode(rawPassword), fullName.trim(), roles);
+        user.setHubId(hubId);
         try {
             return users.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
@@ -257,7 +270,8 @@ public class AccountService implements UserDirectory {
                 user.getPhoneNumber(),
                 roleNames,
                 user.isEnabled(),
-                user.isProfileCompleted());
+                user.isProfileCompleted(),
+                user.getHubId());
     }
 
     private static boolean tooLong(String rawPassword) {

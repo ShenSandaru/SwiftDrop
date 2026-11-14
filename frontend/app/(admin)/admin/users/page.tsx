@@ -10,6 +10,7 @@ import {
   type PageResponse,
   type CreateStaffUserRequest,
   type UpdateUserStatusRequest,
+  type HubResponse,
 } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
   Eye,
   EyeOff,
   Search,
+  Warehouse,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -280,16 +282,62 @@ export default function AdminUsersPage() {
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
   const [staffRole, setStaffRole] = useState<"COURIER" | "DISPATCHER">("COURIER");
+  const [staffHubId, setStaffHubId] = useState("");
+  const [hubs, setHubs] = useState<HubResponse[]>([]);
+  const [hubsLoading, setHubsLoading] = useState(false);
+  const [hubsError, setHubsError] = useState<string | null>(null);
+  const [assignedDispatcherHubIds, setAssignedDispatcherHubIds] = useState<Set<string>>(new Set());
   const [showPassword, setShowPassword] = useState(false);
   const [staffFormErrors, setStaffFormErrors] = useState<Record<string, string>>({});
   const [staffFormGeneralError, setStaffFormGeneralError] = useState<string | null>(null);
   const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadHubsAndDispatchers() {
+      setHubsLoading(true);
+      setHubsError(null);
+      try {
+        const [hubList, dispatcherPage] = await Promise.all([
+          api.get<HubResponse[]>("/api/v1/hubs"),
+          api.get<PageResponse<UserResponse>>("/api/v1/users?role=DISPATCHER&size=100"),
+        ]);
+        if (ignore) return;
+        const sortedHubs = [...hubList].sort((a, b) => {
+          if (a.central !== b.central) return a.central ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+        setHubs(sortedHubs);
+        const assigned = new Set<string>();
+        for (const d of dispatcherPage.items) {
+          if (d.hubId) assigned.add(d.hubId);
+        }
+        setAssignedDispatcherHubIds(assigned);
+      } catch (err: unknown) {
+        if (!ignore) {
+          setHubsError(formatApiError(err));
+        }
+      } finally {
+        if (!ignore) {
+          setHubsLoading(false);
+        }
+      }
+    }
+    loadHubsAndDispatchers();
+    return () => {
+      ignore = true;
+    };
+  }, [refreshKey]);
+
+  const activeHubs = hubs.filter((h) => h.active);
+  const assignedActiveHubCount = activeHubs.filter((h) => assignedDispatcherHubIds.has(h.id)).length;
 
   function resetStaffForm() {
     setStaffFullName("");
     setStaffEmail("");
     setStaffPassword("");
     setStaffRole("COURIER");
+    setStaffHubId("");
     setShowPassword(false);
     setStaffFormErrors({});
     setStaffFormGeneralError(null);
@@ -343,6 +391,14 @@ export default function AdminUsersPage() {
       errors.role = "Role must be COURIER or DISPATCHER.";
     }
 
+    if (staffRole === "DISPATCHER") {
+      if (!staffHubId) {
+        errors.hubId = "Please select an assigned hub for this dispatcher.";
+      } else if (assignedDispatcherHubIds.has(staffHubId)) {
+        errors.hubId = "This hub already has an assigned dispatcher.";
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setStaffFormErrors(errors);
       return;
@@ -355,6 +411,7 @@ export default function AdminUsersPage() {
       email: trimmedEmail,
       password: staffPassword,
       role: staffRole,
+      ...(staffRole === "DISPATCHER" && staffHubId ? { hubId: staffHubId } : {}),
     };
 
     try {
@@ -761,6 +818,15 @@ export default function AdminUsersPage() {
                             ) : (
                               <span className="text-xs text-muted-foreground">No roles assigned</span>
                             )}
+                            {item.hubId && (() => {
+                              const hub = hubs.find((h) => h.id === item.hubId);
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted/60 text-muted-foreground border border-border">
+                                  <Warehouse className="size-3 shrink-0" />
+                                  {hub ? `${hub.name} (${hub.code})` : "Hub assigned"}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
 
@@ -1022,7 +1088,14 @@ export default function AdminUsersPage() {
                         name="staff-role"
                         value={r.value}
                         checked={isSelected}
-                        onChange={() => !isSubmittingStaff && setStaffRole(r.value)}
+                        onChange={() => {
+                          if (!isSubmittingStaff) {
+                            setStaffRole(r.value);
+                            if (r.value !== "DISPATCHER") {
+                              setStaffHubId("");
+                            }
+                          }
+                        }}
                         disabled={isSubmittingStaff}
                         className="sr-only"
                       />
@@ -1059,6 +1132,62 @@ export default function AdminUsersPage() {
                 </p>
               )}
             </div>
+
+            {/* Assigned Hub (required for DISPATCHER, one dispatcher per hub) */}
+            {staffRole === "DISPATCHER" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="staff-hub">Assigned Hub</Label>
+                  {!hubsLoading && activeHubs.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {assignedActiveHubCount} / {activeHubs.length} hubs assigned
+                    </span>
+                  )}
+                </div>
+                {hubsError ? (
+                  <p className="text-[11px] text-destructive font-medium" role="alert">
+                    Failed to load hubs: {hubsError}
+                  </p>
+                ) : (
+                  <select
+                    id="staff-hub"
+                    value={staffHubId}
+                    onChange={(e) => setStaffHubId(e.target.value)}
+                    disabled={isSubmittingStaff || hubsLoading}
+                    required
+                    aria-required="true"
+                    aria-invalid={Boolean(staffFormErrors.hubId)}
+                    aria-describedby={staffFormErrors.hubId ? "staff-hub-error" : "staff-hub-hint"}
+                    className={`flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+                      staffFormErrors.hubId ? "border-destructive focus-visible:ring-destructive" : "border-input"
+                    }`}
+                  >
+                    <option value="">
+                      {hubsLoading ? "Loading hubs..." : "Select a hub for this dispatcher"}
+                    </option>
+                    {activeHubs.map((hub) => {
+                      const alreadyAssigned = assignedDispatcherHubIds.has(hub.id);
+                      const roleTag = hub.central ? "Main Hub" : "Sub-hub";
+                      return (
+                        <option key={hub.id} value={hub.id} disabled={alreadyAssigned}>
+                          {hub.name} — {hub.city} ({hub.code}) · {roleTag}
+                          {alreadyAssigned ? " (Dispatcher assigned)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+                {staffFormErrors.hubId ? (
+                  <p id="staff-hub-error" className="text-[11px] text-destructive font-medium" role="alert">
+                    {staffFormErrors.hubId}
+                  </p>
+                ) : (
+                  <p id="staff-hub-hint" className="text-[11px] text-muted-foreground">
+                    Each hub can have one dispatcher. Already-assigned hubs are disabled.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
