@@ -15,7 +15,6 @@ import {
   MapPin,
   Package,
   ShieldCheck,
-  SlidersHorizontal,
   Store,
   Truck,
   Users,
@@ -29,7 +28,9 @@ import { api, formatApiError, type PageResponse, type UserResponse } from "@/lib
 import {
   countDispatchParcels,
   listDispatchCouriers,
+  listDispatchParcels,
   type DispatchCourier,
+  type DispatchParcelItem,
 } from "@/lib/dispatch";
 import { listHubs, type Hub } from "@/lib/hubs";
 import {
@@ -86,6 +87,8 @@ export default function AdminPortalOverviewPage() {
     delivered: 0,
     failedAttempt: 0,
   });
+  const [recentParcels, setRecentParcels] = useState<DispatchParcelItem[]>([]);
+  const [barsReady, setBarsReady] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -107,6 +110,7 @@ export default function AdminPortalOverviewPage() {
         outForDeliveryParcels,
         deliveredParcels,
         failedAttemptParcels,
+        recentParcelsPage,
       ] = await Promise.all([
         listHubs().catch(() => [] as Hub[]),
         listAdminZones().catch(() => [] as ZoneAdmin[]),
@@ -135,6 +139,13 @@ export default function AdminPortalOverviewPage() {
         countDispatchParcels("OUT_FOR_DELIVERY").catch(() => 0),
         countDispatchParcels("DELIVERED").catch(() => 0),
         countDispatchParcels("DELIVERY_ATTEMPT_FAILED").catch(() => 0),
+        listDispatchParcels({ page: 0, size: 5 }).catch(() => ({
+          items: [] as DispatchParcelItem[],
+          page: 0,
+          size: 5,
+          totalItems: 0,
+          totalPages: 0,
+        })),
       ]);
 
       setHubs(loadedHubs);
@@ -158,6 +169,8 @@ export default function AdminPortalOverviewPage() {
         delivered: deliveredParcels,
         failedAttempt: failedAttemptParcels,
       });
+      setRecentParcels(recentParcelsPage.items);
+      requestAnimationFrame(() => setBarsReady(true));
 
       setLastSyncedAt(new Date());
       setError(null);
@@ -278,10 +291,10 @@ export default function AdminPortalOverviewPage() {
         </div>
       </div>
 
-      {/* Hero Command Banner */}
+      {/* Hero Command Banner with animated route SVG */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary/95 to-primary/90 px-6 py-7 text-primary-foreground sm:px-8 sm:py-8 shadow-sm">
         <svg
-          className="pointer-events-none absolute -right-12 -top-10 h-64 w-96 opacity-20"
+          className="pointer-events-none absolute -right-12 -top-10 h-64 w-96 opacity-30"
           viewBox="0 0 320 220"
           fill="none"
           aria-hidden="true"
@@ -292,10 +305,26 @@ export default function AdminPortalOverviewPage() {
             strokeWidth="3.5"
             strokeDasharray="10 10"
             strokeLinecap="round"
-          />
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="40"
+              to="0"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </path>
           <circle cx="10" cy="190" r="7" fill="currentColor" />
           <circle cx="180" cy="120" r="6" fill="currentColor" />
+          <circle cx="180" cy="120" r="6" stroke="currentColor" strokeWidth="2" fill="none">
+            <animate attributeName="r" from="6" to="18" dur="2.2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.8" to="0" dur="2.2s" repeatCount="indefinite" />
+          </circle>
           <circle cx="310" cy="20" r="8" fill="currentColor" />
+          <circle cx="310" cy="20" r="8" stroke="currentColor" strokeWidth="2" fill="none">
+            <animate attributeName="r" from="8" to="22" dur="2.2s" begin="0.7s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.8" to="0" dur="2.2s" begin="0.7s" repeatCount="indefinite" />
+          </circle>
         </svg>
         <div className="relative max-w-2xl space-y-3">
           <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] opacity-85">
@@ -320,7 +349,10 @@ export default function AdminPortalOverviewPage() {
 
       {/* 5 Primary KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card className="rounded-xl border border-border bg-card shadow-2xs py-4">
+        <Card
+          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 rounded-xl border border-border bg-card py-4 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xs"
+          style={{ animationDelay: "0ms", animationFillMode: "both" }}
+        >
           <CardContent className="flex h-full flex-col justify-between gap-3 px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -339,7 +371,10 @@ export default function AdminPortalOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl border border-border bg-card shadow-2xs py-4">
+        <Card
+          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 rounded-xl border border-border bg-card py-4 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xs"
+          style={{ animationDelay: "60ms", animationFillMode: "both" }}
+        >
           <CardContent className="flex h-full flex-col justify-between gap-3 px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -358,7 +393,10 @@ export default function AdminPortalOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl border border-border bg-card shadow-2xs py-4">
+        <Card
+          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 rounded-xl border border-border bg-card py-4 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xs"
+          style={{ animationDelay: "120ms", animationFillMode: "both" }}
+        >
           <CardContent className="flex h-full flex-col justify-between gap-3 px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -377,7 +415,10 @@ export default function AdminPortalOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl border border-border bg-card shadow-2xs py-4">
+        <Card
+          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 rounded-xl border border-border bg-card py-4 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xs"
+          style={{ animationDelay: "180ms", animationFillMode: "both" }}
+        >
           <CardContent className="flex h-full flex-col justify-between gap-3 px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -396,7 +437,10 @@ export default function AdminPortalOverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl border border-border bg-card shadow-2xs py-4">
+        <Card
+          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300 rounded-xl border border-border bg-card py-4 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xs"
+          style={{ animationDelay: "240ms", animationFillMode: "both" }}
+        >
           <CardContent className="flex h-full flex-col justify-between gap-3 px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -539,7 +583,7 @@ export default function AdminPortalOverviewPage() {
               return (
                 <div
                   key={stage.status}
-                  className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+                  className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-accent/30"
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="inline-flex items-center gap-2 font-medium text-foreground">
@@ -555,8 +599,8 @@ export default function AdminPortalOverviewPage() {
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
-                      className={cn("h-full rounded-full transition-all", stage.tone)}
-                      style={{ width: `${pct}%` }}
+                      className={cn("h-full rounded-full transition-all duration-700 ease-out", stage.tone)}
+                      style={{ width: barsReady ? `${pct}%` : "0%" }}
                     />
                   </div>
                 </div>
@@ -604,13 +648,9 @@ export default function AdminPortalOverviewPage() {
             </div>
             <Link
               href="/admin/pricing"
-              className={cn(
-                buttonVariants({ size: "sm", variant: "outline" }),
-                "group h-8 gap-1.5 rounded-lg border-primary/25 bg-accent/40 px-3 text-xs font-semibold text-primary shadow-2xs transition-all hover:border-primary hover:bg-primary hover:text-primary-foreground"
-              )}
+              className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
             >
-              <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-              Adjust Tariff
+              Adjust Tariff{" "}
               <ArrowRight
                 className="size-3.5 transition-transform group-hover:translate-x-0.5"
                 aria-hidden="true"
@@ -652,6 +692,75 @@ export default function AdminPortalOverviewPage() {
             </p>
           )}
         </CardContent>
+      </Card>
+
+      {/* Live Recent Shipments Feed */}
+      <Card className="rounded-xl border border-border bg-card shadow-2xs pb-0">
+        <CardHeader className="border-b border-border/70 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
+              <Package className="size-4" aria-hidden="true" />
+            </span>
+            <div>
+              <CardTitle className="font-heading text-base font-semibold">
+                Recent Shipments
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Latest parcels created across customer and merchant channels.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              Loading recent shipments...
+            </div>
+          ) : recentParcels.length === 0 ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              No shipments recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recentParcels.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3.5 py-2.5 text-xs transition-colors hover:border-primary/30 hover:bg-accent/25"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="shrink-0 rounded bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                      {p.trackingNumber}
+                    </span>
+                    <span className="truncate font-medium text-foreground">
+                      {p.pickupCity} &rarr; {p.dropoffCity}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {p.size} &middot; {(p.weightGrams / 1000).toFixed(1)} kg
+                    </span>
+                    <span className="rounded-full border border-primary/20 bg-accent px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
+                      {p.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        <CardFooter className="flex justify-end border-t border-border/60 bg-muted/20 px-4 py-3">
+          <Link
+            href="/dispatch"
+            className="group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+          >
+            View All in Dispatch{" "}
+            <ArrowRight
+              className="size-3.5 transition-transform group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </Link>
+        </CardFooter>
       </Card>
     </div>
   );
