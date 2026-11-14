@@ -276,6 +276,11 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public List<UserSummary> findEnabledCouriersByHub(UUID hubId) {
+            return List.of();
+        }
+
+        @Override
         public UUID createMerchantUser(String fullName, String email, String rawPassword) {
             return UUID.randomUUID();
         }

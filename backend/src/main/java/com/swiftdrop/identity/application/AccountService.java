@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -255,6 +256,14 @@ public class AccountService implements UserDirectory {
     @Override
     public List<UserSummary> findEnabledCouriers() {
         return users.findByRoleAndEnabledTrue(Role.COURIER).stream()
+                .map(AccountService::toSummary)
+                .toList();
+    }
+
+    @Override
+    public List<UserSummary> findEnabledCouriersByHub(UUID hubId) {
+        Objects.requireNonNull(hubId, "hubId");
+        return users.findByRoleAndEnabledTrueAndHubId(Role.COURIER, hubId).stream()
                 .map(AccountService::toSummary)
                 .toList();
     }
