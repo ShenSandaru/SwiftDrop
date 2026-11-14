@@ -19,6 +19,7 @@ current state of each decision and lists the open questions that still need one.
 | [0008 (Merchant)](0008-merchant-api-key-authentication.md) | Merchant API key authentication | Accepted *(shares number 0008 with Dispatch ADR)* |
 | [0009](0009-hub-network-delivery-attempts-and-returns.md) | Hub network, delivery attempts, returns and cancellation | Accepted |
 | [0010](0010-ai-delivery-assistant-and-mcp-server.md) | AI delivery assistant and MCP server (BON-2) | Proposed *(implemented in `assistant`; awaiting formal ADR acceptance)* |
+| [0011](0011-direct-links-between-branch-hubs.md) | Direct links between branch hubs | Proposed |
 
 ## Process
 
