@@ -1,5 +1,6 @@
 package com.swiftdrop.pricing.domain;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,10 +40,10 @@ public class District {
     private String defaultBranchName;
 
     @Column(precision = 9, scale = 6)
-    private Double latitude;
+    private BigDecimal latitude;
 
     @Column(precision = 9, scale = 6)
-    private Double longitude;
+    private BigDecimal longitude;
 
     @OneToMany(mappedBy = "district", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("name ASC")
@@ -53,10 +54,16 @@ public class District {
     }
 
     public District(String code, String name, String province, String postalCode, String defaultBranchName) {
-        this(code, name, province, postalCode, defaultBranchName, null, null);
+        this(code, name, province, postalCode, defaultBranchName, (BigDecimal) null, (BigDecimal) null);
     }
 
     public District(String code, String name, String province, String postalCode, String defaultBranchName, Double latitude, Double longitude) {
+        this(code, name, province, postalCode, defaultBranchName,
+                latitude != null ? BigDecimal.valueOf(latitude) : null,
+                longitude != null ? BigDecimal.valueOf(longitude) : null);
+    }
+
+    public District(String code, String name, String province, String postalCode, String defaultBranchName, BigDecimal latitude, BigDecimal longitude) {
         this.code = Objects.requireNonNull(code, "code must not be null").trim().toUpperCase();
         this.name = Objects.requireNonNull(name, "name must not be null").trim();
         this.province = Objects.requireNonNull(province, "province must not be null").trim();
@@ -86,11 +93,11 @@ public class District {
         return defaultBranchName;
     }
 
-    public Double getLatitude() {
+    public BigDecimal getLatitude() {
         return latitude;
     }
 
-    public Double getLongitude() {
+    public BigDecimal getLongitude() {
         return longitude;
     }
 

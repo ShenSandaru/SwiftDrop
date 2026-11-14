@@ -199,8 +199,7 @@ class MigrationConventionTest {
                         tuple(
                                 "202611131400",
                                 "pricing create districts and postal zones",
-                                "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql"));
-                                "identity/V202611131900__identity_add_phone_number_to_users.sql"),
+                                "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql"),
                         tuple(
                                 "202611141000",
                                 "notification allow non parcel notifications",
