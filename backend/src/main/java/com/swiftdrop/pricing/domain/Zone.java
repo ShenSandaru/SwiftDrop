@@ -34,6 +34,9 @@ public class Zone {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "hub_id")
+    private UUID hubId;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -46,13 +49,18 @@ public class Zone {
     }
 
     public Zone(String code, String name) {
-        this(code, name, true);
+        this(code, name, true, null);
     }
 
     public Zone(String code, String name, boolean active) {
+        this(code, name, active, null);
+    }
+
+    public Zone(String code, String name, boolean active, UUID hubId) {
         this.code = normalizeCode(code);
         this.name = normalizeName(name);
         this.active = active;
+        this.hubId = hubId;
         this.createdAt = Instant.now();
     }
 
@@ -106,6 +114,14 @@ public class Zone {
 
     public void deactivate() {
         this.active = false;
+    }
+
+    public UUID getHubId() {
+        return hubId;
+    }
+
+    public void setHubId(UUID hubId) {
+        this.hubId = hubId;
     }
 
     public long getVersion() {

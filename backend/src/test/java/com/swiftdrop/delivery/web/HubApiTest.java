@@ -44,6 +44,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
@@ -155,5 +157,20 @@ class HubApiTest {
         mvc.perform(put("/api/v1/hubs/" + UUID.randomUUID()).with(TestPrincipal.admin().postProcessor())
                         .contentType(MediaType.APPLICATION_JSON).content(KANDY))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void onlyTheAdminDeletesHubs() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(hubs.findById(id)).thenReturn(Optional.of(
+                new Hub("KDY", "Kandy branch", "Kandy", UUID.randomUUID(), false, NOW)));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/hubs/" + id)
+                        .with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/hubs/" + id)
+                        .with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isNoContent());
     }
 }

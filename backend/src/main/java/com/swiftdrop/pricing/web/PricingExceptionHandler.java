@@ -4,9 +4,12 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.swiftdrop.pricing.api.PricingConflictException;
+import com.swiftdrop.pricing.api.PricingNotFoundException;
 import com.swiftdrop.pricing.application.RouteNotPricedException;
 
 /**
@@ -21,5 +24,20 @@ class PricingExceptionHandler {
     @ExceptionHandler(RouteNotPricedException.class)
     ProblemDetail routeNotPriced(RouteNotPricedException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(PricingConflictException.class)
+    ProblemDetail conflict(PricingConflictException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(PricingNotFoundException.class)
+    ProblemDetail notFound(PricingNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ProblemDetail versionConflict(ObjectOptimisticLockingFailureException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Resource was modified by another transaction. Please reload.");
     }
 }

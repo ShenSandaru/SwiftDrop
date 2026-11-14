@@ -44,6 +44,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
@@ -118,10 +120,10 @@ class PriceQuoteApiTest {
     }
 
     @Test
-    void unpricedRouteReturnsConflictWithoutZoneIds() throws Exception {
+    void routeWithoutExplicitRuleUsesGlobalFallback() throws Exception {
         quote(TestPrincipal.customer(), body(KANDY, COLOMBO, "\"SMALL\"", "1000"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("No pricing for this route"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currency").value("LKR"));
     }
 
     @Test

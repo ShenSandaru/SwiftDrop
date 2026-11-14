@@ -68,7 +68,9 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
-@MockitoBean(types = {UserRepository.class, ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
+@MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,UserRepository.class, ExternalIdentityRepository.class, GoogleLoginCodeRepository.class,
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         ZoneRepository.class, PricingRuleRepository.class, ParcelRepository.class, ParcelStatusHistoryRepository.class,
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
