@@ -35,6 +35,17 @@ public interface MerchantOrderQuery {
     Optional<ParcelSummary> findByMerchantReference(UUID merchantId, String merchantOrderReference);
 
     /**
+     * Finds one of the merchant's orders by parcel ID, with its status timeline. Another merchant's
+     * parcel and an unknown ID look the same (empty), so callers can answer 404 and IDs cannot be
+     * enumerated.
+     *
+     * @param merchantId the merchant ID, always from the authenticated principal
+     * @param parcelId the parcel (order) ID
+     * @return the order detail, or empty
+     */
+    Optional<MerchantOrderDetailView> findOrderDetail(UUID merchantId, UUID parcelId);
+
+    /**
      * Counts parcels owned by this merchant grouped by parcel status.
      *
      * @param merchantId the merchant ID

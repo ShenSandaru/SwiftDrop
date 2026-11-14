@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -227,20 +228,28 @@ export default function AdminMerchantsPage() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7 px-2.5 font-medium"
-                        onClick={() => {
-                          setSelectedMerchant(m);
-                          setIsReviewOpen(true);
-                          setDecisionMode("NONE");
-                          setRejectionReason("");
-                          setDialogError(null);
-                        }}
-                      >
-                        Review
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/merchants/${m.merchantId}`}
+                          className="inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-xs h-7 px-2.5 font-medium transition-colors"
+                        >
+                          View Details
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2.5 font-medium"
+                          onClick={() => {
+                            setSelectedMerchant(m);
+                            setIsReviewOpen(true);
+                            setDecisionMode("NONE");
+                            setRejectionReason("");
+                            setDialogError(null);
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

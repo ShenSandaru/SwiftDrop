@@ -17,11 +17,11 @@ export function ApprovalGate({ children }: ApprovalGateProps) {
   const [isChecking, setIsChecking] = useState(true);
   const [isApproved, setIsApproved] = useState(false);
 
-  const isStatusPage = pathname === "/merchant/status";
+  const isExemptPage = pathname === "/merchant/status" || pathname === "/merchant/profile";
 
   useEffect(() => {
-    // Status page itself is never blocked by the approval gate
-    if (isStatusPage) {
+    // Status and profile pages are never blocked by the approval gate
+    if (isExemptPage) {
       return;
     }
 
@@ -53,9 +53,9 @@ export function ApprovalGate({ children }: ApprovalGateProps) {
     return () => {
       isMounted = false;
     };
-  }, [pathname, isStatusPage, token, isAuthLoading, router]);
+  }, [pathname, isExemptPage, token, isAuthLoading, router]);
 
-  if (isStatusPage) {
+  if (isExemptPage) {
     return <>{children}</>;
   }
 

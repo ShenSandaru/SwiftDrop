@@ -230,7 +230,7 @@ export default function MerchantStatusPage() {
                 <Button
                   variant="outline"
                   className="w-full mt-2 font-semibold"
-                  onClick={() => alert("Resubmission form will open in the next phase.")}
+                  onClick={() => router.push("/merchant/profile")}
                 >
                   Edit & Resubmit Application
                 </Button>
