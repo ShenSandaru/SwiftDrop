@@ -351,8 +351,8 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
     needs a separate ADR.
 - **Proposed ([ADR 0011](adr/0011-direct-links-between-branch-hubs.md)); implemented:** an admin
   links two active branch hubs, and parcels picked up between them travel origin → destination
-  without the central hub. Links do not chain, the route is still fixed at pickup, and returns use
-  it reversed. This amends only the route rule of ADR 0009 §1.
+  without the central hub. Links do not chain and the route is still fixed at pickup. This amends
+  only the route rule of ADR 0009 §1.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.

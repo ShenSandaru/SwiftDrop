@@ -41,8 +41,9 @@ Links do **not chain**. With links A–B and B–C, a parcel from A to C still t
 central hub unless A–C is linked too. A route stays at most three hubs long.
 
 The route is still fixed at pickup and stored on the parcel (ADR 0009 §1). Adding or removing a link
-changes only parcels picked up afterwards. A return uses the stored route reversed, so a parcel that
-travelled directly also returns directly.
+changes only parcels picked up afterwards. Returns are not affected: a return starts at the
+destination hub and a return courier takes the parcel back to the sender (ADR 0009 §3), without
+further hub legs.
 
 ### 3. API
 
