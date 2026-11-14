@@ -1181,6 +1181,10 @@ export default function AdminUsersPage() {
                   <p id="staff-hub-error" className="text-[11px] text-destructive font-medium" role="alert">
                     {staffFormErrors.hubId}
                   </p>
+                ) : !hubsLoading && !hubsError && activeHubs.length === 0 ? (
+                  <p id="staff-hub-hint" className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                    No active hubs found. Create hubs in Admin &rarr; Hubs (/admin/hubs) first.
+                  </p>
                 ) : (
                   <p id="staff-hub-hint" className="text-[11px] text-muted-foreground">
                     Each hub can have one dispatcher. Already-assigned hubs are disabled.
