@@ -8,6 +8,7 @@
  */
 
 import { api, type PageResponse } from "./api";
+export type { PageResponse };
 
 export type NotificationChannel = "IN_APP" | "EMAIL" | "SMS" | "PUSH";
 

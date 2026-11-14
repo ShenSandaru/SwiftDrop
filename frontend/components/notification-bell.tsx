@@ -93,11 +93,7 @@ export function NotificationBell() {
   };
 
   const getFooterLink = () => {
-    if (hasRole("CUSTOMER")) return { href: "/customer/history", label: "View delivery history" };
-    if (hasRole("MERCHANT")) return { href: "/merchant/orders", label: "View merchant orders" };
-    if (hasRole("COURIER")) return { href: "/courier", label: "View courier tasks" };
-    if (hasRole("DISPATCHER") || hasRole("ADMIN")) return { href: "/dispatch", label: "View dispatch fleet" };
-    return { href: "/track", label: "Track a parcel" };
+    return { href: "/notifications", label: "View all notifications" };
   };
 
   const footerLink = getFooterLink();
