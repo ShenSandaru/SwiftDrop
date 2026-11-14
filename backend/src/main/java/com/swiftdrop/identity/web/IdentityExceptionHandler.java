@@ -36,6 +36,11 @@ class IdentityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Malformed request body");
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail illegalArgument(IllegalArgumentException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
     @ExceptionHandler(InvalidPasswordException.class)
     ProblemDetail invalidPassword(InvalidPasswordException e) {
         return invalid(e.getMessage(), List.of("password"));

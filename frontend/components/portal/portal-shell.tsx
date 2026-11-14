@@ -20,6 +20,7 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { href: "/admin/pricing", label: "Pricing & Zones", exact: true },
   { href: "/admin/hubs", label: "Hub Network", exact: true },
   { href: "/admin/reports", label: "Reports", exact: true },
+  { href: "/profile", label: "My Profile", exact: true },
 ];
 
 export const DISPATCHER_NAV: PortalNavItem[] = [];

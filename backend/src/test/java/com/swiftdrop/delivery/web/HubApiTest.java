@@ -44,6 +44,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,

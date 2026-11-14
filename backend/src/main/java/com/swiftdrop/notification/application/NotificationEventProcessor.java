@@ -228,7 +228,7 @@ public class NotificationEventProcessor {
                     // Check idempotency pre-insert
                     if (!recordRepository.existsByEventIdAndChannelAndRecipientUserId(
                             event.eventId(), NotificationChannel.IN_APP, customerId)) {
-                        NotificationRecord record = new NotificationRecord(
+                        NotificationRecord record = NotificationRecord.forParcel(
                                 event.eventId(),
                                 customerId,
                                 event.data().parcelId(),

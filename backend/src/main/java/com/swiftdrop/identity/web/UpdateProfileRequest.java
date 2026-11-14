@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** Request to update the authenticated customer's own profile information. */
+/** Request to update the authenticated user's own profile information. */
 public record UpdateProfileRequest(
         @NotBlank(message = "Full name cannot be blank")
         @Size(max = 200, message = "Full name must not exceed 200 characters")
@@ -17,6 +17,8 @@ public record UpdateProfileRequest(
         fullName = fullName == null ? null : fullName.trim();
         phoneNumber = phoneNumber == null ? null : phoneNumber.trim();
     }
+
+    public UpdateProfileRequest(String fullName) {
+        this(fullName, null);
+    }
 }
-
-

@@ -93,6 +93,7 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.identity.bootstrap.admin-password="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,

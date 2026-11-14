@@ -102,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(25);
+        assertThat(rows).hasSize(28);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -148,41 +148,48 @@ class DatabaseMigrationIT {
                         tuple("merchant/V202611041020__merchant_create_merchant_webhook_endpoints.sql", true),
                         tuple("merchant/V202611041030__merchant_create_merchant_webhook_endpoint_events.sql", true));
 
-        assertThat(rows.subList(12, 15))
+        assertThat(rows.subList(12, 16))
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("delivery/V202611041200__delivery_add_dispatch_assignment_history.sql", true),
                         tuple("delivery/V202611051210__delivery_add_parcel_assignment_version.sql", true),
-                        tuple("merchant/V202611081000__merchant_create_merchant_api_keys.sql", true));
+                        tuple("merchant/V202611081000__merchant_create_merchant_api_keys.sql", true),
+                        tuple("identity/V202611081400__identity_user_profiles_and_addresses.sql", true));
 
-        assertThat(rows.subList(15, 17))
+        assertThat(rows.subList(16, 18))
                 .extracting(row -> row.get("script"), row -> row.get("success"))
                 .containsExactly(
                         tuple("identity/V202611101200__identity_replace_dispatcher_admin_with_admin_and_dispatcher.sql", true),
                         tuple("delivery/V202611101210__delivery_update_actor_role_for_admin_and_dispatcher.sql", true));
 
-        assertThat(rows.get(17))
+        assertThat(rows.get(18))
                 .containsEntry("script", "delivery/V202611111000__delivery_create_hubs.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(18))
+        assertThat(rows.get(19))
                 .containsEntry("script", "delivery/V202611111010__delivery_add_hub_lifecycle.sql")
                 .containsEntry("success", true);
-        assertThat(rows.get(19))
-                .containsEntry("script", "notification/V202611131000__notification_create_tables.sql")
-                .containsEntry("success", true);
         assertThat(rows.get(20))
-                .containsEntry("script", "merchant/V202611131200__merchant_extend_webhook_event_types.sql")
+                .containsEntry("script", "identity/V202611111330__identity_user_avatar.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(21))
-                .containsEntry("script", "identity/V202611131900__identity_add_phone_number_to_users.sql")
+                .containsEntry("script", "notification/V202611131000__notification_create_tables.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(22))
-                .containsEntry("script", "merchant/V202611141000__merchant_create_event_consumer_tables.sql")
+                .containsEntry("script", "merchant/V202611131200__merchant_extend_webhook_event_types.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(23))
-                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
+                .containsEntry("script", "identity/V202611131900__identity_add_phone_number_to_users.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(24))
+                .containsEntry("script", "notification/V202611141000__notification_allow_non_parcel_notifications.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(25))
+                .containsEntry("script", "merchant/V202611141100__merchant_create_event_consumer_tables.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(26))
+                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(27))
                 .containsEntry("script", "merchant/V202611161000__merchant_create_webhook_redeliveries.sql")
                 .containsEntry("success", true);
 

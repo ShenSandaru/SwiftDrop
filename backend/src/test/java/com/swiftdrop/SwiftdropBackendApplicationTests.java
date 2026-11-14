@@ -45,6 +45,8 @@ class SwiftdropBackendApplicationTests {
     @MockitoBean
     private UserRepository users;
     @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
+    @MockitoBean
     private ExternalIdentityRepository identities;
     @MockitoBean
     private ParcelRepository parcels;

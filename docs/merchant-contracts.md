@@ -299,7 +299,7 @@ To avoid collisions:
   `merchant.application.MerchantEventProcessor` applies each merchant parcel's events in sequence order
   (ADR 0004 §4.3). Customer parcels are ignored. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`
   (default `true`); tuning `swiftdrop.merchant.events.*` (ADR 0004 §9 defaults, bounds checked at startup).
-- Tables (migration `V202611141000`): `merchant_event_states` (last applied sequence, `stuck`),
+- Tables (migration `V202611141100`): `merchant_event_states` (last applied sequence, `stuck`),
   `merchant_processed_events`, `merchant_pending_events`, `merchant_event_anomalies`,
   `merchant_webhook_deliveries` (unique per event and endpoint). They replace the `webhook_deliveries` and
   consumer-state names in the implementation contract §5.5/§5.7.
