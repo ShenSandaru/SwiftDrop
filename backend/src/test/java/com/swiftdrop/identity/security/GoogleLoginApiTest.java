@@ -208,7 +208,7 @@ class GoogleLoginApiTest {
                         .content("{\"code\": \"%s\"}".formatted(code)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(exchangeBody, "$.accessToken");
 
