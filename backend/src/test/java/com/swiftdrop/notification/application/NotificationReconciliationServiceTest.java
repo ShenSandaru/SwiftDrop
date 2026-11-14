@@ -451,9 +451,9 @@ class NotificationReconciliationServiceTest {
             for (NotificationRecord r : records) {
                 if (r.getId().equals(id)) {
                     if (status == NotificationDeliveryStatus.SENT) {
-                        r.markSent(java.time.Instant.now());
+                        r.markAsSent(java.time.Instant.now());
                     } else if (status == NotificationDeliveryStatus.FAILED) {
-                        r.markFailed("Delivery failed");
+                        r.markAsFailed("Delivery failed");
                     }
                     return 1;
                 }
