@@ -94,7 +94,9 @@ public class MerchantAdminService {
                 request.reason());
         historyRepository.save(history);
 
+        UUID eventId = UUID.randomUUID();
         eventPublisher.publishEvent(new MerchantStatusChanged(
+                eventId,
                 merchant.getId(),
                 merchant.getUserId(),
                 fromStatus,
