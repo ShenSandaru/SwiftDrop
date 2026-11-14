@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ClipboardList,
   LayoutDashboard,
+  Loader2,
   MapPin,
   MapPinned,
   Package,
@@ -46,6 +47,7 @@ import {
   listAllActiveDispatchAssignments,
   listAllDispatchCouriers,
   listDispatchParcels,
+  receiveParcelAtHub,
 } from "@/lib/dispatch";
 
 const PARCEL_PAGE_SIZE = 8;
@@ -114,6 +116,11 @@ export default function DispatchPage() {
   const [warehouseParcels, setWarehouseParcels] = useState<DispatchParcelItem[]>([]);
   const [warehouseLoading, setWarehouseLoading] = useState(true);
   const [warehouseError, setWarehouseError] = useState<string | null>(null);
+
+  const [incomingParcels, setIncomingParcels] = useState<DispatchParcelItem[]>([]);
+  const [incomingLoading, setIncomingLoading] = useState(true);
+  const [receivingParcelId, setReceivingParcelId] = useState<string | null>(null);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
 
   const [couriers, setCouriers] = useState<DispatchCourier[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
@@ -216,6 +223,37 @@ export default function DispatchPage() {
       }
       setMetricsLoading(false);
     });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshKey, effectiveHubFilter]);
+
+  // 1b. Incoming Requests Queue (Unassigned CREATED parcels)
+  useEffect(() => {
+    let active = true;
+    listDispatchParcels({
+      page: 0,
+      size: 12,
+      status: "CREATED",
+      assigned: false,
+      hubId: effectiveHubFilter,
+    })
+      .then((loaded) => {
+        if (active) {
+          setIncomingParcels(loaded.items);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setIncomingParcels([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIncomingLoading(false);
+        }
+      });
 
     return () => {
       active = false;
@@ -404,12 +442,37 @@ export default function DispatchPage() {
 
   function refreshDashboard() {
     setMetricsLoading(true);
+    setIncomingLoading(true);
     setParcelPageLoading(true);
     setActiveLoading(true);
     setWarehouseLoading(true);
     setCouriersLoading(true);
     setAssignmentFeedback(null);
+    setIntakeError(null);
     setRefreshKey((current) => current + 1);
+  }
+
+  function resolveIntakeHubId(parcel: DispatchParcelItem): string | null {
+    return parcel.expectedHubId ?? currentUser?.hubId ?? effectiveHubFilter ?? null;
+  }
+
+  async function handleReceiveAtHub(parcel: DispatchParcelItem) {
+    const targetHubId = resolveIntakeHubId(parcel);
+    if (!targetHubId) {
+      setIntakeError("Select or assign a hub before receiving a walk-in parcel at the hub.");
+      return;
+    }
+    setReceivingParcelId(parcel.id);
+    setIntakeError(null);
+    try {
+      await receiveParcelAtHub(parcel.id, targetHubId);
+      setAssignmentFeedback(`${parcel.trackingNumber} received at hub (At Hub).`);
+      setRefreshKey((current) => current + 1);
+    } catch (failure: unknown) {
+      setIntakeError(formatApiError(failure));
+    } finally {
+      setReceivingParcelId(null);
+    }
   }
 
   function changeParcelStatus(value: string) {
@@ -567,6 +630,101 @@ export default function DispatchPage() {
             Dismiss
           </button>
         </div>
+      )}
+
+      {(activeTab === "overview" || activeTab === "pickup") && (intakeError || (!incomingLoading && incomingParcels.length > 0)) && (
+        <section
+          aria-label="Incoming requests queue"
+          className="rounded-2xl border border-primary/25 bg-card p-4 shadow-xs space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <PackagePlus className="size-4 text-primary" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-foreground">
+                Incoming Requests (Customer &amp; Merchant)
+              </h2>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                {incomingParcels.length}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Accept &amp; assign a pickup courier, or receive walk-in drop-offs directly at the hub.
+            </p>
+          </div>
+
+          {intakeError && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <span>{intakeError}</span>
+              <button type="button" onClick={() => setIntakeError(null)} className="font-semibold hover:underline">
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {incomingParcels.length > 0 && (
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {incomingParcels.slice(0, 6).map((parcel) => {
+                const canReceiveAtHub =
+                  parcel.actions.includes("RECEIVE_AT_HUB") && Boolean(resolveIntakeHubId(parcel));
+                const isReceiving = receivingParcelId === parcel.id;
+                return (
+                  <article
+                    key={parcel.id}
+                    className="flex flex-col justify-between gap-2.5 rounded-xl border border-border bg-background p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs font-semibold text-primary">
+                          {parcel.trackingNumber}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {parcelLocation(parcel)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                        {parcel.source}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 flex-1 text-xs"
+                        disabled={isReceiving}
+                        onClick={() =>
+                          setSelectedParcel({
+                            parcel,
+                            mode: "assignment",
+                            assignmentType: "PICKUP",
+                          })
+                        }
+                      >
+                        Accept &amp; Assign
+                      </Button>
+                      {canReceiveAtHub && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 flex-1 text-xs"
+                          disabled={isReceiving}
+                          onClick={() => handleReceiveAtHub(parcel)}
+                        >
+                          {isReceiving ? (
+                            <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <PackageCheck className="mr-1 size-3" aria-hidden="true" />
+                          )}
+                          Receive at Hub
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ======================================================== */}
@@ -963,6 +1121,12 @@ export default function DispatchPage() {
                             key={parcel.id}
                             parcel={parcel}
                             courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                            canReceiveAtHub={
+                              parcel.status === "CREATED" &&
+                              parcel.actions.includes("RECEIVE_AT_HUB") &&
+                              Boolean(resolveIntakeHubId(parcel))
+                            }
+                            receiving={receivingParcelId === parcel.id}
                             onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
                             onAssign={() =>
                               setSelectedParcel({
@@ -971,6 +1135,7 @@ export default function DispatchPage() {
                                 assignmentType: "PICKUP",
                               })
                             }
+                            onReceiveAtHub={() => handleReceiveAtHub(parcel)}
                           />
                         ))}
                       </tbody>
@@ -982,6 +1147,12 @@ export default function DispatchPage() {
                         key={parcel.id}
                         parcel={parcel}
                         courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                        canReceiveAtHub={
+                          parcel.status === "CREATED" &&
+                          parcel.actions.includes("RECEIVE_AT_HUB") &&
+                          Boolean(resolveIntakeHubId(parcel))
+                        }
+                        receiving={receivingParcelId === parcel.id}
                         onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
                         onAssign={() =>
                           setSelectedParcel({
@@ -990,6 +1161,7 @@ export default function DispatchPage() {
                             assignmentType: "PICKUP",
                           })
                         }
+                        onReceiveAtHub={() => handleReceiveAtHub(parcel)}
                       />
                     ))}
                   </div>
@@ -1331,13 +1503,19 @@ function EmptyState({
 function ParcelTableRow({
   parcel,
   courierName,
+  canReceiveAtHub,
+  receiving,
   onDetails,
   onAssign,
+  onReceiveAtHub,
 }: {
   parcel: DispatchParcelItem;
   courierName?: string;
+  canReceiveAtHub: boolean;
+  receiving: boolean;
   onDetails: () => void;
   onAssign: () => void;
+  onReceiveAtHub: () => void;
 }) {
   return (
     <tr className="hover:bg-muted/40">
@@ -1349,19 +1527,25 @@ function ParcelTableRow({
       </td>
       <td className="px-4 py-3 text-foreground">{parcelSourceLabel(parcel.source)}</td>
       <td className="px-4 py-3 text-muted-foreground">{parcelLocation(parcel)}</td>
-      <td className="px-4 py-3"><StatusBadge status={parcel.status} /></td>
+      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(parcel.createdAt)}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button type="button" variant="ghost" size="sm" onClick={onDetails} aria-label={`View ${parcel.trackingNumber} details`}>
             View
           </Button>
           {parcel.status === "CREATED" && (
-            <Button type="button" variant="outline" size="sm" onClick={onAssign}>
-              {parcel.assignedCourierId ? "Reassign pickup" : "Assign pickup"}
+            <Button type="button" variant="outline" size="sm" onClick={onAssign} disabled={receiving}>
+              {parcel.assignedCourierId ? "Reassign pickup" : "Accept & Assign"}
+            </Button>
+          )}
+          {canReceiveAtHub && (
+            <Button type="button" variant="outline" size="sm" onClick={onReceiveAtHub} disabled={receiving}>
+              {receiving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null}
+              Receive at Hub
             </Button>
           )}
         </div>
@@ -1373,13 +1557,19 @@ function ParcelTableRow({
 function ParcelMobileCard({
   parcel,
   courierName,
+  canReceiveAtHub,
+  receiving,
   onDetails,
   onAssign,
+  onReceiveAtHub,
 }: {
   parcel: DispatchParcelItem;
   courierName?: string;
+  canReceiveAtHub: boolean;
+  receiving: boolean;
   onDetails: () => void;
   onAssign: () => void;
+  onReceiveAtHub: () => void;
 }) {
   return (
     <article className="space-y-3 rounded-lg border border-border bg-background p-3">
@@ -1388,7 +1578,7 @@ function ParcelMobileCard({
           <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}… · {parcelSourceLabel(parcel.source)}</p>
         </div>
-        <StatusBadge status={parcel.status} />
+        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
       </div>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -1400,13 +1590,19 @@ function ParcelMobileCard({
           Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
         </span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onDetails} className="flex-1">
           View details
         </Button>
         {parcel.status === "CREATED" && (
-          <Button type="button" size="sm" onClick={onAssign} className="flex-1">
-            {parcel.assignedCourierId ? "Reassign pickup" : "Assign pickup"}
+          <Button type="button" size="sm" onClick={onAssign} disabled={receiving} className="flex-1">
+            {parcel.assignedCourierId ? "Reassign pickup" : "Accept & Assign"}
+          </Button>
+        )}
+        {canReceiveAtHub && (
+          <Button type="button" variant="outline" size="sm" onClick={onReceiveAtHub} disabled={receiving} className="w-full">
+            {receiving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null}
+            Receive at Hub (Walk-in)
           </Button>
         )}
       </div>
@@ -1439,7 +1635,7 @@ function ActiveDeliveryRow({
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Not assigned"}
       </td>
-      <td className="px-4 py-3"><StatusBadge status={parcel.status} /></td>
+      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
       <td className="px-4 py-3">
         <Button type="button" variant="ghost" size="sm" onClick={onDetails}>View details</Button>
@@ -1470,7 +1666,7 @@ function ActiveDeliveryCard({
           </Link>
           <span className="mt-1 block text-xs text-muted-foreground">Destination: {parcel.dropoffCity}</span>
         </span>
-        <StatusBadge status={parcel.status} />
+        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
@@ -1545,6 +1741,19 @@ interface MetricCardProps {
   description: string;
   icon: typeof Package;
   unavailable?: boolean;
+}
+
+function dispatchWorkflowLabel(parcel: DispatchParcelItem): string {
+  if (parcel.status === "CREATED") {
+    return parcel.assignedCourierId ? "Pickup Pending" : "Pickup Requested";
+  }
+  if (parcel.status === "AT_HUB") {
+    if (parcel.actions.includes("ASSIGN_DELIVERY") && parcel.assignedCourierId) {
+      return "Delivery Pending";
+    }
+    return "Pickup Done (At Hub)";
+  }
+  return STATUS_LABELS[parcel.status];
 }
 
 function parcelLocation(parcel: DispatchParcelItem): string {

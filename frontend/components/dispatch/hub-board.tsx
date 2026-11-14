@@ -138,6 +138,12 @@ function HubCard({ parcel, couriers, busy, run }: {
   const [reason, setReason] = useState<FailureReason>("DAMAGED");
   const has = (action: DispatchAction) => parcel.actions.includes(action);
   const taskType = has("ASSIGN_RETURN") ? "RETURN" : "DELIVERY";
+  const workflowLabel =
+    parcel.status === "AT_HUB"
+      ? has("ASSIGN_DELIVERY") && parcel.assignedCourierId
+        ? "Delivery Pending"
+        : "Pickup Done (At Hub)"
+      : undefined;
 
   return (
     <article className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
@@ -148,7 +154,7 @@ function HubCard({ parcel, couriers, busy, run }: {
             <span className="capitalize">{parcel.pickupCity}</span> → <span className="capitalize">{parcel.dropoffCity}</span>
           </p>
         </div>
-        <StatusBadge status={parcel.status} />
+        <StatusBadge status={parcel.status} label={workflowLabel} />
       </div>
 
       <RouteStrip parcel={parcel} />

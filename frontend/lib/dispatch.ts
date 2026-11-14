@@ -7,6 +7,7 @@ export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "
 /** What a dispatcher may do next with a parcel; the backend works it out (ADR 0009). */
 export type DispatchAction =
   | "ASSIGN_PICKUP"
+  | "RECEIVE_AT_HUB"
   | "CANCEL"
   | "SCAN_AT_HUB"
   | "SEND_TO_NEXT_HUB"
@@ -176,6 +177,10 @@ export function getDispatchParcelDetails(id: string): Promise<ParcelDetail> {
 }
 
 // ---- Hub network steps (ADR 0009 §3); each answers 204, or 409 when the rules do not allow it ----
+
+export function receiveParcelAtHub(parcelId: string, hubId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-intake`, { hubId });
+}
 
 export function scanParcelAtHub(parcelId: string, hubId: string): Promise<void> {
   return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-scans`, { hubId });
