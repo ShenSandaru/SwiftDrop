@@ -277,12 +277,16 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+<<<<<<< HEAD
+        public List<UserSummary> findEnabledCouriersByHub(UUID hubId) {
+=======
         public List<UserSummary> findEnabledAdmins() {
             return List.of();
         }
 
         @Override
         public List<UserSummary> findEnabledDispatchers() {
+>>>>>>> c79bb0a3a7d28b5a701519c253bd6e30fd519757
             return List.of();
         }
 

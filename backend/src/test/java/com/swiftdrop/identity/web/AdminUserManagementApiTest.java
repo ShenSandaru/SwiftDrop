@@ -242,6 +242,98 @@ class AdminUserManagementApiTest {
     }
 
     @Test
+    void createStaffDispatcherWithHubIdReturns201AndHubId() throws Exception {
+        UUID hubId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(users.findByEmail("colombodisp@swiftdrop.com")).thenReturn(Optional.empty());
+        when(users.existsByHubIdAndRole(hubId, Role.DISPATCHER)).thenReturn(false);
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Colombo Dispatcher",
+                                  "email": "colombodisp@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "DISPATCHER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("colombodisp@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("DISPATCHER")))
+                .andExpect(jsonPath("$.hubId").value(hubId.toString()));
+    }
+
+    @Test
+    void createStaffDispatcherRejectsHubWithExistingDispatcher() throws Exception {
+        UUID hubId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(users.findByEmail("seconddisp@swiftdrop.com")).thenReturn(Optional.empty());
+        when(users.existsByHubIdAndRole(hubId, Role.DISPATCHER)).thenReturn(true);
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Second Dispatcher",
+                                  "email": "seconddisp@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "DISPATCHER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void createStaffCourierWithHubIdReturns201AndHubId() throws Exception {
+        UUID hubId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(users.findByEmail("colombocourier@swiftdrop.com")).thenReturn(Optional.empty());
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Colombo Courier",
+                                  "email": "colombocourier@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "COURIER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("colombocourier@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("COURIER")))
+                .andExpect(jsonPath("$.hubId").value(hubId.toString()));
+    }
+
+    @Test
+    void createStaffCourierAllowsMultipleCouriersInSameHub() throws Exception {
+        UUID hubId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(users.findByEmail("secondcourier@swiftdrop.com")).thenReturn(Optional.empty());
+        when(users.existsByHubIdAndRole(hubId, Role.COURIER)).thenReturn(true);
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Second Courier",
+                                  "email": "secondcourier@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "COURIER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("secondcourier@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("COURIER")))
+                .andExpect(jsonPath("$.hubId").value(hubId.toString()));
+    }
+
+    @Test
     void createStaffRejectsAdminRole() throws Exception {
         mvc.perform(post("/api/v1/staff-users")
                         .with(TestPrincipal.admin(ADMIN_ID).postProcessor())

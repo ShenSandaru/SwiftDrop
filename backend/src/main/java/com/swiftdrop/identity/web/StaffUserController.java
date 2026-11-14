@@ -46,6 +46,6 @@ class StaffUserController {
             }
         }
         return UserResponse.from(
-                accounts.registerStaff(request.fullName(), request.email(), request.password(), role));
+                accounts.registerStaff(request.fullName(), request.email(), request.password(), role, request.hubId()));
     }
 }

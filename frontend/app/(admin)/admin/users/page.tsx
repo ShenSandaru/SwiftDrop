@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import {
   api,
@@ -8,13 +9,11 @@ import {
   formatApiError,
   type UserResponse,
   type PageResponse,
-  type CreateStaffUserRequest,
   type UpdateUserStatusRequest,
+  type HubResponse,
 } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Plus,
   RefreshCw,
@@ -33,29 +32,13 @@ import {
   UserCheck,
   UserX,
   Loader2,
-  Eye,
-  EyeOff,
   Search,
+  Warehouse,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
 const ROLE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT", "COURIER", "DISPATCHER", "ADMIN"] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
-
-const STAFF_ROLES = [
-  {
-    value: "COURIER" as const,
-    label: "Courier / Driver",
-    description: "Assigned delivery routes, barcode scanning, proof submission, and parcel handoffs.",
-    icon: Truck,
-  },
-  {
-    value: "DISPATCHER" as const,
-    label: "Dispatcher",
-    description: "Fleet tracking, parcel assignment, route monitoring, and exception handling.",
-    icon: Radio,
-  },
-];
 
 interface AccessibleModalProps {
   isOpen: boolean;
@@ -192,8 +175,7 @@ export default function AdminUsersPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Trigger refs for focus restoration
-  const createStaffButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Trigger ref for focus restoration
   const statusTriggerRef = useRef<HTMLElement | null>(null);
 
   // Notifications
@@ -274,131 +256,45 @@ export default function AdminUsersPage() {
     setPage((p) => p + 1);
   }
 
-  // Staff Creation Modal State
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [staffFullName, setStaffFullName] = useState("");
-  const [staffEmail, setStaffEmail] = useState("");
-  const [staffPassword, setStaffPassword] = useState("");
-  const [staffRole, setStaffRole] = useState<"COURIER" | "DISPATCHER">("COURIER");
-  const [showPassword, setShowPassword] = useState(false);
-  const [staffFormErrors, setStaffFormErrors] = useState<Record<string, string>>({});
-  const [staffFormGeneralError, setStaffFormGeneralError] = useState<string | null>(null);
-  const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+  const [hubs, setHubs] = useState<HubResponse[]>([]);
 
-  function resetStaffForm() {
-    setStaffFullName("");
-    setStaffEmail("");
-    setStaffPassword("");
-    setStaffRole("COURIER");
-    setShowPassword(false);
-    setStaffFormErrors({});
-    setStaffFormGeneralError(null);
-  }
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const onboarded = params.get("onboarded");
+    const role = params.get("role");
+    if (!onboarded) return;
 
-  function handleOpenCreateModal() {
-    resetStaffForm();
-    setIsCreateModalOpen(true);
-  }
-
-  function handleCloseCreateModal() {
-    if (isSubmittingStaff) return;
-    setIsCreateModalOpen(false);
-    resetStaffForm();
-  }
-
-  async function handleCreateStaffSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (isSubmittingStaff) return;
-
-    setStaffFormErrors({});
-    setStaffFormGeneralError(null);
-
-    // Client-side validations
-    const errors: Record<string, string> = {};
-    const trimmedName = staffFullName.trim();
-    const trimmedEmail = staffEmail.trim();
-
-    if (!trimmedName) {
-      errors.fullName = "Full name is required.";
-    } else if (trimmedName.length > 200) {
-      errors.fullName = "Full name must not exceed 200 characters.";
-    }
-
-    if (!trimmedEmail) {
-      errors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail) || trimmedEmail.length > 320) {
-      errors.email = "Please enter a valid email address (maximum 320 characters).";
-    }
-
-    const passwordBytes = new TextEncoder().encode(staffPassword).length;
-    if (!staffPassword) {
-      errors.password = "Password is required.";
-    } else if (staffPassword.length < 8) {
-      errors.password = "Password must be at least 8 characters.";
-    } else if (passwordBytes > 72) {
-      errors.password = "Password must be at most 72 bytes.";
-    }
-
-    if (staffRole !== "COURIER" && staffRole !== "DISPATCHER") {
-      errors.role = "Role must be COURIER or DISPATCHER.";
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setStaffFormErrors(errors);
-      return;
-    }
-
-    setIsSubmittingStaff(true);
-
-    const payload: CreateStaffUserRequest = {
-      fullName: trimmedName,
-      email: trimmedEmail,
-      password: staffPassword,
-      role: staffRole,
-    };
-
-    try {
-      const createdUser = await api.post<UserResponse>("/api/v1/staff-users", payload);
-
-      // Successfully created staff account
-      setIsCreateModalOpen(false);
-      resetStaffForm();
-
-      // Show notification
-      setNotification({
-        type: "success",
-        message: `Staff account for ${createdUser.fullName} (${createdUser.email}) was successfully created as ${createdUser.roles.join(", ")}.`,
-      });
-
-      // Make new account discoverable by switching filter to match or ALL, and reset to page 0
-      setIsLoading(true);
-      setFetchError(null);
-      setRoleFilter((prev) => (prev === "ALL" || prev === staffRole ? prev : "ALL"));
-      setPage(0);
-      setRefreshKey((k) => k + 1);
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        if (err.status === 409) {
-          setStaffFormGeneralError(
-            "An account with this email address already exists. Please choose a different email."
-          );
-        } else if (err.status === 400 && err.problem?.invalidFields) {
-          const fieldMap: Record<string, string> = {};
-          err.problem.invalidFields.forEach((f) => {
-            fieldMap[f] = `Invalid ${f}. Please check the value.`;
-          });
-          setStaffFormErrors(fieldMap);
-          setStaffFormGeneralError(err.problem.detail || "Validation failed for the submitted fields.");
-        } else {
-          setStaffFormGeneralError(formatApiError(err));
-        }
-      } else {
-        setStaffFormGeneralError("A network error occurred. Please try again.");
+    let cancelled = false;
+    window.history.replaceState({}, "", "/admin/users");
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setNotification({
+          type: "success",
+          message: `Staff account for ${onboarded} was successfully created${role ? ` as ${role}` : ""}.`,
+        });
       }
-    } finally {
-      setIsSubmittingStaff(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadHubs() {
+      try {
+        const hubList = await api.get<HubResponse[]>("/api/v1/hubs");
+        if (!ignore) setHubs(hubList);
+      } catch {
+        // Hub names are supplementary in the directory table
+      }
     }
-  }
+    loadHubs();
+    return () => {
+      ignore = true;
+    };
+  }, [refreshKey]);
 
   // Account Status Toggle State & Modal
   const [statusConfirmTarget, setStatusConfirmTarget] = useState<{
@@ -512,15 +408,13 @@ export default function AdminUsersPage() {
             <RefreshCw className={`size-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button
-            ref={createStaffButtonRef}
-            onClick={handleOpenCreateModal}
-            size="sm"
-            className="gap-1.5 font-semibold text-xs shadow-xs"
+          <Link
+            href="/admin/users/new"
+            className={buttonVariants({ size: "sm", className: "gap-1.5 font-semibold text-xs shadow-xs" })}
           >
             <Plus className="size-4" />
             Onboard Staff
-          </Button>
+          </Link>
         </div>
       </div>
 
@@ -761,6 +655,15 @@ export default function AdminUsersPage() {
                             ) : (
                               <span className="text-xs text-muted-foreground">No roles assigned</span>
                             )}
+                            {item.hubId && (() => {
+                              const hub = hubs.find((h) => h.id === item.hubId);
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted/60 text-muted-foreground border border-border">
+                                  <Warehouse className="size-3 shrink-0" />
+                                  {hub ? `${hub.name} (${hub.code})` : "Hub assigned"}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
 
@@ -860,236 +763,6 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Staff Account Onboarding Modal */}
-      <AccessibleModal
-        isOpen={isCreateModalOpen}
-        onClose={handleCloseCreateModal}
-        titleId="create-staff-modal-title"
-        descriptionId="create-staff-modal-desc"
-        isSubmitting={isSubmittingStaff}
-        triggerRef={createStaffButtonRef}
-        maxWidthClass="max-w-lg"
-      >
-        <div className="flex items-center justify-between p-5 border-b border-border">
-          <div>
-            <h2 id="create-staff-modal-title" className="text-lg font-bold text-foreground">
-              Onboard Staff Member
-            </h2>
-            <p id="create-staff-modal-desc" className="text-xs text-muted-foreground mt-0.5">
-              Create credentials for couriers or administrators.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleCloseCreateModal}
-            disabled={isSubmittingStaff}
-            className="text-muted-foreground hover:text-foreground rounded p-1 transition-colors"
-            aria-label="Close modal"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleCreateStaffSubmit} noValidate>
-          <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-            {/* General Error Banner */}
-            {staffFormGeneralError && (
-              <div
-                role="alert"
-                aria-live="assertive"
-                className="p-3 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive text-xs font-medium flex items-start gap-2"
-              >
-                <AlertCircle className="size-4 shrink-0 mt-0.5" />
-                <span>{staffFormGeneralError}</span>
-              </div>
-            )}
-
-            {/* Full Name */}
-            <div className="space-y-1.5">
-              <Label htmlFor="staff-fullname">Full Name</Label>
-              <Input
-                id="staff-fullname"
-                type="text"
-                placeholder="e.g. Ruwan Wickramasinghe"
-                value={staffFullName}
-                onChange={(e) => setStaffFullName(e.target.value)}
-                disabled={isSubmittingStaff}
-                required
-                aria-required="true"
-                aria-invalid={Boolean(staffFormErrors.fullName)}
-                aria-describedby={staffFormErrors.fullName ? "staff-fullname-error" : undefined}
-                className={staffFormErrors.fullName ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {staffFormErrors.fullName && (
-                <p id="staff-fullname-error" className="text-[11px] text-destructive font-medium" role="alert">
-                  {staffFormErrors.fullName}
-                </p>
-              )}
-            </div>
-
-            {/* Email Address */}
-            <div className="space-y-1.5">
-              <Label htmlFor="staff-email">Email Address</Label>
-              <Input
-                id="staff-email"
-                type="email"
-                placeholder="e.g. ruwan@swiftdrop.com"
-                value={staffEmail}
-                onChange={(e) => setStaffEmail(e.target.value)}
-                disabled={isSubmittingStaff}
-                required
-                aria-required="true"
-                aria-invalid={Boolean(staffFormErrors.email)}
-                aria-describedby={staffFormErrors.email ? "staff-email-error" : undefined}
-                className={staffFormErrors.email ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {staffFormErrors.email && (
-                <p id="staff-email-error" className="text-[11px] text-destructive font-medium" role="alert">
-                  {staffFormErrors.email}
-                </p>
-              )}
-            </div>
-
-            {/* Password */}
-            <div className="space-y-1.5">
-              <Label htmlFor="staff-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="staff-password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Minimum 8 characters"
-                  autoComplete="new-password"
-                  value={staffPassword}
-                  onChange={(e) => setStaffPassword(e.target.value)}
-                  disabled={isSubmittingStaff}
-                  required
-                  aria-required="true"
-                  aria-invalid={Boolean(staffFormErrors.password)}
-                  aria-describedby={
-                    staffFormErrors.password ? "staff-password-error" : "staff-password-hint"
-                  }
-                  className={`pr-10 ${
-                    staffFormErrors.password ? "border-destructive focus-visible:ring-destructive" : ""
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={isSubmittingStaff}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              {staffFormErrors.password ? (
-                <p id="staff-password-error" className="text-[11px] text-destructive font-medium" role="alert">
-                  {staffFormErrors.password}
-                </p>
-              ) : (
-                <p id="staff-password-hint" className="text-[11px] text-muted-foreground">
-                  Must be between 8 and 72 bytes.
-                </p>
-              )}
-            </div>
-
-            {/* Staff Role Radiogroup */}
-            <div className="space-y-2">
-              <Label id="staff-role-label">Assigned Staff Role</Label>
-              <div
-                role="radiogroup"
-                aria-labelledby="staff-role-label"
-                aria-describedby={staffFormErrors.role ? "staff-role-error" : undefined}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-              >
-                {STAFF_ROLES.map((r) => {
-                  const isSelected = staffRole === r.value;
-                  const Icon = r.icon;
-                  return (
-                    <label
-                      key={r.value}
-                      htmlFor={`staff-role-${r.value}`}
-                      className={`relative cursor-pointer rounded-xl border p-3.5 transition-all text-left flex flex-col justify-between has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary has-[:focus-visible]:ring-offset-2 ${
-                        isSelected
-                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
-                          : "border-border bg-card hover:bg-muted/30"
-                      } ${isSubmittingStaff ? "opacity-50 pointer-events-none" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        id={`staff-role-${r.value}`}
-                        name="staff-role"
-                        value={r.value}
-                        checked={isSelected}
-                        onChange={() => !isSubmittingStaff && setStaffRole(r.value)}
-                        disabled={isSubmittingStaff}
-                        className="sr-only"
-                      />
-                      <div className="flex items-center justify-between mb-2">
-                        <span
-                          className={`p-1.5 rounded-lg ${
-                            isSelected
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          <Icon className="size-4" />
-                        </span>
-                        <span
-                          aria-hidden="true"
-                          className={`size-4 rounded-full border flex items-center justify-center ${
-                            isSelected ? "border-primary bg-primary text-white" : "border-muted-foreground/40"
-                          }`}
-                        >
-                          {isSelected && <span className="size-1.5 rounded-full bg-white" />}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-xs text-foreground block">{r.label}</span>
-                      <span className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                        {r.description}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              {staffFormErrors.role && (
-                <p id="staff-role-error" className="text-[11px] text-destructive font-medium" role="alert">
-                  {staffFormErrors.role}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 p-4 border-t border-border bg-muted/20">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCloseCreateModal}
-              disabled={isSubmittingStaff}
-              className="text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isSubmittingStaff}
-              className="text-xs font-semibold shadow-xs min-w-28"
-            >
-              {isSubmittingStaff ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  Creating...
-                </>
-              ) : (
-                "Create Staff"
-              )}
-            </Button>
-          </div>
-        </form>
-      </AccessibleModal>
 
       {/* Account Status Confirmation Modal */}
       {statusConfirmTarget && (
