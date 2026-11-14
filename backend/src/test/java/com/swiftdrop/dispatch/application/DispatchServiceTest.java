@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.HubStaffDirectory;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
@@ -37,6 +38,7 @@ class DispatchServiceTest {
     private ParcelAssignment assignments;
     private ParcelHubOperations hubOperations;
     private UserDirectory users;
+    private final HubStaffDirectory hubStaff = mock(HubStaffDirectory.class);
     private DispatchService service;
 
     @BeforeEach
@@ -45,7 +47,8 @@ class DispatchServiceTest {
         assignments = mock(ParcelAssignment.class);
         hubOperations = mock(ParcelHubOperations.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, hubOperations, users, java.time.Duration.ofHours(24),
+        service = new DispatchService(parcels, assignments, hubOperations, users, hubStaff,
+                java.time.Duration.ofHours(24),
                 java.time.Clock.fixed(Instant.parse("2026-11-14T08:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
@@ -110,7 +113,7 @@ class DispatchServiceTest {
         UserSummary courier = new UserSummary(COURIER_ID, "Courier", "courier@example.com", Set.of("COURIER"), true);
         when(users.findEnabledCouriers()).thenReturn(List.of(courier));
 
-        List<UserSummary> active = service.activeCouriers();
+        List<UserSummary> active = service.activeCouriers(Staff.admin(DISPATCHER_ID));
 
         assertThat(active).containsExactly(courier);
         verify(users).findEnabledCouriers();
@@ -148,7 +151,57 @@ class DispatchServiceTest {
 
     @Test
     void theStaleTimeMustBePositive() {
-        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, users, 0))
+        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, users, hubStaff, 0))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ---- Hub scope of the courier lists (ADR 0012 §4) ----
+
+    private static UserSummary courier(UUID id) {
+        return new UserSummary(id, "Courier", "courier-" + id + "@example.com", Set.of("COURIER"), true);
+    }
+
+    @Test
+    void aHubDispatcherSeesOnlyTheCouriersOfTheirHubs() {
+        UUID mine = UUID.randomUUID();
+        UUID someoneElses = UUID.randomUUID();
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(mine), courier(someoneElses)));
+        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(false);
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of(DISPATCHER_ID, mine));
+
+        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).extracting(UserSummary::id)
+                .containsExactly(mine);
+    }
+
+    @Test
+    void aDispatcherWithNoHubSeesNoCouriers() {
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(UUID.randomUUID())));
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of());
+
+        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).isEmpty();
+    }
+
+    @Test
+    void adminsAndHeadOfficeSeeEveryCourier() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(first), courier(second)));
+        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(true);
+
+        assertThat(service.activeCouriers(Staff.admin(UUID.randomUUID()))).hasSize(2);
+        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).hasSize(2);
+    }
+
+    @Test
+    void workloadsAreShownOnlyForTheCouriersTheCallerMayAssign() {
+        UUID mine = UUID.randomUUID();
+        UUID someoneElses = UUID.randomUUID();
+        when(parcels.countActiveParcelsByCourier()).thenReturn(java.util.Map.of(mine, 3L, someoneElses, 5L));
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of(mine));
+
+        assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine);
+
+        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(true);
+        assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine, someoneElses);
     }
 }

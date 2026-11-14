@@ -74,13 +74,13 @@ class DispatchController {
     }
 
     @GetMapping("/courier-workloads")
-    Map<UUID, Long> courierWorkloads() {
-        return dispatch.courierWorkloads();
+    Map<UUID, Long> courierWorkloads(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.courierWorkloads(staff(jwt));
     }
 
     @GetMapping("/couriers")
-    List<DispatchCourierResponse> couriers() {
-        return dispatch.activeCouriers().stream()
+    List<DispatchCourierResponse> couriers(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.activeCouriers(staff(jwt)).stream()
                 .map(DispatchCourierResponse::from)
                 .toList();
     }

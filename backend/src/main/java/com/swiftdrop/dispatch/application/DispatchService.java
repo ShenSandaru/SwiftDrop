@@ -5,7 +5,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.HubStaffDirectory;
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignment;
@@ -37,17 +40,20 @@ public class DispatchService {
     private final ParcelAssignment assignments;
     private final ParcelHubOperations hubOperations;
     private final UserDirectory users;
+    private final HubStaffDirectory hubStaff;
     private final Duration staleAfter;
     private final Clock clock;
 
     @Autowired
     public DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users, @Value("${swiftdrop.dispatch.stale-after-hours:24}") int staleAfterHours) {
-        this(parcels, assignments, hubOperations, users, Duration.ofHours(staleAfterHours), Clock.systemUTC());
+            UserDirectory users, HubStaffDirectory hubStaff,
+            @Value("${swiftdrop.dispatch.stale-after-hours:24}") int staleAfterHours) {
+        this(parcels, assignments, hubOperations, users, hubStaff, Duration.ofHours(staleAfterHours),
+                Clock.systemUTC());
     }
 
     DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users, Duration staleAfter, Clock clock) {
+            UserDirectory users, HubStaffDirectory hubStaff, Duration staleAfter, Clock clock) {
         if (staleAfter.isZero() || staleAfter.isNegative()) {
             throw new IllegalStateException("swiftdrop.dispatch.stale-after-hours must be at least 1");
         }
@@ -55,6 +61,7 @@ public class DispatchService {
         this.assignments = assignments;
         this.hubOperations = hubOperations;
         this.users = users;
+        this.hubStaff = hubStaff;
         this.staleAfter = staleAfter;
         this.clock = clock;
     }
@@ -80,14 +87,27 @@ public class DispatchService {
         return parcels.findActiveAssignments(staff.userId(), type, page);
     }
 
+    /** Active parcels per courier, for the couriers the caller may assign (ADR 0012 §4). */
     @Transactional(readOnly = true)
-    public Map<UUID, Long> courierWorkloads() {
-        return parcels.countActiveParcelsByCourier();
+    public Map<UUID, Long> courierWorkloads(Staff staff) {
+        Map<UUID, Long> all = parcels.countActiveParcelsByCourier();
+        if (staff.admin() || hubStaff.worksEverywhere(staff.userId())) {
+            return all;
+        }
+        Set<UUID> visible = hubStaff.colleaguesOf(staff.userId());
+        return all.entrySet().stream().filter(entry -> visible.contains(entry.getKey()))
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    /** The couriers the caller may assign: all of them for admins and head office, else those of their hubs. */
     @Transactional(readOnly = true)
-    public List<UserSummary> activeCouriers() {
-        return users.findEnabledCouriers();
+    public List<UserSummary> activeCouriers(Staff staff) {
+        List<UserSummary> couriers = users.findEnabledCouriers();
+        if (staff.admin() || hubStaff.worksEverywhere(staff.userId())) {
+            return couriers;
+        }
+        Set<UUID> visible = hubStaff.colleaguesOf(staff.userId());
+        return couriers.stream().filter(courier -> visible.contains(courier.id())).toList();
     }
 
     @Transactional(readOnly = true)
