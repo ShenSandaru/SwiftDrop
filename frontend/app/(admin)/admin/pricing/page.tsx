@@ -348,7 +348,7 @@ export default function AdminPricingPage() {
       {/* Island Pricing & Tariff Hero Banner (Matches Hubs & Dispatch Control) */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary/95 to-primary/90 px-6 py-7 text-primary-foreground sm:px-8 sm:py-8 shadow-sm">
         <svg
-          className="pointer-events-none absolute -right-12 -top-10 h-64 w-96 opacity-20"
+          className="pointer-events-none absolute -right-12 -top-10 h-64 w-96 opacity-30"
           viewBox="0 0 320 220"
           fill="none"
           aria-hidden="true"
@@ -359,10 +359,26 @@ export default function AdminPricingPage() {
             strokeWidth="3.5"
             strokeDasharray="10 10"
             strokeLinecap="round"
-          />
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="40"
+              to="0"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </path>
           <circle cx="10" cy="190" r="7" fill="currentColor" />
           <circle cx="180" cy="120" r="6" fill="currentColor" />
+          <circle cx="180" cy="120" r="6" stroke="currentColor" strokeWidth="2" fill="none">
+            <animate attributeName="r" from="6" to="18" dur="2.2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.8" to="0" dur="2.2s" repeatCount="indefinite" />
+          </circle>
           <circle cx="310" cy="20" r="8" fill="currentColor" />
+          <circle cx="310" cy="20" r="8" stroke="currentColor" strokeWidth="2" fill="none">
+            <animate attributeName="r" from="8" to="22" dur="2.2s" begin="0.7s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.8" to="0" dur="2.2s" begin="0.7s" repeatCount="indefinite" />
+          </circle>
         </svg>
         <div className="relative max-w-4xl space-y-3">
           <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] opacity-85">
