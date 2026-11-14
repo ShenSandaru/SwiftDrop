@@ -45,10 +45,19 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
               AND (:assigned IS NULL
                    OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
                    OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (:hubId IS NULL
+                   OR p.originHubId = :hubId
+                   OR p.viaHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR p.currentHubId = :hubId
+                   OR p.nextHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
             """)
     Page<Parcel> findForDispatch(@Param("status") ParcelStatus status,
             @Param("source") ParcelSource source,
             @Param("assigned") Boolean assigned,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId,
             Pageable pageable);
 
     @Query("""
@@ -58,6 +67,13 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
               AND (:assigned IS NULL
                    OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
                    OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (:hubId IS NULL
+                   OR p.originHubId = :hubId
+                   OR p.viaHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR p.currentHubId = :hubId
+                   OR p.nextHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
               AND (LOWER(p.trackingNumber) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR (:parcelId IS NOT NULL AND p.id = :parcelId))
             """)
@@ -66,7 +82,23 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
             @Param("assigned") Boolean assigned,
             @Param("search") String search,
             @Param("parcelId") UUID parcelId,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId,
             Pageable pageable);
+
+    @Query("""
+            SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Parcel p
+            WHERE p.id = :parcelId
+              AND (p.originHubId = :hubId
+                   OR p.viaHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR p.currentHubId = :hubId
+                   OR p.nextHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
+            """)
+    boolean existsInHub(@Param("parcelId") UUID parcelId,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId);
 
     /** A merchant's parcels (MER-4); always scoped by merchant, never across merchants. */
     Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);

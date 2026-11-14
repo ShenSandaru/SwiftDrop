@@ -24,6 +24,7 @@ export interface ThemedSelectProps {
   className?: string;
   id?: string;
   size?: "sm" | "default";
+  placement?: "bottom" | "top";
 }
 
 export function ThemedSelect({
@@ -37,6 +38,7 @@ export function ThemedSelect({
   className,
   id,
   size = "default",
+  placement = "bottom",
 }: ThemedSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -129,7 +131,12 @@ export function ThemedSelect({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-[220px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 duration-100">
+        <div
+          className={cn(
+            "absolute z-50 max-h-64 w-full min-w-[220px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 duration-100",
+            placement === "top" ? "bottom-full mb-1" : "top-full mt-1"
+          )}
+        >
           {isSearchable && (
             <div className="sticky top-0 bg-popover p-1 border-b border-border/50">
               <div className="flex items-center gap-1.5 rounded-lg border border-input px-2 py-1 bg-background">

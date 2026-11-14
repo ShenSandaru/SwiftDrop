@@ -20,11 +20,26 @@ public interface ParcelQueries {
     Map<UUID, Long> countActiveParcelsByCourier();
 
     /** Dispatcher parcel list with explicit current-assignment and source/status filtering. */
+    default PageResult<DispatchParcelSummary> findDispatchParcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
+        return findDispatchParcels(status, source, assigned, search, null, page);
+    }
+
+    /** Dispatcher parcel list scoped optionally to a single hub ({@code null} returns all hubs). */
     PageResult<DispatchParcelSummary> findDispatchParcels(
-            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page);
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId, PageRequest page);
 
     /** Active assignment rows of one task type, oldest first. */
-    PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page);
+    default PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
+        return findActiveAssignments(type, null, page);
+    }
+
+    /** Active assignment rows of one task type, optionally scoped to a single hub. */
+    PageResult<ParcelAssignmentSummary> findActiveAssignments(
+            ParcelAssignmentType type, UUID hubId, PageRequest page);
+
+    /** Returns {@code true} if the parcel belongs to or is routed through the given hub. */
+    boolean isParcelInHub(UUID parcelId, UUID hubId);
 
     /** Assignment history, empty when the parcel does not exist. */
     Optional<ParcelAssignmentHistory> findAssignmentHistory(UUID parcelId);

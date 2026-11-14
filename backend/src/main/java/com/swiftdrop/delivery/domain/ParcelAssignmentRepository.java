@@ -40,4 +40,23 @@ public interface ParcelAssignmentRepository extends JpaRepository<ParcelAssignme
 
     Page<ParcelAssignmentRecord> findByTypeAndStatus(
             ParcelAssignmentType type, ParcelAssignmentStatus status, Pageable pageable);
+
+    @Query("""
+            SELECT a FROM ParcelAssignmentRecord a
+            JOIN Parcel p ON p.id = a.parcelId
+            WHERE a.type = :type
+              AND a.status = :status
+              AND (p.originHubId = :hubId
+                   OR p.viaHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR p.currentHubId = :hubId
+                   OR p.nextHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
+            """)
+    Page<ParcelAssignmentRecord> findByTypeAndStatusAndHub(
+            @Param("type") ParcelAssignmentType type,
+            @Param("status") ParcelAssignmentStatus status,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId,
+            Pageable pageable);
 }

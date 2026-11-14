@@ -127,11 +127,47 @@ class DispatchQueriesIT {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void hubAssignedDispatcher_onlySeesCouriersFromOwnHub_whileAdminCanFilterByHub() throws Exception {
+        UUID hubA = UUID.randomUUID();
+        UUID hubB = UUID.randomUUID();
+        UUID dispatcherA = insertUserWithHub("Dispatcher A", "DISPATCHER", true, hubA);
+        UUID courierA = insertUserWithHub("Courier A", "COURIER", true, hubA);
+        UUID courierB = insertUserWithHub("Courier B", "COURIER", true, hubB);
+
+        // Dispatcher A only sees Courier A
+        mvc.perform(get("/api/v1/dispatch/couriers")
+                        .with(TestPrincipal.dispatcher(dispatcherA).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + courierA + "')].fullName").value("Courier A"))
+                .andExpect(jsonPath("$[?(@.id == '" + courierB + "')]").doesNotExist());
+
+        // Dispatcher A cannot spoof another hubId via query parameter
+        mvc.perform(get("/api/v1/dispatch/couriers")
+                        .param("hubId", hubB.toString())
+                        .with(TestPrincipal.dispatcher(dispatcherA).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + courierA + "')].fullName").value("Courier A"))
+                .andExpect(jsonPath("$[?(@.id == '" + courierB + "')]").doesNotExist());
+
+        // Admin can filter by Hub B
+        mvc.perform(get("/api/v1/dispatch/couriers")
+                        .param("hubId", hubB.toString())
+                        .with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + courierB + "')].fullName").value("Courier B"))
+                .andExpect(jsonPath("$[?(@.id == '" + courierA + "')]").doesNotExist());
+    }
+
     private UUID insertUser(String name, String role, boolean enabled) {
+        return insertUserWithHub(name, role, enabled, null);
+    }
+
+    private UUID insertUserWithHub(String name, String role, boolean enabled, UUID hubId) {
         UUID id = UUID.randomUUID();
         String email = (name.replace(" ", "").toLowerCase() + "-" + id + "@example.com");
-        jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, ?, ?, NOW())",
-                id, email, name, enabled);
+        jdbc.update("INSERT INTO users (id, email, full_name, enabled, hub_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())",
+                id, email, name, enabled, hubId);
         jdbc.update("INSERT INTO user_roles (user_id, role_name) VALUES (?, ?)", id, role);
         return id;
     }

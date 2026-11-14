@@ -31,6 +31,7 @@ import com.swiftdrop.delivery.api.PublicTrackingView;
 import com.swiftdrop.delivery.domain.Hub;
 import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.Parcel;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
@@ -86,14 +87,16 @@ class ParcelQueryService implements ParcelQueries {
 
     @Override
     public PageResult<DispatchParcelSummary> findDispatchParcels(
-            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId, PageRequest page) {
         Objects.requireNonNull(page, "page");
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
         UUID parcelId = parseParcelId(normalizedSearch);
+        UUID hubZoneId = hubId == null ? null : hubs.findById(hubId).map(Hub::getZoneId).orElse(null);
         Pageable pageable = pageable(page, NEWEST_FIRST);
         Page<Parcel> found = normalizedSearch == null
-                ? parcels.findForDispatch(status, source, assigned, pageable)
-                : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, pageable);
+                ? parcels.findForDispatch(status, source, assigned, hubId, hubZoneId, pageable)
+                : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, hubId, hubZoneId,
+                        pageable);
         Map<UUID, String> hubCodes = found.isEmpty() ? Map.of()
                 : hubs.findAll().stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
         return PageResult.of(found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes)).toList(),
@@ -101,13 +104,29 @@ class ParcelQueryService implements ParcelQueries {
     }
 
     @Override
-    public PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
+    public PageResult<ParcelAssignmentSummary> findActiveAssignments(
+            ParcelAssignmentType type, UUID hubId, PageRequest page) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(page, "page");
-        Page<ParcelAssignmentSummary> found = assignments
-                .findByTypeAndStatus(type, ParcelAssignmentStatus.ACTIVE, pageable(page, ASSIGNED_OLDEST_FIRST))
-                .map(assignment -> assignment.toSummary());
+        Pageable pageable = pageable(page, ASSIGNED_OLDEST_FIRST);
+        Page<ParcelAssignmentRecord> records;
+        if (hubId == null) {
+            records = assignments.findByTypeAndStatus(type, ParcelAssignmentStatus.ACTIVE, pageable);
+        } else {
+            UUID hubZoneId = hubs.findById(hubId).map(Hub::getZoneId).orElse(null);
+            records = assignments.findByTypeAndStatusAndHub(
+                    type, ParcelAssignmentStatus.ACTIVE, hubId, hubZoneId, pageable);
+        }
+        Page<ParcelAssignmentSummary> found = records.map(ParcelAssignmentRecord::toSummary);
         return PageResult.of(found.getContent(), page, found.getTotalElements());
+    }
+
+    @Override
+    public boolean isParcelInHub(UUID parcelId, UUID hubId) {
+        Objects.requireNonNull(parcelId, "parcelId");
+        Objects.requireNonNull(hubId, "hubId");
+        UUID hubZoneId = hubs.findById(hubId).map(Hub::getZoneId).orElse(null);
+        return parcels.existsInHub(parcelId, hubId, hubZoneId);
     }
 
     @Override

@@ -45,33 +45,39 @@ class DispatchController {
 
     @GetMapping("/parcels")
     PageResponse<DispatchParcelSummary> parcels(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) ParcelStatus status,
             @RequestParam(required = false) ParcelSource source,
             @RequestParam(required = false) Boolean assigned,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) UUID hubId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
+        return toResponse(dispatch.parcels(status, source, assigned, search, hubId, staff(jwt), request), request);
     }
 
     @GetMapping("/active-assignments")
     PageResponse<ParcelAssignmentSummary> activeAssignments(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam ParcelAssignmentType type,
+            @RequestParam(required = false) UUID hubId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.activeAssignments(type, request), request);
+        return toResponse(dispatch.activeAssignments(type, hubId, staff(jwt), request), request);
     }
 
     @GetMapping("/courier-workloads")
-    Map<UUID, Long> courierWorkloads() {
-        return dispatch.courierWorkloads();
+    Map<UUID, Long> courierWorkloads(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) UUID hubId) {
+        return dispatch.courierWorkloads(hubId, staff(jwt));
     }
 
     @GetMapping("/couriers")
-    List<DispatchCourierResponse> couriers() {
-        return dispatch.activeCouriers().stream()
+    List<DispatchCourierResponse> couriers(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) UUID hubId) {
+        return dispatch.activeCouriers(hubId, staff(jwt)).stream()
                 .map(DispatchCourierResponse::from)
                 .toList();
     }
@@ -85,8 +91,7 @@ class DispatchController {
     @ResponseStatus(HttpStatus.CREATED)
     ParcelAssignmentSummary assign(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody DispatchAssignmentRequest request) {
-        return dispatch.assign(request.parcelId(), request.courierId(), UUID.fromString(jwt.getSubject()),
-                request.type());
+        return dispatch.assign(request.parcelId(), request.courierId(), staff(jwt), request.type());
     }
 
     // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----

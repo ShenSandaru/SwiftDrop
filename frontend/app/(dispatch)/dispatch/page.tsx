@@ -26,11 +26,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect, type SelectOption } from "@/components/ui/select";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
-import { formatApiError, type PageResponse } from "@/lib/api";
+import { api, formatApiError, type HubResponse, type PageResponse, type UserResponse } from "@/lib/api";
 import type { ParcelStatus } from "@/lib/delivery";
 import type {
   DispatchAssignment,
@@ -122,21 +123,73 @@ export default function DispatchPage() {
 
   const [quickTrackCode, setQuickTrackCode] = useState("");
 
+  const [currentUser, setCurrentUser] = useState<UserResponse | null>(null);
+  const [hubs, setHubs] = useState<HubResponse[]>([]);
+  const [hubContextLoaded, setHubContextLoaded] = useState(false);
+  const [adminHubFilter, setAdminHubFilter] = useState<string>("ALL");
+
   const [selectedParcel, setSelectedParcel] = useState<
     | { parcel: DispatchParcelItem; mode: "details" }
     | { parcel: DispatchParcelItem; mode: "assignment"; assignmentType: DispatchAssignmentType }
     | null
   >(null);
 
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      api.get<UserResponse>("/api/v1/users/me"),
+      api.get<HubResponse[]>("/api/v1/hubs"),
+    ])
+      .then(([meResult, hubsResult]) => {
+        if (!active) return;
+        if (meResult.status === "fulfilled") {
+          setCurrentUser(meResult.value);
+        }
+        if (hubsResult.status === "fulfilled") {
+          const sorted = [...hubsResult.value].sort((a, b) => {
+            if (a.central !== b.central) return a.central ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+          setHubs(sorted);
+        }
+      })
+      .finally(() => {
+        if (active) setHubContextLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const isAdmin = Boolean(currentUser?.roles?.includes("ADMIN"));
+  const assignedHub = useMemo(
+    () => (currentUser?.hubId ? hubs.find((h) => h.id === currentUser.hubId) ?? null : null),
+    [currentUser, hubs],
+  );
+  const effectiveHubFilter = isAdmin && adminHubFilter !== "ALL" ? adminHubFilter : undefined;
+
+  const adminHubOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: "ALL", label: "All Hubs (Network-wide)" },
+      ...hubs.map((h) => ({
+        value: h.id,
+        label: `${h.name} (${h.code})`,
+        description: `${h.city} · ${h.central ? "Main Hub" : "Sub-hub"}`,
+        badge: !h.active ? "Inactive" : h.central ? "Main" : undefined,
+        badgeVariant: (!h.active ? "warning" : "success") as SelectOption["badgeVariant"],
+      })),
+    ];
+  }, [hubs]);
+
   // 1. Overall Metrics
   useEffect(() => {
     let active = true;
     const requests = [
-      countDispatchParcels(),
-      listDispatchParcels({ page: 0, size: 1, status: "CREATED", assigned: false }),
-      listActiveDispatchAssignments("PICKUP", 0, 1),
-      listActiveDispatchAssignments("DELIVERY", 0, 1),
-      countDispatchParcels("DELIVERED"),
+      countDispatchParcels(undefined, effectiveHubFilter),
+      listDispatchParcels({ page: 0, size: 1, status: "CREATED", assigned: false, hubId: effectiveHubFilter }),
+      listActiveDispatchAssignments("PICKUP", 0, 1, effectiveHubFilter),
+      listActiveDispatchAssignments("DELIVERY", 0, 1, effectiveHubFilter),
+      countDispatchParcels("DELIVERED", effectiveHubFilter),
     ] as const;
 
     Promise.allSettled(requests).then((results) => {
@@ -167,7 +220,7 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   // 2. Pickup / Main Parcel Page
   useEffect(() => {
@@ -179,6 +232,7 @@ export default function DispatchPage() {
       source: sourceFilter === "ALL" ? undefined : sourceFilter,
       assigned: assignmentFilter === "ALL" ? undefined : assignmentFilter === "ASSIGNED",
       search,
+      hubId: effectiveHubFilter,
     })
       .then((loaded) => {
         if (active) {
@@ -200,15 +254,15 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [parcelPageNumber, parcelStatus, sourceFilter, assignmentFilter, search, refreshKey]);
+  }, [parcelPageNumber, parcelStatus, sourceFilter, assignmentFilter, search, refreshKey, effectiveHubFilter]);
 
   // 3. Active Deliveries
   useEffect(() => {
     let active = true;
     Promise.all([
-      listDispatchParcels({ page: 0, size: 10, status: "PICKED_UP", assigned: true }),
-      listDispatchParcels({ page: 0, size: 10, status: "IN_TRANSIT", assigned: true }),
-      listDispatchParcels({ page: 0, size: 10, status: "OUT_FOR_DELIVERY", assigned: true }),
+      listDispatchParcels({ page: 0, size: 10, status: "PICKED_UP", assigned: true, hubId: effectiveHubFilter }),
+      listDispatchParcels({ page: 0, size: 10, status: "IN_TRANSIT", assigned: true, hubId: effectiveHubFilter }),
+      listDispatchParcels({ page: 0, size: 10, status: "OUT_FOR_DELIVERY", assigned: true, hubId: effectiveHubFilter }),
     ])
       .then((pages) => {
         if (active) {
@@ -235,14 +289,14 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   // 4. Warehouse & Hub Parcels (Items collected & being sorted / transferred)
   useEffect(() => {
     let active = true;
     Promise.all([
       ...(["PICKED_UP", "AT_HUB", "IN_TRANSIT", "DELIVERY_ATTEMPT_FAILED", "RETURNING"] as const).map((status) =>
-        listDispatchParcels({ page: 0, size: 25, status })),
+        listDispatchParcels({ page: 0, size: 25, status, hubId: effectiveHubFilter })),
     ])
       .then((pages) => {
         if (active) {
@@ -268,16 +322,16 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   // 5. Couriers, Workloads, Active Assignments
   useEffect(() => {
     let active = true;
     Promise.allSettled([
-      listAllDispatchCouriers(),
-      getCourierWorkloads(),
-      listAllActiveDispatchAssignments("PICKUP"),
-      listAllActiveDispatchAssignments("DELIVERY"),
+      listAllDispatchCouriers(effectiveHubFilter),
+      getCourierWorkloads(effectiveHubFilter),
+      listAllActiveDispatchAssignments("PICKUP", effectiveHubFilter),
+      listAllActiveDispatchAssignments("DELIVERY", effectiveHubFilter),
     ])
       .then(([couriersResult, workloadsResult, pickupsResult, deliveriesResult]) => {
         if (!active) {
@@ -309,7 +363,7 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   const visibleParcels = useMemo(() => parcelPage?.items ?? [], [parcelPage]);
   const courierById = useMemo(
@@ -390,33 +444,72 @@ export default function DispatchPage() {
               <time suppressHydrationWarning>{today}</time>
             </span>
             <span aria-hidden="true">·</span>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              Island Network Active
-            </span>
+            {assignedHub ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                <Warehouse className="size-3" aria-hidden="true" />
+                {assignedHub.name} ({assignedHub.code}) · {assignedHub.central ? "Main Hub" : "Sub-hub"}
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                Island Network Active
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
-            Coordinate first-mile pickups, warehouse sorting & branch transfers, and final-mile deliveries.
+            {assignedHub
+              ? `Managing pickups, hub sorting, transfers, and deliveries for ${assignedHub.name} (${assignedHub.city}).`
+              : "Coordinate first-mile pickups, warehouse sorting & branch transfers, and final-mile deliveries."}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={refreshDashboard}
-          disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
-          className="w-full shrink-0 sm:w-auto"
-        >
-          <RefreshCw
-            className={`size-3.5 mr-1.5 ${
-              metricsLoading || parcelPageLoading || activeLoading || couriersLoading
-                ? "animate-spin"
-                : ""
-            }`}
-            aria-hidden="true"
-          />
-          Refresh data
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {isAdmin && hubs.length > 0 && (
+            <div className="w-full sm:w-64">
+              <ThemedSelect
+                value={adminHubFilter}
+                onChange={(val) => {
+                  setParcelPageNumber(0);
+                  setAdminHubFilter(val);
+                }}
+                options={adminHubOptions}
+                size="sm"
+                searchable={hubs.length > 6}
+                searchPlaceholder="Filter by hub..."
+                placeholder="All Hubs (Network-wide)"
+              />
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={refreshDashboard}
+            disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
+            className="w-full shrink-0 sm:w-auto"
+          >
+            <RefreshCw
+              className={`size-3.5 mr-1.5 ${
+                metricsLoading || parcelPageLoading || activeLoading || couriersLoading
+                  ? "animate-spin"
+                  : ""
+              }`}
+              aria-hidden="true"
+            />
+            Refresh data
+          </Button>
+        </div>
       </div>
+
+      {hubContextLoaded && currentUser && !isAdmin && !currentUser.hubId && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300"
+        >
+          <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <p>
+            No hub is assigned to your dispatcher account yet — showing the network-wide view. Contact an administrator to assign your hub.
+          </p>
+        </div>
+      )}
 
       {/* Main Operational Tabs Bar */}
       <div className="border-b border-border">

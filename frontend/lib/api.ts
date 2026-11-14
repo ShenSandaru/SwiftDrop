@@ -23,6 +23,7 @@ export interface UserResponse {
   avatarUpdatedAt?: string;
   createdAt?: string;
   profileCompleted?: boolean;
+  hubId?: string | null;
 }
 
 export function getUserAvatarUrl(userId: string, avatarUpdatedAt?: string): string {
@@ -87,6 +88,17 @@ export interface CreateStaffUserRequest {
   email: string;
   password: string;
   role?: "COURIER" | "DISPATCHER";
+  hubId?: string | null;
+}
+
+export interface HubResponse {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  zoneId?: string | null;
+  central: boolean;
+  active: boolean;
 }
 
 export interface UpdateUserStatusRequest {

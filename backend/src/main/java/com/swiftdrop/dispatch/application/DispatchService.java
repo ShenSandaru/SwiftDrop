@@ -49,8 +49,23 @@ public class DispatchService {
     }
 
     @Transactional(readOnly = true)
+    public PageResult<DispatchParcelSummary> parcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search,
+            UUID requestedHubId, Staff caller, PageRequest page) {
+        UUID effectiveHubId = resolveEffectiveHubId(caller, requestedHubId);
+        return parcels.findDispatchParcels(status, source, assigned, search, effectiveHubId, page);
+    }
+
+    @Transactional(readOnly = true)
     public PageResult<ParcelAssignmentSummary> activeAssignments(ParcelAssignmentType type, PageRequest page) {
         return parcels.findActiveAssignments(type, page);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<ParcelAssignmentSummary> activeAssignments(
+            ParcelAssignmentType type, UUID requestedHubId, Staff caller, PageRequest page) {
+        UUID effectiveHubId = resolveEffectiveHubId(caller, requestedHubId);
+        return parcels.findActiveAssignments(type, effectiveHubId, page);
     }
 
     @Transactional(readOnly = true)
@@ -59,8 +74,31 @@ public class DispatchService {
     }
 
     @Transactional(readOnly = true)
+    public Map<UUID, Long> courierWorkloads(UUID requestedHubId, Staff caller) {
+        UUID effectiveHubId = resolveEffectiveHubId(caller, requestedHubId);
+        Map<UUID, Long> all = parcels.countActiveParcelsByCourier();
+        if (effectiveHubId == null) {
+            return all;
+        }
+        java.util.Set<UUID> hubCourierIds = users.findEnabledCouriersByHub(effectiveHubId).stream()
+                .map(UserSummary::id)
+                .collect(java.util.stream.Collectors.toSet());
+        return all.entrySet().stream()
+                .filter(e -> hubCourierIds.contains(e.getKey()))
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    @Transactional(readOnly = true)
     public List<UserSummary> activeCouriers() {
         return users.findEnabledCouriers();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSummary> activeCouriers(UUID requestedHubId, Staff caller) {
+        UUID effectiveHubId = resolveEffectiveHubId(caller, requestedHubId);
+        return effectiveHubId == null
+                ? users.findEnabledCouriers()
+                : users.findEnabledCouriersByHub(effectiveHubId);
     }
 
     @Transactional(readOnly = true)
@@ -72,9 +110,15 @@ public class DispatchService {
     @Transactional
     public ParcelAssignmentSummary assign(UUID parcelId, UUID courierId, UUID dispatcherId,
             ParcelAssignmentType type) {
+        return assign(parcelId, courierId, Staff.dispatcher(dispatcherId), type);
+    }
+
+    @Transactional
+    public ParcelAssignmentSummary assign(UUID parcelId, UUID courierId, Staff caller,
+            ParcelAssignmentType type) {
         Objects.requireNonNull(parcelId, "parcelId");
         Objects.requireNonNull(courierId, "courierId");
-        Objects.requireNonNull(dispatcherId, "dispatcherId");
+        Objects.requireNonNull(caller, "caller");
         Objects.requireNonNull(type, "type");
 
         UserSummary courier = users.findUser(courierId).orElseThrow(DispatchCourierNotFoundException::new);
@@ -85,28 +129,66 @@ public class DispatchService {
             throw new DispatchCourierUnavailableException("The courier account is disabled");
         }
 
-        return assignments.assignCourier(parcelId, courierId, dispatcherId, type);
+        UUID effectiveHubId = resolveEffectiveHubId(caller, null);
+        if (effectiveHubId != null) {
+            if (!effectiveHubId.equals(courier.hubId())) {
+                throw new DispatchCourierUnavailableException("The courier is not assigned to your hub");
+            }
+            if (!parcels.isParcelInHub(parcelId, effectiveHubId)) {
+                throw new ParcelConflictException("Parcel does not belong to your hub");
+            }
+        }
+
+        return assignments.assignCourier(parcelId, courierId, caller.userId(), type);
     }
 
     // Hub network steps (ADR 0009 §3, §6); delivery enforces the rules and records the history
 
     public void scanAtHub(UUID parcelId, UUID hubId, Staff staff) {
-        hubOperations.scanAtHub(parcelId, Objects.requireNonNull(hubId, "hubId"), staff);
+        Objects.requireNonNull(hubId, "hubId");
+        UUID effectiveHubId = resolveEffectiveHubId(staff, null);
+        if (effectiveHubId != null && !effectiveHubId.equals(hubId)) {
+            throw new ParcelConflictException("Dispatchers can only scan parcels at their assigned hub");
+        }
+        hubOperations.scanAtHub(parcelId, hubId, staff);
     }
 
     public void sendToNextHub(UUID parcelId, Staff staff) {
+        requireParcelInCallerHub(parcelId, staff);
         hubOperations.sendToNextHub(parcelId, staff);
     }
 
     public void startReturn(UUID parcelId, Staff staff) {
+        requireParcelInCallerHub(parcelId, staff);
         hubOperations.startReturn(parcelId, staff);
     }
 
     public void markFailed(UUID parcelId, FailureReason reason, String note, Staff staff) {
+        requireParcelInCallerHub(parcelId, staff);
         hubOperations.markFailed(parcelId, Objects.requireNonNull(reason, "reason"), note, staff);
     }
 
     public void cancel(UUID parcelId, Staff staff) {
+        requireParcelInCallerHub(parcelId, staff);
         hubOperations.cancel(parcelId, staff);
+    }
+
+    private UUID resolveEffectiveHubId(Staff caller, UUID requestedHubId) {
+        if (caller == null) {
+            return requestedHubId;
+        }
+        if (caller.admin()) {
+            return requestedHubId;
+        }
+        return users.findUser(caller.userId())
+                .map(UserSummary::hubId)
+                .orElse(null);
+    }
+
+    private void requireParcelInCallerHub(UUID parcelId, Staff staff) {
+        UUID effectiveHubId = resolveEffectiveHubId(staff, null);
+        if (effectiveHubId != null && !parcels.isParcelInHub(parcelId, effectiveHubId)) {
+            throw new ParcelConflictException("Parcel does not belong to your hub");
+        }
     }
 }

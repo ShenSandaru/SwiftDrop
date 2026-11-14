@@ -71,6 +71,7 @@ export interface DispatchParcelPageRequest {
   source?: "CUSTOMER" | "MERCHANT";
   assigned?: boolean;
   search?: string;
+  hubId?: string;
 }
 
 export function listDispatchParcels({
@@ -80,6 +81,7 @@ export function listDispatchParcels({
   source,
   assigned,
   search,
+  hubId,
 }: DispatchParcelPageRequest): Promise<PageResponse<DispatchParcelItem>> {
   const query = new URLSearchParams({ page: String(page), size: String(size) });
   if (status) {
@@ -94,28 +96,36 @@ export function listDispatchParcels({
   if (search?.trim()) {
     query.set("search", search.trim());
   }
+  if (hubId) {
+    query.set("hubId", hubId);
+  }
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/parcels?${query.toString()}`);
 }
 
-export async function countDispatchParcels(status?: ParcelStatus): Promise<number> {
-  const page = await listDispatchParcels({ page: 0, size: 1, status });
+export async function countDispatchParcels(status?: ParcelStatus, hubId?: string): Promise<number> {
+  const page = await listDispatchParcels({ page: 0, size: 1, status, hubId });
   return page.totalItems;
 }
 
-export function listDispatchCouriers(): Promise<DispatchCourier[]> {
-  return api.get<DispatchCourier[]>("/api/v1/dispatch/couriers");
+export function listDispatchCouriers(hubId?: string): Promise<DispatchCourier[]> {
+  const query = hubId ? `?${new URLSearchParams({ hubId }).toString()}` : "";
+  return api.get<DispatchCourier[]>(`/api/v1/dispatch/couriers${query}`);
 }
 
-export async function listAllDispatchCouriers(): Promise<DispatchCourier[]> {
-  return listDispatchCouriers();
+export async function listAllDispatchCouriers(hubId?: string): Promise<DispatchCourier[]> {
+  return listDispatchCouriers(hubId);
 }
 
 export function listActiveDispatchAssignments(
   type: DispatchAssignmentType,
   page: number,
   size: number,
+  hubId?: string,
 ): Promise<PageResponse<DispatchAssignment>> {
   const query = new URLSearchParams({ type, page: String(page), size: String(size) });
+  if (hubId) {
+    query.set("hubId", hubId);
+  }
   return api.get<PageResponse<DispatchAssignment>>(
     `/api/v1/dispatch/active-assignments?${query.toString()}`,
   );
@@ -123,22 +133,24 @@ export function listActiveDispatchAssignments(
 
 export async function listAllActiveDispatchAssignments(
   type: DispatchAssignmentType,
+  hubId?: string,
 ): Promise<DispatchAssignment[]> {
-  const firstPage = await listActiveDispatchAssignments(type, 0, 100);
+  const firstPage = await listActiveDispatchAssignments(type, 0, 100, hubId);
   if (firstPage.totalPages < 2) {
     return firstPage.items;
   }
 
   const remaining = await Promise.all(
     Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      listActiveDispatchAssignments(type, index + 1, 100),
+      listActiveDispatchAssignments(type, index + 1, 100, hubId),
     ),
   );
   return [...firstPage.items, ...remaining.flatMap((page) => page.items)];
 }
 
-export function getCourierWorkloads(): Promise<Record<string, number>> {
-  return api.get<Record<string, number>>("/api/v1/dispatch/courier-workloads");
+export function getCourierWorkloads(hubId?: string): Promise<Record<string, number>> {
+  const query = hubId ? `?${new URLSearchParams({ hubId }).toString()}` : "";
+  return api.get<Record<string, number>>(`/api/v1/dispatch/courier-workloads${query}`);
 }
 
 export function assignDispatchCourier(
