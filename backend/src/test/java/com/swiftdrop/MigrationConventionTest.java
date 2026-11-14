@@ -179,8 +179,7 @@ class MigrationConventionTest {
                         tuple(
                                 "202611131900",
                                 "identity add phone number to users",
-                                "identity/V202611131900__identity_add_phone_number_to_users.sql"));
-                                "delivery/V202611111010__delivery_add_hub_lifecycle.sql"),
+                                "identity/V202611131900__identity_add_phone_number_to_users.sql"),
                         tuple(
                                 "202611131400",
                                 "pricing create districts and postal zones",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -782,7 +782,7 @@ export default function AdminHubsAndZonesPage() {
 
       {/* ===================== TAB 1: HUB NETWORK ===================== */}
       {tab === "hubs" && (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-28">
           {hubs !== null && unserved.length > 0 && (
             <Alert variant="warning">
               <AlertTriangle aria-hidden="true" />
@@ -1355,8 +1355,46 @@ function DistrictSelect({
   districts: District[];
   existingDistricts: Set<string>;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Close automatically when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  function toggleOpen() {
+    if (!open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenUpward(spaceBelow < 290 && spaceAbove > spaceBelow);
+    }
+    setOpen((prev) => !prev);
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return districts;
@@ -1370,10 +1408,11 @@ function DistrictSelect({
   }, [districts, search]);
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggleOpen}
+        aria-expanded={open}
         className="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-card px-2.5 text-xs text-foreground shadow-xs hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
       >
         {selected ? (
@@ -1384,13 +1423,18 @@ function DistrictSelect({
         ) : (
           <span className="text-muted-foreground">Select a district...</span>
         )}
-        <ChevronDown className="size-4 shrink-0 opacity-50" />
+        <ChevronDown className={cn("size-4 shrink-0 opacity-50 transition-transform", open && "rotate-180")} />
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-[280px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 duration-100">
-          <div className="sticky top-0 bg-popover p-1 border-b border-border/50">
-            <div className="flex items-center gap-1.5 rounded-lg border border-input px-2 py-1 bg-background">
+        <div
+          className={cn(
+            "absolute z-50 flex w-full min-w-[280px] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 duration-100",
+            openUpward ? "bottom-full mb-1.5" : "top-full mt-1.5"
+          )}
+        >
+          <div className="bg-popover p-1.5 border-b border-border/60 shrink-0">
+            <div className="flex items-center gap-1.5 rounded-lg border border-input px-2 py-1.5 bg-background">
               <Search className="size-3.5 text-muted-foreground shrink-0" />
               <input
                 type="text"
@@ -1402,7 +1446,7 @@ function DistrictSelect({
               />
             </div>
           </div>
-          <div className="py-1">
+          <div className="max-h-56 overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <p className="p-3 text-center text-xs text-muted-foreground">No matching district found.</p>
             ) : (
