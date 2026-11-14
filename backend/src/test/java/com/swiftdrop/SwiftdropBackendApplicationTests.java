@@ -1,7 +1,14 @@
 package com.swiftdrop;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
@@ -10,6 +17,8 @@ import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryRepository;
 import com.swiftdrop.identity.domain.ExternalIdentityRepository;
 import com.swiftdrop.identity.domain.UserRepository;
+import com.swiftdrop.merchant.api.WebhookUrlValidator;
+import com.swiftdrop.merchant.application.MerchantWebhookService;
 import com.swiftdrop.merchant.domain.MerchantRepository;
 import com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository;
 import com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository;
@@ -36,6 +45,8 @@ class SwiftdropBackendApplicationTests {
     @MockitoBean
     private UserRepository users;
     @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
+    @MockitoBean
     private ExternalIdentityRepository identities;
     @MockitoBean
     private ParcelRepository parcels;
@@ -57,9 +68,47 @@ class SwiftdropBackendApplicationTests {
     private MerchantStatusHistoryRepository merchantStatusHistory;
     @MockitoBean
     private MerchantWebhookEndpointRepository merchantWebhookEndpoints;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantApiKeyRepository merchantApiKeys;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventStateRepository merchantEventStates;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantProcessedEventRepository merchantProcessedEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantPendingEventRepository merchantPendingEvents;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository merchantEventAnomalies;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository merchantWebhookDeliveries;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
+    @MockitoBean
+    private com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository merchantWebhookRedeliveries;
+
+    @Autowired
+    private ApplicationContext context;
 
     @Test
     void contextLoads() {
+    }
+
+    /** F-02: one webhook URL validator, the SSRF-safe one, used for registration and for sending. */
+    @Test
+    void webhookRegistrationAndDeliveryUseTheSsrfSafeValidator() {
+        Map<String, WebhookUrlValidator> validators = context.getBeansOfType(WebhookUrlValidator.class);
+        assertThat(validators).hasSize(1);
+        WebhookUrlValidator validator = validators.values().iterator().next();
+        assertThat(validator.getClass().getSimpleName()).isEqualTo("WebhookDestinationValidator");
+
+        Object service = context.getBean(MerchantWebhookService.class);
+        assertThat(ReflectionTestUtils.getField(service, "urlValidator")).isSameAs(validator);
+        Object sender = context.getBean("webhookHttpClient");
+        assertThat(ReflectionTestUtils.getField(sender, "validator")).isSameAs(validator);
+
+        // Private and loopback destinations are refused at registration, without any DNS lookup.
+        assertThat(validator.validate("https://10.0.0.1/hook").isValid()).isFalse();
+        assertThat(validator.validate("https://127.0.0.1/hook").isValid()).isFalse();
+        assertThat(validator.validate("http://8.8.8.8/hook").isValid()).isFalse();
     }
 
 }

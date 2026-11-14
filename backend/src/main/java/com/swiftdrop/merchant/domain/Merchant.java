@@ -103,57 +103,71 @@ public class Merchant {
         return trimmed;
     }
 
-    public void approve(UUID adminUserId) {
-        Objects.requireNonNull(adminUserId, "adminUserId must not be null");
-        if (this.status != MerchantStatus.PENDING && this.status != MerchantStatus.SUSPENDED) {
-            throw new IllegalStateException("Cannot approve merchant with status " + this.status);
+    public void transitionTo(MerchantStatus targetStatus, UUID actorUserId, String reason) {
+        Objects.requireNonNull(targetStatus, "targetStatus must not be null");
+        Objects.requireNonNull(actorUserId, "actorUserId must not be null");
+        if (!this.status.canTransitionTo(targetStatus)) {
+            throw new IllegalStateTransitionException(this.status, targetStatus);
         }
-        this.status = MerchantStatus.APPROVED;
-        this.decidedBy = adminUserId;
+        this.status = targetStatus;
+        this.decidedBy = actorUserId;
         this.decidedAt = Instant.now();
-        this.statusReason = null;
+        this.statusReason = (reason != null && !reason.isBlank()) ? reason.trim() : null;
         this.updatedAt = Instant.now();
+    }
+
+    public void approve(UUID adminUserId) {
+        transitionTo(MerchantStatus.APPROVED, adminUserId, null);
     }
 
     public void reject(UUID adminUserId, String reason) {
-        Objects.requireNonNull(adminUserId, "adminUserId must not be null");
-        if (this.status != MerchantStatus.PENDING) {
-            throw new IllegalStateException("Cannot reject merchant with status " + this.status);
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Rejection reason is required");
         }
-        this.status = MerchantStatus.REJECTED;
-        this.decidedBy = adminUserId;
-        this.decidedAt = Instant.now();
-        this.statusReason = reason != null && !reason.isBlank() ? reason.trim() : null;
-        this.updatedAt = Instant.now();
+        transitionTo(MerchantStatus.REJECTED, adminUserId, reason);
     }
 
     public void suspend(UUID adminUserId, String reason) {
-        Objects.requireNonNull(adminUserId, "adminUserId must not be null");
-        if (this.status != MerchantStatus.APPROVED) {
-            throw new IllegalStateException("Cannot suspend merchant with status " + this.status);
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Suspension reason is required");
         }
-        this.status = MerchantStatus.SUSPENDED;
-        this.decidedBy = adminUserId;
-        this.decidedAt = Instant.now();
-        this.statusReason = reason != null && !reason.isBlank() ? reason.trim() : null;
-        this.updatedAt = Instant.now();
+        transitionTo(MerchantStatus.SUSPENDED, adminUserId, reason);
     }
 
     public void resubmit(String businessName, String businessType, String contactPhone, String businessAddress,
             String businessDescription, String websiteUrl) {
-        if (this.status != MerchantStatus.REJECTED) {
-            throw new IllegalStateException("Only rejected merchants can resubmit registration, current: " + this.status);
-        }
+        transitionTo(MerchantStatus.PENDING, this.userId, null);
         this.businessName = normalizeRequired(businessName, "businessName");
         this.businessType = normalizeRequired(businessType, "businessType");
         this.contactPhone = normalizeRequired(contactPhone, "contactPhone");
         this.businessAddress = normalizeRequired(businessAddress, "businessAddress");
         this.businessDescription = businessDescription != null && !businessDescription.isBlank() ? businessDescription.trim() : null;
         this.websiteUrl = websiteUrl != null && !websiteUrl.isBlank() ? websiteUrl.trim() : null;
-        this.status = MerchantStatus.PENDING;
         this.statusReason = null;
         this.decidedBy = null;
         this.decidedAt = null;
+    }
+
+    public void updateProfile(String businessName, String businessType, String contactPhone,
+            String businessAddress, String businessDescription, String websiteUrl) {
+        if (businessName != null && !businessName.isBlank()) {
+            this.businessName = businessName.trim();
+        }
+        if (businessType != null && !businessType.isBlank()) {
+            this.businessType = businessType.trim();
+        }
+        if (contactPhone != null && !contactPhone.isBlank()) {
+            this.contactPhone = contactPhone.trim();
+        }
+        if (businessAddress != null && !businessAddress.isBlank()) {
+            this.businessAddress = businessAddress.trim();
+        }
+        if (businessDescription != null) {
+            this.businessDescription = businessDescription.isBlank() ? null : businessDescription.trim();
+        }
+        if (websiteUrl != null) {
+            this.websiteUrl = websiteUrl.isBlank() ? null : websiteUrl.trim();
+        }
         this.updatedAt = Instant.now();
     }
 

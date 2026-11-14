@@ -149,8 +149,12 @@ On startup Flyway connects, applies the migrations under
 then validates the entities against the schema. `http://localhost:8080/actuator/health` returns
 `{"status":"UP"}` when the database and RabbitMQ are reachable. If you run the backend from an IDE,
 set the working directory to `backend/` or define the `SWIFTDROP_*` variables in the run
-configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` holds at least 32 bytes
-(see `.env.example`). `.\mvnw.cmd clean verify` does not need the containers.
+configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` and
+`SWIFTDROP_WEBHOOK_SECRET_KEY` (the key that encrypts merchant webhook signing secrets) each hold at
+least 32 bytes (see `.env.example`). If you created webhook endpoints before the key became required,
+set it to the old built-in value `swiftdrop-local-dev-webhook-secret-key-32bytes!` to keep their
+secrets readable, or rotate their secrets after choosing a new key.
+`.\mvnw.cmd test` runs all unit tests without Docker; `.\mvnw.cmd verify -Pintegration` runs unit and integration tests (`*IT.java`) against PostgreSQL and RabbitMQ Testcontainers and requires Docker Desktop running.
 
 Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
 create a Google OAuth client of type "Web application" with the authorized redirect URI
@@ -158,6 +162,19 @@ create a Google OAuth client of type "Web application" with the authorized redir
 `SWIFTDROP_GOOGLE_CLIENT_SECRET` in your `.env`, restart the backend and open
 `http://localhost:8080/oauth2/authorization/google` in a browser. The callback responds with the
 same JSON token body as `POST /api/v1/auth/tokens`.
+
+Merchant webhooks only go to public `https` URLs on port 443. To send them to a demo receiver on
+your own machine, set `SWIFTDROP_WEBHOOK_ALLOW_LOCAL=true` in your `.env` and restart the backend:
+this allows `http` and any port, but only for `127.0.0.1` and `::1` (for example
+`http://localhost:9000/hook`), and the backend logs a warning at startup. Private addresses stay
+refused. Never enable it outside local development.
+
+The merchant event consumer turns every merchant parcel's status change into webhook delivery records
+(`merchant_webhook_deliveries`), and the webhook sender signs and sends them (attempts in
+`merchant_webhook_attempts`). Both are on by default; set
+`SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED=false` to leave events waiting in the
+`merchant.parcel-status-changed` queue (visible in the RabbitMQ management UI), or
+`SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED=false` to leave the records `PENDING`.
 
 ### AI assistant (optional)
 
