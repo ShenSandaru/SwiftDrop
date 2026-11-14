@@ -144,6 +144,15 @@ public class DispatchService {
 
     // Hub network steps (ADR 0009 §3, §6); delivery enforces the rules and records the history
 
+    public void receiveAtHub(UUID parcelId, UUID hubId, Staff staff) {
+        Objects.requireNonNull(hubId, "hubId");
+        UUID effectiveHubId = resolveEffectiveHubId(staff, null);
+        if (effectiveHubId != null && !effectiveHubId.equals(hubId)) {
+            throw new ParcelConflictException("Dispatchers can only receive parcels at their assigned hub");
+        }
+        hubOperations.receiveAtHub(parcelId, hubId, staff);
+    }
+
     public void scanAtHub(UUID parcelId, UUID hubId, Staff staff) {
         Objects.requireNonNull(hubId, "hubId");
         UUID effectiveHubId = resolveEffectiveHubId(staff, null);

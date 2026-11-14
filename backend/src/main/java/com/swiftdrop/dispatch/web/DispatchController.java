@@ -96,6 +96,14 @@ class DispatchController {
 
     // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----
 
+    /** Receives a booked parcel directly at its origin hub (walk-in / counter drop-off). */
+    @PostMapping("/parcels/{id}/hub-intake")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void receiveAtHub(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+            @Valid @RequestBody HubScanRequest request) {
+        dispatch.receiveAtHub(id, request.hubId(), staff(jwt));
+    }
+
     /** Scans a parcel in at the hub it is expected at. */
     @PostMapping("/parcels/{id}/hub-scans")
     @ResponseStatus(HttpStatus.NO_CONTENT)

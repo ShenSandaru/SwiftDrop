@@ -194,6 +194,14 @@ class DispatchServiceTest {
                 .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
                 .hasMessageContaining("assigned hub");
         verify(hubOperations, never()).scanAtHub(PARCEL_ID, otherHub, caller);
+
+        assertThatThrownBy(() -> service.receiveAtHub(PARCEL_ID, otherHub, caller))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
+                .hasMessageContaining("assigned hub");
+        verify(hubOperations, never()).receiveAtHub(PARCEL_ID, otherHub, caller);
+
+        service.receiveAtHub(PARCEL_ID, dispatcherHub, caller);
+        verify(hubOperations).receiveAtHub(PARCEL_ID, dispatcherHub, caller);
     }
 
     @Test
