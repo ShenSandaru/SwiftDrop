@@ -1,6 +1,6 @@
 # 0003. Backend business modules and boundaries
 
-- Status: Accepted
+- Status: Superseded by 0008
 - Date: 2026-10-25
 
 ## Context

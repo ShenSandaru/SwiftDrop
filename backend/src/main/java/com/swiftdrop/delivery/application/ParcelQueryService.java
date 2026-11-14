@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
+import com.swiftdrop.delivery.api.DispatchActivity;
+import com.swiftdrop.delivery.api.DispatchActivityFilter;
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentHistory;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
@@ -58,14 +60,17 @@ class ParcelQueryService implements ParcelQueries {
     private final ParcelStatusHistoryRepository history;
     private final HubRepository hubs;
     private final DeliveryPolicy policy;
+    private final DispatchActivityHistoryQuery activityHistory;
 
     ParcelQueryService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
-            ParcelStatusHistoryRepository history, HubRepository hubs, DeliveryPolicy policy) {
+            ParcelStatusHistoryRepository history, HubRepository hubs, DeliveryPolicy policy,
+            DispatchActivityHistoryQuery activityHistory) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.history = history;
         this.hubs = hubs;
         this.policy = policy;
+        this.activityHistory = activityHistory;
     }
 
     @Override
@@ -120,6 +125,12 @@ class ParcelQueryService implements ParcelQueries {
                 assignments.findByParcelIdOrderByAssignedAtAsc(parcelId).stream()
                         .map(assignment -> assignment.toSummary())
                         .toList()));
+    }
+
+    @Override
+    public PageResult<DispatchActivity> findDispatchActivityHistory(
+            DispatchActivityFilter filter, PageRequest page) {
+        return activityHistory.find(filter, page);
     }
 
     @Override

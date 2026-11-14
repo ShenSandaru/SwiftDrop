@@ -10,13 +10,15 @@ current state of each decision and lists the open questions that still need one.
 |---|---|---|
 | [0001](0001-modular-monolith-in-a-monorepo.md) | Modular monolith in a monorepo | Accepted |
 | [0002](0002-technology-and-version-baseline.md) | Technology and version baseline | Accepted |
-| [0003](0003-backend-modules-and-boundaries.md) | Backend business modules and boundaries | Accepted |
+| [0003](0003-backend-modules-and-boundaries.md) | Backend business modules and boundaries | Superseded by 0008 |
 | [0004](0004-messaging-and-integration-reliability.md) | Messaging and integration reliability | Accepted |
 | [0005](0005-google-oauth-token-handoff.md) | Google OAuth token handoff | Accepted |
-| [0006](0006-delivery-lifecycle-and-transition-rules.md) | Delivery lifecycle and transition rules | Proposed *(implemented in `delivery`; awaiting formal ADR acceptance)* |
-| [0007](0007-public-sse-tracking-stream.md) | Public SSE tracking stream | Proposed *(implemented in `tracking`; awaiting formal ADR acceptance)* |
-| [0008 (Dispatch)](0008-dispatch-assignment-history-and-handoff.md) | Dispatch assignment history and handoff | Accepted *(shares number 0008 with Merchant API key ADR)* |
+
+| [0006](0006-delivery-lifecycle-and-transition-rules.md) | Delivery lifecycle and transition rules | Superseded by 0008 |
+| [0007](0007-public-sse-tracking-stream.md) | Public SSE tracking stream | Proposed |
+| [0008 (Dispatch)](0008-dispatch-assignment-history-and-handoff.md) | Dispatch assignment history and courier handoff | Accepted *(shares number 0008 with Merchant ADR)* |
 | [0008 (Merchant)](0008-merchant-api-key-authentication.md) | Merchant API key authentication | Accepted *(shares number 0008 with Dispatch ADR)* |
+
 | [0009](0009-hub-network-delivery-attempts-and-returns.md) | Hub network, delivery attempts, returns and cancellation | Accepted |
 | [0010](0010-ai-delivery-assistant-and-mcp-server.md) | AI delivery assistant and MCP server (BON-2) | Proposed *(implemented in `assistant`; awaiting formal ADR acceptance)* |
 

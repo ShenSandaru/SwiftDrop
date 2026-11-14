@@ -17,13 +17,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.DispatchActivity;
+import com.swiftdrop.delivery.api.DispatchActivityAction;
+import com.swiftdrop.delivery.api.DispatchActivityDetails;
+import com.swiftdrop.delivery.api.DispatchActivityFilter;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.PageRequest;
+import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.Staff;
+import com.swiftdrop.dispatch.api.DispatchActivityItem;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
@@ -113,6 +120,38 @@ class DispatchServiceTest {
 
         assertThat(active).containsExactly(courier);
         verify(users).findEnabledCouriers();
+    }
+
+    @Test
+    void enrichesHistoryActorNamesAndHandlesLegacyMissingDispatcherIds() {
+        UUID legacyActivityId = UUID.randomUUID();
+        DispatchActivity activity = new DispatchActivity(
+                "ASSIGNMENT:" + UUID.randomUUID(),
+                "SD7K3M9Q2XWB",
+                Instant.now(),
+                DispatchActivityAction.PICKUP_ASSIGNED,
+                DISPATCHER_ID,
+                new DispatchActivityDetails(ParcelAssignmentType.PICKUP, COURIER_ID, null, null, null, null, null));
+        DispatchActivity legacyActivity = new DispatchActivity(
+                "ASSIGNMENT:" + legacyActivityId,
+                "SD9K3M9Q2XWB",
+                Instant.now().minusSeconds(1),
+                DispatchActivityAction.RETURN_ASSIGNED,
+                null,
+                new DispatchActivityDetails(ParcelAssignmentType.RETURN, COURIER_ID, null, null, null, null, null));
+        DispatchActivityFilter filter = new DispatchActivityFilter(null, null, null, null, null);
+        PageRequest page = new PageRequest(0, 20);
+        when(parcels.findDispatchActivityHistory(filter, page))
+                .thenReturn(PageResult.of(List.of(activity, legacyActivity), page, 2));
+        when(users.findUsers(Set.of(DISPATCHER_ID))).thenReturn(List.of(new UserSummary(
+                DISPATCHER_ID, "Dispatcher One", "dispatcher@example.com", Set.of("DISPATCHER"), true)));
+
+        PageResult<com.swiftdrop.dispatch.api.DispatchActivityItem> result = service.activityHistory(filter, page);
+
+        assertThat(result.items()).extracting(DispatchActivityItem::actorName)
+                .containsExactly("Dispatcher One", "Unknown dispatcher");
+        assertThat(result.items().get(1).actorId()).isNull();
+        verify(users).findUsers(Set.of(DISPATCHER_ID));
     }
 
     @Test

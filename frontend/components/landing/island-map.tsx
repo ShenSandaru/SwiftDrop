@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "cn";
 import { useReducedMotion } from "./use-reduced-motion";
 import "./landing.css";
@@ -103,6 +103,18 @@ export function IslandMap({ className }: { className?: string }) {
   const pinRef = useRef<SVGGElement>(null);
   const legRefs = useRef<(SVGPathElement | null)[]>([]);
   const trailRefs = useRef<(SVGPathElement | null)[]>([]);
+  const legRefCallbacks = useMemo(
+    () => LEGS.map((_, index) => (node: SVGPathElement | null) => {
+      legRefs.current[index] = node;
+    }),
+    [],
+  );
+  const trailRefCallbacks = useMemo(
+    () => LEGS.map((_, index) => (node: SVGPathElement | null) => {
+      trailRefs.current[index] = node;
+    }),
+    [],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -258,11 +270,11 @@ export function IslandMap({ className }: { className?: string }) {
 
         {/* The sample parcel's route: road ahead, then the part already travelled */}
         {LEGS.map((d, index) => (
-          <path key={`road-${d}`} ref={(node) => { legRefs.current[index] = node; }} d={d}
+          <path key={`road-${d}`} ref={legRefCallbacks[index]} d={d}
             className="fill-none stroke-border" strokeWidth="3" strokeDasharray="1 6" strokeLinecap="round" />
         ))}
         {LEGS.map((d, index) => (
-          <path key={`trail-${d}`} ref={(node) => { trailRefs.current[index] = node; }} d={d}
+          <path key={`trail-${d}`} ref={trailRefCallbacks[index]} d={d}
             className="fill-none stroke-primary" strokeWidth="3.5" strokeLinecap="round" />
         ))}
 

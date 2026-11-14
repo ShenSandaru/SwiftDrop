@@ -54,6 +54,7 @@ class ParcelQueryServiceTest {
     private ParcelRepository parcels;
     private ParcelAssignmentRepository assignments;
     private ParcelStatusHistoryRepository history;
+    private DispatchActivityHistoryQuery activityHistory;
     private ParcelQueryService service;
     private Parcel parcel;
 
@@ -62,8 +63,9 @@ class ParcelQueryServiceTest {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
+        activityHistory = mock(DispatchActivityHistoryQuery.class);
         service = new ParcelQueryService(parcels, assignments, history, mock(HubRepository.class),
-                DeliveryPolicy.defaults());
+                DeliveryPolicy.defaults(), activityHistory);
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
                         "00500"),

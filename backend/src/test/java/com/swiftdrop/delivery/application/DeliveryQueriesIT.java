@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -28,10 +30,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.CreatedParcel;
 import com.swiftdrop.delivery.api.DeliveryContact;
+import com.swiftdrop.delivery.api.DispatchActivity;
+import com.swiftdrop.delivery.api.DispatchActivityAction;
+import com.swiftdrop.delivery.api.DispatchActivityFilter;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
 import com.swiftdrop.delivery.api.PageRequest;
+import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelEvents;
@@ -115,6 +122,102 @@ class DeliveryQueriesIT {
         statusService.changeStatus(parcelId, new StatusChange(ParcelStatus.PICKED_UP, null, null), Actor.courier(second));
         assertThatThrownBy(() -> assignment.assignCourier(parcelId, first, dispatcherId))
                 .isInstanceOf(ParcelConflictException.class);
+    }
+
+    @Test
+    void dispatcherActivityHistoryIncludesAssignmentAndStatusActionsAndCorrectReassignmentActor() {
+        CreatedParcel pickupParcel = order("ORD-H-PICKUP");
+        UUID firstCourier = insertUser("courier");
+        UUID replacementCourier = insertUser("courier");
+        UUID replacementDispatcher = insertUser("dispatcher-reassignment");
+        assignment.assignCourier(pickupParcel.parcelId(), firstCourier, dispatcherId, ParcelAssignmentType.PICKUP);
+        assignment.assignCourier(
+                pickupParcel.parcelId(), replacementCourier, replacementDispatcher, ParcelAssignmentType.PICKUP);
+
+        CreatedParcel deliveryParcel = order("ORD-H-DELIVERY");
+        insertAssignment(deliveryParcel.parcelId(), insertUser("courier"), ParcelAssignmentType.DELIVERY, dispatcherId);
+        CreatedParcel returnParcel = order("ORD-H-RETURN");
+        insertAssignment(returnParcel.parcelId(), insertUser("courier"), ParcelAssignmentType.RETURN, null);
+
+        CreatedParcel statusParcel = order("ORD-H-STATUS");
+        Instant base = Instant.parse("2026-11-12T10:00:00Z");
+        insertStatus(statusParcel.parcelId(), 2, "PICKED_UP", "AT_HUB", dispatcherId, "DISPATCHER",
+                base, "CMB", null, null);
+        insertStatus(statusParcel.parcelId(), 3, "AT_HUB", "IN_TRANSIT", dispatcherId, "ADMIN",
+                base.plusSeconds(1), "CMB", null, null);
+        insertStatus(statusParcel.parcelId(), 4, "IN_TRANSIT", "FAILED", dispatcherId, "DISPATCHER",
+                base.plusSeconds(2), null, null, "DAMAGED");
+        UUID courierId = insertUser("courier");
+        insertStatus(statusParcel.parcelId(), 5, "OUT_FOR_DELIVERY", "DELIVERY_ATTEMPT_FAILED", courierId,
+                "COURIER", base.plusSeconds(3), null, 1, "REFUSED");
+        insertStatus(statusParcel.parcelId(), 6, "AT_HUB", "RETURNING", dispatcherId, "DISPATCHER",
+                base.plusSeconds(4), null, null, null);
+        insertStatus(statusParcel.parcelId(), 7, "CREATED", "CANCELLED", dispatcherId, "ADMIN",
+                base.plusSeconds(5), null, null, null);
+
+        List<DispatchActivity> activities = queries.findDispatchActivityHistory(
+                new DispatchActivityFilter(null, null, null, null, null), new PageRequest(0, 100)).items();
+
+        assertThat(activities).extracting(DispatchActivity::actionType)
+                .contains(
+                        DispatchActivityAction.PICKUP_ASSIGNED,
+                        DispatchActivityAction.DELIVERY_ASSIGNED,
+                        DispatchActivityAction.RETURN_ASSIGNED,
+                        DispatchActivityAction.COURIER_REASSIGNED,
+                        DispatchActivityAction.HUB_SCAN,
+                        DispatchActivityAction.TRANSIT,
+                        DispatchActivityAction.FAILURE,
+                        DispatchActivityAction.RETURN_INITIATED,
+                        DispatchActivityAction.CANCELLATION);
+        assertThat(activities).noneMatch(
+                activity -> activity.details().toStatus() == ParcelStatus.DELIVERY_ATTEMPT_FAILED);
+        DispatchActivity reassignment = activities.stream()
+                .filter(activity -> activity.actionType() == DispatchActivityAction.COURIER_REASSIGNED)
+                .findFirst()
+                .orElseThrow();
+        assertThat(reassignment.actorId()).isEqualTo(replacementDispatcher);
+        assertThat(reassignment.details().courierId()).isEqualTo(replacementCourier);
+
+        DispatchActivity legacyAssignment = activities.stream()
+                .filter(activity -> activity.trackingNumber().equals(returnParcel.trackingNumber()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(legacyAssignment.actorId()).isNull();
+    }
+
+    @Test
+    void dispatcherActivityHistoryFiltersSortsAndPaginatesAcrossHistoryRows() {
+        CreatedParcel parcel = order("ORD-H-FILTER");
+        CreatedParcel otherParcel = order("ORD-H-OTHER");
+        Instant older = Instant.parse("2026-11-12T10:00:00Z");
+        Instant newer = older.plusSeconds(60);
+        insertStatus(parcel.parcelId(), 2, "PICKED_UP", "AT_HUB", dispatcherId, "DISPATCHER",
+                older, "CMB", null, null);
+        insertStatus(parcel.parcelId(), 3, "AT_HUB", "IN_TRANSIT", dispatcherId, "DISPATCHER",
+                newer, "CMB", null, null);
+        UUID otherDispatcher = insertUser("another-dispatcher");
+        insertStatus(otherParcel.parcelId(), 2, "CREATED", "CANCELLED", otherDispatcher, "ADMIN",
+                newer.plusSeconds(1), null, null, null);
+
+        PageResult<DispatchActivity> firstPage = queries.findDispatchActivityHistory(
+                new DispatchActivityFilter(null, null, null, parcel.trackingNumber(), dispatcherId),
+                new PageRequest(0, 1));
+        PageResult<DispatchActivity> secondPage = queries.findDispatchActivityHistory(
+                new DispatchActivityFilter(null, null, null, parcel.trackingNumber(), dispatcherId),
+                new PageRequest(1, 1));
+        PageResult<DispatchActivity> dateAndActionFiltered = queries.findDispatchActivityHistory(
+                new DispatchActivityFilter(older, newer, DispatchActivityAction.HUB_SCAN,
+                        parcel.trackingNumber().toLowerCase(), dispatcherId),
+                new PageRequest(0, 20));
+
+        assertThat(firstPage.items()).extracting(DispatchActivity::actionType)
+                .containsExactly(DispatchActivityAction.TRANSIT);
+        assertThat(firstPage.totalItems()).isEqualTo(2);
+        assertThat(secondPage.items()).extracting(DispatchActivity::actionType)
+                .containsExactly(DispatchActivityAction.HUB_SCAN);
+        assertThat(dateAndActionFiltered.items()).extracting(DispatchActivity::actionType)
+                .containsExactly(DispatchActivityAction.HUB_SCAN);
+        assertThat(dateAndActionFiltered.items().getFirst().occurredAt()).isEqualTo(older);
     }
 
     @Test
@@ -224,6 +327,26 @@ class DeliveryQueriesIT {
         jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, ?, TRUE, now())",
                 id, name + "-" + id + "@example.com", "Test " + name);
         return id;
+    }
+
+    private void insertAssignment(UUID parcelId, UUID courierId, ParcelAssignmentType type, UUID assignedBy) {
+        jdbc.update("""
+                INSERT INTO parcel_assignments (
+                    id, parcel_id, courier_id, assignment_type, status, assigned_at, completed_at, dispatcher_id
+                ) VALUES (?, ?, ?, ?, 'ACTIVE', ?, NULL, ?)
+                """, UUID.randomUUID(), parcelId, courierId, type.name(),
+                OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC), assignedBy);
+    }
+
+    private void insertStatus(UUID parcelId, int sequence, String fromStatus, String toStatus, UUID actorId,
+            String actorRole, Instant occurredAt, String hubCode, Integer attempt, String failureReason) {
+        jdbc.update("""
+                INSERT INTO parcel_status_history (
+                    id, parcel_id, sequence, from_status, to_status, actor_user_id, actor_role,
+                    event_id, occurred_at, hub_code, attempt, failure_reason_code
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), parcelId, sequence, fromStatus, toStatus, actorId, actorRole,
+                UUID.randomUUID(), OffsetDateTime.ofInstant(occurredAt, ZoneOffset.UTC), hubCode, attempt, failureReason);
     }
 
     private static DeliveryContact contact(String city) {
