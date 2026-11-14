@@ -54,6 +54,7 @@ class ParcelQueryServiceTest {
     private ParcelRepository parcels;
     private ParcelAssignmentRepository assignments;
     private ParcelStatusHistoryRepository history;
+    private HubRepository hubs;
     private ParcelQueryService service;
     private Parcel parcel;
 
@@ -62,7 +63,8 @@ class ParcelQueryServiceTest {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
-        service = new ParcelQueryService(parcels, assignments, history, mock(HubRepository.class),
+        hubs = mock(HubRepository.class);
+        service = new ParcelQueryService(parcels, assignments, history, hubs,
                 DeliveryPolicy.defaults());
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
@@ -109,7 +111,7 @@ class ParcelQueryServiceTest {
 
     @Test
     void dispatchQueryWithoutSearchReturnsValidEmptyPage() {
-        when(parcels.findForDispatch(any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+        when(parcels.findForDispatch(any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
         PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
                 null, null, null, null, new PageRequest(0, 10));
@@ -117,7 +119,7 @@ class ParcelQueryServiceTest {
         assertThat(result.items()).isEmpty();
         assertThat(result.totalItems()).isZero();
         assertThat(result.totalPages()).isZero();
-        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any());
+        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any(), any(), any());
     }
 
     @Test
@@ -149,27 +151,57 @@ class ParcelQueryServiceTest {
 
     @Test
     void emptyDispatchSearchUsesQueryWithoutSearch() {
-        when(parcels.findForDispatch(any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
+        when(parcels.findForDispatch(any(), any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
         PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
                 null, null, null, "", new PageRequest(0, 10));
 
         assertThat(result.items()).isEmpty();
-        verify(parcels).findForDispatch(any(), any(), any(), any());
-        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any());
+        verify(parcels).findForDispatch(any(), any(), any(), any(), any(), any());
+        verify(parcels, never()).findForDispatchBySearch(any(), any(), any(), anyString(), any(), any(), any(), any());
     }
 
     @Test
     void nonBlankDispatchSearchUsesTypedSearchQuery() {
-        when(parcels.findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any()))
+        when(parcels.findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
                 null, null, null, " SD7K3M9Q2XWB ", new PageRequest(0, 10));
 
         assertThat(result.items()).isEmpty();
-        verify(parcels).findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any());
-        verify(parcels, never()).findForDispatch(any(), any(), any(), any());
+        verify(parcels).findForDispatchBySearch(any(), any(), any(), eq("SD7K3M9Q2XWB"), any(), any(), any(), any());
+        verify(parcels, never()).findForDispatch(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void hubScopedDispatchQueryPassesHubIdAndHubZoneId() {
+        UUID hubId = UUID.randomUUID();
+        UUID zoneId = UUID.randomUUID();
+        com.swiftdrop.delivery.domain.Hub hub = mock(com.swiftdrop.delivery.domain.Hub.class);
+        when(hub.getZoneId()).thenReturn(zoneId);
+        when(hubs.findById(hubId)).thenReturn(Optional.of(hub));
+        when(parcels.findForDispatch(any(), any(), any(), eq(hubId), eq(zoneId), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        PageResult<DispatchParcelSummary> result = service.findDispatchParcels(
+                null, null, null, null, hubId, new PageRequest(0, 10));
+
+        assertThat(result.items()).isEmpty();
+        verify(parcels).findForDispatch(any(), any(), any(), eq(hubId), eq(zoneId), any());
+    }
+
+    @Test
+    void isParcelInHubResolvesHubZoneIdAndDelegates() {
+        UUID hubId = UUID.randomUUID();
+        UUID zoneId = UUID.randomUUID();
+        com.swiftdrop.delivery.domain.Hub hub = mock(com.swiftdrop.delivery.domain.Hub.class);
+        when(hub.getZoneId()).thenReturn(zoneId);
+        when(hubs.findById(hubId)).thenReturn(Optional.of(hub));
+        when(parcels.existsInHub(PARCEL_ID, hubId, zoneId)).thenReturn(true);
+
+        assertThat(service.isParcelInHub(PARCEL_ID, hubId)).isTrue();
+        verify(parcels).existsInHub(PARCEL_ID, hubId, zoneId);
     }
 
     @Test
