@@ -2,6 +2,7 @@ package com.swiftdrop.notification.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -62,7 +63,7 @@ class NotificationEventListenerTest {
         };
 
         NotificationEventProcessor stubProcessor = new NotificationEventProcessor(
-                null, null, null, null, null, null, null) {
+                null, null, null, null, null, null, null, mock(com.swiftdrop.merchant.api.MerchantLookup.class)) {
             @Override
             public void process(ParcelStatusChanged ev, String rawPayload) {
                 processedEvent.set(ev);
@@ -94,7 +95,7 @@ class NotificationEventListenerTest {
         };
 
         NotificationEventProcessor stubProcessor = new NotificationEventProcessor(
-                null, null, null, null, null, null, null) {
+                null, null, null, null, null, null, null, mock(com.swiftdrop.merchant.api.MerchantLookup.class)) {
             @Override
             public void process(ParcelStatusChanged ev, String rawPayload) {
                 processedRawPayload.set(rawPayload);
@@ -123,7 +124,7 @@ class NotificationEventListenerTest {
         };
 
         NotificationEventProcessor stubProcessor = new NotificationEventProcessor(
-                null, null, null, null, null, null, null) {
+                null, null, null, null, null, null, null, mock(com.swiftdrop.merchant.api.MerchantLookup.class)) {
             @Override
             public void process(ParcelStatusChanged ev, String rawPayload) {
                 processorInvoked.set(true);
@@ -153,7 +154,7 @@ class NotificationEventListenerTest {
         };
 
         NotificationEventProcessor stubProcessor = new NotificationEventProcessor(
-                null, null, null, null, null, null, null) {
+                null, null, null, null, null, null, null, mock(com.swiftdrop.merchant.api.MerchantLookup.class)) {
             @Override
             public void process(ParcelStatusChanged ev, String rawPayload) {
                 throw new CannotAcquireLockException("Lock contention on parcel");
@@ -172,7 +173,7 @@ class NotificationEventListenerTest {
     void nullMessageThrows() {
         NotificationEventListener listener = new NotificationEventListener(
                 new ParcelStatusEventParser(),
-                new NotificationEventProcessor(null, null, null, null, null, null, null)
+                new NotificationEventProcessor(null, null, null, null, null, null, null, mock(com.swiftdrop.merchant.api.MerchantLookup.class))
         );
 
         assertThatThrownBy(() -> listener.onParcelStatusChanged(null))

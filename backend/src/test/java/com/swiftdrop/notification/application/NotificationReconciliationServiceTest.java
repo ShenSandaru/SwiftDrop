@@ -66,7 +66,8 @@ class NotificationReconciliationServiceTest {
                 templateResolver,
                 eventParser,
                 parcelEvents,
-                userDirectory);
+                userDirectory,
+                org.mockito.Mockito.mock(com.swiftdrop.merchant.api.MerchantLookup.class));
 
         NotificationReconciliationProperties properties = new NotificationReconciliationProperties(
                 true,
@@ -272,6 +273,16 @@ class NotificationReconciliationServiceTest {
 
         @Override
         public List<UserSummary> findEnabledCouriers() {
+            return List.of();
+        }
+
+        @Override
+        public List<UserSummary> findEnabledAdmins() {
+            return List.of();
+        }
+
+        @Override
+        public List<UserSummary> findEnabledDispatchers() {
             return List.of();
         }
 
