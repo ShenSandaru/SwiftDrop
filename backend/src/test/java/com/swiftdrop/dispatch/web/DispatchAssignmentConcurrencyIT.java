@@ -34,6 +34,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.domain.TrackingNumberGenerator;
 import com.swiftdrop.test.security.TestPrincipal;
 
@@ -71,6 +72,7 @@ class DispatchAssignmentConcurrencyIT {
     void setUp() {
         customerId = insertUser("customer", "CUSTOMER");
         dispatcherId = insertUser("dispatcher", "DISPATCHER");
+        TestHubs.headOffice(jdbc, dispatcherId);
     }
 
     @Test

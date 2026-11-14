@@ -32,6 +32,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelConflictException;
@@ -105,7 +106,9 @@ class ParcelStatusChangeIT {
             return parcel.getId();
         });
         // A real pickup assignment with its history record, as dispatch creates it (ADR 0008)
-        assignment.assignCourier(parcelId, courierId, insertUser("dispatcher"));
+        UUID dispatcherId = insertUser("dispatcher");
+        TestHubs.headOffice(jdbc, dispatcherId);
+        assignment.assignCourier(parcelId, courierId, dispatcherId);
         committedEvents.clear();
     }
 

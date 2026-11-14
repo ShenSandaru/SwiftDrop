@@ -98,6 +98,7 @@ class LiveTrackingIT {
         dispatcherId = UUID.randomUUID();
         jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Dispatcher', TRUE, now())",
                 dispatcherId, "dispatcher-" + dispatcherId + "@example.com");
+        TestHubs.headOffice(jdbc, dispatcherId);
     }
 
     @Test
