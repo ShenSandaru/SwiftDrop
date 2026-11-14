@@ -97,6 +97,15 @@ export function listDispatchParcels({
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/parcels?${query.toString()}`);
 }
 
+/**
+ * Unfinished parcels with no scan, status change or assignment for longer than the backend's
+ * configured time, longest waiting first.
+ */
+export function listStaleDispatchParcels(page = 0, size = 5): Promise<PageResponse<DispatchParcelItem>> {
+  const query = new URLSearchParams({ page: String(page), size: String(size) });
+  return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/stale-parcels?${query.toString()}`);
+}
+
 export async function countDispatchParcels(status?: ParcelStatus): Promise<number> {
   const page = await listDispatchParcels({ page: 0, size: 1, status });
   return page.totalItems;

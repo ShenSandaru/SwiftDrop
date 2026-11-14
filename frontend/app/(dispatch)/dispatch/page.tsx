@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/delivery/status-badge";
+import { StaleParcelsCard } from "@/components/dispatch/stale-parcels-card";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
@@ -601,6 +602,12 @@ export default function DispatchPage() {
               loading={metricsLoading}
             />
           </div>
+
+          {/* Parcels with no recent scan, status change or assignment */}
+          <StaleParcelsCard
+            refreshKey={refreshKey}
+            onDetails={(parcel) => setSelectedParcel({ parcel, mode: "details" })}
+          />
 
           {/* 3-Stage Interactive Lifecycle Cards */}
           <section className="space-y-4">
