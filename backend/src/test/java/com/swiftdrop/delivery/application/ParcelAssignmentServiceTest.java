@@ -16,11 +16,14 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelCourierAssigned;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.Parcel;
@@ -39,6 +42,7 @@ class ParcelAssignmentServiceTest {
 
     private ParcelRepository parcels;
     private ParcelAssignmentRepository assignments;
+    private ApplicationEventPublisher eventPublisher;
     private ParcelAssignmentService service;
     private Parcel parcel;
 
@@ -46,7 +50,8 @@ class ParcelAssignmentServiceTest {
     void setUp() {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
-        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher);
         when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(parcels.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
@@ -68,6 +73,17 @@ class ParcelAssignmentServiceTest {
         verify(assignments).saveAndFlush(org.mockito.ArgumentMatchers.argThat(
                 row -> row.toSummary().type() == ParcelAssignmentType.PICKUP
                         && row.toSummary().status() == ParcelAssignmentStatus.ACTIVE));
+
+        ArgumentCaptor<ParcelCourierAssigned> captor = ArgumentCaptor.forClass(ParcelCourierAssigned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        ParcelCourierAssigned event = captor.getValue();
+        assertThat(event.parcelId()).isEqualTo(PARCEL_ID);
+        assertThat(event.trackingNumber()).isEqualTo("SD7K3M9Q2XWB");
+        assertThat(event.courierId()).isEqualTo(COURIER_ID);
+        assertThat(event.dispatcherId()).isEqualTo(DISPATCHER_ID);
+        assertThat(event.assignmentType()).isEqualTo(ParcelAssignmentType.PICKUP);
+        assertThat(event.occurredAt()).isEqualTo(NOW);
+        assertThat(event.previousCourierId()).isNull();
     }
 
     @Test
@@ -156,6 +172,24 @@ class ParcelAssignmentServiceTest {
 
         verify(assignments).saveAndFlush(previous);
         verify(parcels).saveAndFlush(parcel);
+
+        ArgumentCaptor<ParcelCourierAssigned> captor = ArgumentCaptor.forClass(ParcelCourierAssigned.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        ParcelCourierAssigned event = captor.getValue();
+        assertThat(event.parcelId()).isEqualTo(PARCEL_ID);
+        assertThat(event.courierId()).isEqualTo(replacementCourierId);
+        assertThat(event.assignmentType()).isEqualTo(ParcelAssignmentType.PICKUP);
+        assertThat(event.previousCourierId()).isEqualTo(COURIER_ID);
+    }
+
+    @Test
+    void failedAssignmentDoesNotPublishEvent() {
+        when(parcels.findById(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID))
+                .isInstanceOf(ParcelNotFoundException.class);
+
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher);
     }
 
     @Test
