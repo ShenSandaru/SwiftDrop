@@ -1,7 +1,9 @@
 package com.swiftdrop.delivery.application;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -48,6 +50,14 @@ public class HubNetwork {
     /** Checks at booking that both zones are served (ADR 0009 §1). */
     public void requireServed(UUID pickupZoneId, UUID dropoffZoneId) {
         routeFor(pickupZoneId, dropoffZoneId);
+    }
+
+    /** IDs of all zones currently served by an active hub. */
+    public Set<UUID> servedZoneIds() {
+        return hubs.findAll().stream()
+                .filter(hub -> hub.isActive() && hub.getZoneId() != null)
+                .map(Hub::getZoneId)
+                .collect(Collectors.toSet());
     }
 
     private Hub branchOf(UUID zoneId, String which) {
