@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import com.swiftdrop.delivery.api.ParcelEvents;
 import com.swiftdrop.identity.api.UserDirectory;
+import com.swiftdrop.merchant.api.MerchantLookup;
 import com.swiftdrop.notification.application.NotificationEventListener;
 import com.swiftdrop.notification.application.NotificationEventProcessor;
 import com.swiftdrop.notification.application.NotificationReconciliationService;
@@ -36,7 +37,8 @@ class NotificationConsumerConfigurationTest {
                 .withBean(NotificationTemplateResolver.class, () -> mock(NotificationTemplateResolver.class))
                 .withBean(ParcelStatusEventParser.class, () -> mock(ParcelStatusEventParser.class))
                 .withBean(ParcelEvents.class, () -> mock(ParcelEvents.class))
-                .withBean(UserDirectory.class, () -> mock(UserDirectory.class));
+                .withBean(UserDirectory.class, () -> mock(UserDirectory.class))
+                .withBean(MerchantLookup.class, () -> mock(MerchantLookup.class));
     }
 
     @Test

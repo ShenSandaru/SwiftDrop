@@ -139,7 +139,6 @@ class NotificationEventProcessorTest {
         when(pendingEventRepository.findByParcelIdAndSequence(parcelId, 1)).thenReturn(Optional.empty());
         when(userDirectory.findUser(customerId)).thenReturn(Optional.of(new UserSummary(customerId, "Test", "test@example.com", Set.of("CUSTOMER"), true)));
         when(templateResolver.resolve(event)).thenReturn(Optional.of(new NotificationContent("Parcel Booked", "Your parcel SD1234567890 has been booked.")));
-        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(event.eventId(), NotificationChannel.IN_APP, customerId)).thenReturn(false);
 
         NotificationConsumerState savedState = new NotificationConsumerState(parcelId, 1, now);
         when(consumerStateRepository.save(any(NotificationConsumerState.class))).thenReturn(savedState);
@@ -466,6 +465,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Merchant parcel event creates in-app notification for owning merchant user")
     void merchantParcelCreatesNotificationForOwnerUser() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         UUID merchantUserId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
@@ -484,8 +485,6 @@ class NotificationEventProcessorTest {
         when(userDirectory.findUser(merchantUserId)).thenReturn(
                 Optional.of(new UserSummary(merchantUserId, "merchant@acme.com", "Acme Owner", Set.of("MERCHANT"), true)));
         when(templateResolver.resolve(event)).thenReturn(Optional.of(new NotificationContent("Parcel Delivered", "Delivered")));
-        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(
-                event.eventId(), NotificationChannel.IN_APP, merchantUserId)).thenReturn(false);
 
         processor.process(event, "{\"sequence\":1}");
 
@@ -517,6 +516,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Merchant parcel event skips notification when merchant is not found")
     void merchantParcelSkipsWhenMerchantNotFound() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
                 UUID.randomUUID(),
@@ -536,6 +537,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Merchant parcel event skips notification when owning user is disabled")
     void merchantParcelSkipsWhenOwnerUserDisabled() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         UUID merchantUserId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
@@ -562,6 +565,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Merchant parcel IN_TRANSIT status remains suppressed")
     void merchantParcelInTransitRemainsSuppressed() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         UUID merchantUserId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
@@ -589,6 +594,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Merchant parcel event skips notification when owning user is not found")
     void merchantParcelSkipsWhenOwnerUserNotFound() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         UUID merchantUserId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
@@ -614,6 +621,8 @@ class NotificationEventProcessorTest {
     @Test
     @DisplayName("Duplicate merchant parcel event does not create duplicate notifications")
     void merchantParcelDoesNotCreateDuplicateNotifications() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         UUID merchantId = UUID.randomUUID();
         UUID merchantUserId = UUID.randomUUID();
         ParcelStatusChanged event = ParcelStatusChanged.of(
