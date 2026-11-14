@@ -97,9 +97,13 @@ class ParcelQueryService implements ParcelQueries {
                 ? parcels.findForDispatch(status, source, assigned, hubId, hubZoneId, pageable)
                 : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, hubId, hubZoneId,
                         pageable);
-        Map<UUID, String> hubCodes = found.isEmpty() ? Map.of()
-                : hubs.findAll().stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
-        return PageResult.of(found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes)).toList(),
+        List<Hub> allHubs = found.isEmpty() ? List.of() : hubs.findAll();
+        Map<UUID, String> hubCodes = allHubs.stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
+        Map<UUID, UUID> activeHubIdsByZone = allHubs.stream()
+                .filter(h -> h.isActive() && h.getZoneId() != null)
+                .collect(Collectors.toMap(Hub::getZoneId, Hub::getId, (a, b) -> a));
+        return PageResult.of(
+                found.getContent().stream().map(parcel -> toDispatchSummary(parcel, hubCodes, activeHubIdsByZone)).toList(),
                 page, found.getTotalElements());
     }
 
@@ -198,8 +202,12 @@ class ParcelQueryService implements ParcelQueries {
     }
 
     /** The board row: where the parcel is in the network and what a dispatcher may do (ADR 0009). */
-    private DispatchParcelSummary toDispatchSummary(Parcel parcel, Map<UUID, String> hubCodes) {
+    private DispatchParcelSummary toDispatchSummary(Parcel parcel, Map<UUID, String> hubCodes,
+            Map<UUID, UUID> activeHubIdsByZone) {
         UUID expected = parcel.expectedHubId();
+        if (expected == null && parcel.getStatus() == ParcelStatus.CREATED && parcel.getPickup() != null) {
+            expected = activeHubIdsByZone.get(parcel.getPickup().getZoneId());
+        }
         return new DispatchParcelSummary(parcel.getId(), parcel.getTrackingNumber(), parcel.getStatus(),
                 parcel.getSource(), parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(),
                 parcel.getSize(), parcel.getWeightGrams(), parcel.getPickup().getCity(),

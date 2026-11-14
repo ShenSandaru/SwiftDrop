@@ -73,6 +73,24 @@ public class ParcelHubService implements ParcelHubOperations {
 
     @Override
     @Transactional
+    public void receiveAtHub(UUID parcelId, UUID hubId, Staff staff) {
+        Objects.requireNonNull(hubId, "hubId");
+        Hub hub = hubs.findById(hubId).orElseThrow(() -> new ParcelConflictException("Unknown hub"));
+        if (!hub.isActive()) {
+            throw new ParcelConflictException("Hub is inactive");
+        }
+        Parcel parcel = lock(parcelId);
+        com.swiftdrop.delivery.domain.HubRoute route = new HubNetwork(hubs)
+                .routeFor(parcel.getPickup().getZoneId(), parcel.getDropoff().getZoneId());
+        ParcelStatus previous = parcel.getStatus();
+        Instant now = clock.instant();
+        parcel.receiveAtHub(hub.getId(), route, now);
+        cancelActiveTask(parcel, now);
+        record(parcel, previous, staff, null, null, now, hub.getCode());
+    }
+
+    @Override
+    @Transactional
     public void scanAtHub(UUID parcelId, UUID hubId, Staff staff) {
         Objects.requireNonNull(hubId, "hubId");
         Hub hub = hubs.findById(hubId).orElseThrow(() -> new ParcelConflictException("Unknown hub"));
