@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { cn } from "cn";
 import { useAuth } from "@/lib/auth-context";
+import { NotificationBell } from "@/components/notification-bell";
 
 const HOVER_OPEN_MS = 150;
 const HOVER_CLOSE_MS = 250;
@@ -145,6 +146,7 @@ export function NavHeader() {
     <span className="mx-2 h-6 w-16 shrink-0 animate-pulse rounded-full bg-background/15" />
   ) : isAuthenticated && user ? (
     <>
+      <NotificationBell />
       <span className="max-w-40 shrink-0 truncate px-2 text-sm text-background/60">{user.fullName || user.email}</span>
       <button type="button" onClick={() => { close(); logout(); }}
         className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-4 py-2 text-base text-background hover:bg-background/20">
@@ -219,9 +221,12 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-              {initial}
-            </span>
+            <>
+              <NotificationBell />
+              <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                {initial}
+              </span>
+            </>
           )}
           <button
             type="button"
