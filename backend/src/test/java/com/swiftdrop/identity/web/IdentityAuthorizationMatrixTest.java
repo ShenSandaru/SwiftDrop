@@ -62,11 +62,22 @@ import static org.mockito.Mockito.when;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
+        com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class
 })
 class IdentityAuthorizationMatrixTest {
 
@@ -89,6 +100,9 @@ class IdentityAuthorizationMatrixTest {
 
     @MockitoBean
     private UserRepository users;
+
+    @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
 
     @MockitoBean
     private ExternalIdentityRepository identities;

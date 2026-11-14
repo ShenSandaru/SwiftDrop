@@ -1,5 +1,7 @@
 package com.swiftdrop.identity.web;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -7,20 +9,26 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.identity.application.AccountService;
@@ -112,5 +120,70 @@ class UserController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is disabled");
         }
         return UserResponse.from(user);
+    }
+
+    /** Updates the authenticated user's personal profile (full name and phone number). */
+    @PatchMapping("/me")
+    UserResponse updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        return UserResponse.from(accounts.updateProfile(currentUserId, request.fullName(), request.phoneNumber()));
+    }
+
+    /** Changes the authenticated user's password. */
+    @PostMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        accounts.changePassword(currentUserId, request.currentPassword(), request.newPassword());
+    }
+
+    /** Uploads or updates the authenticated user's avatar image. */
+    @PutMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    UserResponse uploadAvatar(
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal Jwt jwt
+    ) throws IOException {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Avatar file cannot be empty");
+        }
+        String contentType = file.getContentType();
+        User updated = accounts.updateAvatar(currentUserId, file.getBytes(), contentType);
+        return UserResponse.from(updated);
+    }
+
+    /** Retrieves the authenticated user's avatar image. */
+    @GetMapping("/me/avatar")
+    ResponseEntity<byte[]> getMyAvatar(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in required");
+        }
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        return getAvatar(currentUserId);
+    }
+
+    /** Retrieves a user's avatar image, cached for 1 hour. */
+    @GetMapping("/{id}/avatar")
+    ResponseEntity<byte[]> getAvatar(@PathVariable UUID id) {
+        AccountService.AvatarData avatar = accounts.getAvatar(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Avatar not found"));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(avatar.contentType()))
+                .cacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePublic())
+                .body(avatar.bytes());
+    }
+
+    /** Removes the authenticated user's avatar image. */
+    @DeleteMapping("/me/avatar")
+    UserResponse deleteAvatar(@AuthenticationPrincipal Jwt jwt) {
+        UUID currentUserId = UUID.fromString(jwt.getSubject());
+        User updated = accounts.removeAvatar(currentUserId);
+        return UserResponse.from(updated);
     }
 }

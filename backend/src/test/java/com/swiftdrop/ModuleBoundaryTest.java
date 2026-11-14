@@ -33,8 +33,9 @@ class ModuleBoundaryTest {
             "delivery", Set.of("identity", "pricing"),
             "dispatch", Set.of("identity", "delivery"),
             "merchant", Set.of("identity", "delivery"),
-            "notification", Set.of("identity", "delivery"),
-            "tracking", Set.of("delivery"));
+            "notification", Set.of("identity", "delivery", "merchant"),
+            "tracking", Set.of("delivery"),
+            "assistant", Set.of("delivery", "pricing"));
 
     private static final String CONFIG = "config";
     private static final String SHARED = "shared";
@@ -96,6 +97,27 @@ class ModuleBoundaryTest {
         assertThat(violations("A.java", """
                 package com.swiftdrop.delivery.application;
                 import static com.swiftdrop.dispatch.api.CourierLookup.find;
+                """)).hasSize(1);
+    }
+
+    @Test
+    void assistantMayUseDeliveryAndPricingApisOnly() {
+        assertThat(violations("A.java", """
+                package com.swiftdrop.assistant.application;
+                import com.swiftdrop.delivery.api.ParcelQueries;
+                import com.swiftdrop.pricing.api.FeeCalculator;
+                """)).isEmpty();
+        assertThat(violations("B.java", """
+                package com.swiftdrop.assistant.application;
+                import com.swiftdrop.identity.api.UserDirectory;
+                """)).hasSize(1);
+        assertThat(violations("C.java", """
+                package com.swiftdrop.assistant.application;
+                import com.swiftdrop.pricing.domain.ZoneRepository;
+                """)).hasSize(1);
+        assertThat(violations("D.java", """
+                package com.swiftdrop.tracking.web;
+                import com.swiftdrop.assistant.api.Anything;
                 """)).hasSize(1);
     }
 

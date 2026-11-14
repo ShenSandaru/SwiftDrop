@@ -79,6 +79,24 @@ public class HubAdministration {
         return save(hub);
     }
 
+    /**
+     * Deletes a hub from the delivery network.
+     *
+     * @throws ParcelNotFoundException if the hub does not exist
+     * @throws ParcelConflictException if the hub is referenced by existing parcels
+     */
+    @Transactional
+    public void delete(UUID hubId) {
+        Hub hub = hubs.findById(hubId).orElseThrow(ParcelNotFoundException::new);
+        try {
+            hubs.delete(hub);
+            hubs.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ParcelConflictException("Cannot delete hub '" + hub.getName()
+                    + "': it is referenced by existing parcels or deliveries. Deactivate the hub instead.");
+        }
+    }
+
     private void checkZoneAndCentral(UUID hubId, HubDetails details) {
         if (details.zoneId() != null) {
             hubs.findByZoneIdAndActiveTrue(details.zoneId())

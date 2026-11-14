@@ -3,55 +3,92 @@
 import React, { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, formatApiError, getApiBaseUrl, type AccessTokenResponse } from "@/lib/api";
+import { api, formatApiError, type AccessTokenResponse, type UserResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { initiateGoogleAuth, isGoogleLoginEnabled as checkGoogleLoginEnabled } from "@/lib/google-auth";
+import {
+  getPortalContext,
+  getPostAuthRedirect,
+  sanitizeRedirectTarget,
+  type PortalRole,
+} from "@/lib/role-redirect";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AuthLayout,
+  AuthBrandingPanel,
+  AuthFormContainer,
+  AuthHeader,
+  AuthDivider,
+  SocialLoginButton,
+  PasswordInput,
+} from "@/components/auth";
+import { Shield, Truck, Warehouse, Store, User } from "lucide-react";
 
-/**
- * Validates and sanitizes a post-login redirect path to prevent open redirect vulnerabilities.
- * Accepts only safe relative paths starting with a single '/' (e.g. "/customer", "/track?code=123").
- * Rejects protocol-relative URLs ('//'), backslash tricks ('/\'), scheme prefixes ('https:', 'javascript:'),
- * and control characters, falling back to the default home path.
- */
-function sanitizeRedirectTarget(target: string | null | undefined): string {
-  if (!target || typeof target !== "string") {
-    return "/";
-  }
-
-  const trimmed = target.trim();
-
-  if (trimmed === "/") {
-    return "/";
-  }
-
-  // Must begin with a single '/' and not be followed by '/' or '\'
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
-    return "/";
-  }
-
-  // Reject CRLF or control characters
-  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
-    return "/";
-  }
-
-  try {
-    const parsed = new URL(trimmed, "http://localhost");
-    // Ensure the host authority was not parsed, origin remains unchanged, and destination is not a login loop
-    if (
-      parsed.origin !== "http://localhost" ||
-      !parsed.pathname.startsWith("/") ||
-      parsed.pathname === "/login"
-    ) {
-      return "/";
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return "/";
-  }
+interface PortalConfig {
+  badge: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  headline: string;
+  subheadline: string;
+  imageSrc: string;
+  imageAlt: string;
 }
+
+const PORTAL_CONFIGS: Record<PortalRole, PortalConfig> = {
+  CUSTOMER: {
+    badge: "Customer Portal",
+    title: "Welcome Back",
+    description: "Sign in to book parcels and track your deliveries.",
+    icon: <User className="size-4" aria-hidden="true" />,
+    headline: "From your door to anywhere on the island.",
+    subheadline: "Book in a minute. Track every stop. Delivered with proof.",
+    imageSrc: "/images/auth-delivery.png",
+    imageAlt: "Professional courier delivering parcel box at doorstep",
+  },
+  MERCHANT: {
+    badge: "Merchant Portal",
+    title: "Merchant Portal",
+    description: "Sign in to manage your business and deliveries.",
+    icon: <Store className="size-4" aria-hidden="true" />,
+    headline: "Grow and streamline your commercial deliveries.",
+    subheadline: "Bulk order intake, scheduled pickups, and real-time shipment monitoring.",
+    imageSrc: "/images/business-account.png",
+    imageAlt: "Merchant shipping account dashboard on digital tablet",
+  },
+  COURIER: {
+    badge: "Courier Portal",
+    title: "Courier Portal",
+    description: "Sign in to view and manage your assigned deliveries.",
+    icon: <Truck className="size-4" aria-hidden="true" />,
+    headline: "Your daily runs, routes, and handoffs in one place.",
+    subheadline: "View assigned parcels, record digital proof of delivery, and update transit statuses.",
+    imageSrc: "/images/auth-courier.png",
+    imageAlt: "SwiftDrop courier driver with delivery van and parcel packages",
+  },
+  DISPATCHER: {
+    badge: "Dispatcher Portal",
+    title: "Dispatcher Portal",
+    description: "Sign in to coordinate and manage delivery operations.",
+    icon: <Warehouse className="size-4" aria-hidden="true" />,
+    headline: "Centralized delivery dispatch and fleet coordination.",
+    subheadline: "Manage regional hub operations, balance courier workloads, and resolve exceptions.",
+    imageSrc: "/images/auth-dispatcher.png",
+    imageAlt: "Logistics dispatch coordinator monitoring live parcel routes on operations screens",
+  },
+  ADMIN: {
+    badge: "Admin Portal",
+    title: "Administration Portal",
+    description: "Sign in to manage and oversee SwiftDrop operations.",
+    icon: <Shield className="size-4" aria-hidden="true" />,
+    headline: "Platform administration and system oversight.",
+    subheadline: "Onboard staff, review merchant accounts, configure hubs, and manage pricing rules.",
+    imageSrc: "/images/auth-admin.png",
+    imageAlt: "System administrator managing enterprise logistics platform controls and user access",
+  },
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -66,9 +103,12 @@ function LoginForm() {
   const registered = searchParams.get("registered") === "true";
   const expired = searchParams.get("expired") === "true";
   const redirectTarget = sanitizeRedirectTarget(searchParams.get("redirect"));
+  const portalContext = getPortalContext(redirectTarget);
+  const portalConfig = PORTAL_CONFIGS[portalContext];
 
-  // Google button is enabled only when explicitly configured via environment flag (AC-2)
-  const isGoogleLoginEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === "true";
+  // Google button and public customer signup prompt are enabled only for customer authentication
+  const isCustomerContext = portalContext === "CUSTOMER";
+  const isGoogleLoginEnabled = checkGoogleLoginEnabled() && isCustomerContext;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -98,37 +138,9 @@ function LoginForm() {
       await login(response.accessToken);
 
       try {
-        const currentUser = await api.get<{ roles?: string[] }>("/api/v1/users/me", { token: response.accessToken });
-        if (currentUser.roles?.includes("MERCHANT")) {
-          try {
-            const statusRes = await api.get<{ status: string }>("/api/v1/merchants/me", { token: response.accessToken });
-            if (statusRes.status === "APPROVED") {
-              router.push(redirectTarget === "/" ? "/merchant" : redirectTarget);
-            } else {
-              router.push("/merchant/status");
-            }
-            return;
-          } catch {
-            router.push("/merchant/status");
-            return;
-          }
-        } else if (currentUser.roles?.includes("ADMIN")) {
-          router.push(redirectTarget === "/" ? "/admin" : redirectTarget);
-          return;
-        } else if (currentUser.roles?.includes("DISPATCHER")) {
-          const safeTarget =
-            redirectTarget === "/" || redirectTarget.startsWith("/admin")
-              ? "/dispatch"
-              : redirectTarget;
-          router.push(safeTarget);
-          return;
-        } else if (currentUser.roles?.includes("COURIER")) {
-          router.push(redirectTarget === "/" ? "/courier" : redirectTarget);
-          return;
-        } else {
-          router.push(redirectTarget === "/" ? "/customer" : redirectTarget);
-          return;
-        }
+        const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
+        const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
+        router.push(destination);
       } catch {
         router.push(redirectTarget);
       }
@@ -139,23 +151,31 @@ function LoginForm() {
     }
   }
 
-  return (
-    <Card className="w-full max-w-md rounded-xl bg-card border-border shadow-xs">
-      <CardHeader className="space-y-1 text-center">
-        <div className="inline-flex items-center justify-center gap-1.5 mx-auto mb-2 text-xs font-semibold uppercase tracking-wider text-primary">
-          <span className="size-1.5 rounded-full bg-primary" />
-          SwiftDrop Account
-        </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-          Welcome back
-        </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Sign in to access your parcel deliveries and workspaces.
-        </CardDescription>
-      </CardHeader>
+  function handleGoogleSignIn() {
+    initiateGoogleAuth(searchParams.get("redirect"));
+  }
 
-      <form onSubmit={handleSubmit} noValidate>
-        <CardContent className="space-y-4">
+  return (
+    <AuthLayout
+      branding={
+        <AuthBrandingPanel
+          badgeText={portalConfig.badge}
+          headline={portalConfig.headline}
+          description={portalConfig.subheadline}
+          imageSrc={portalConfig.imageSrc}
+          imageAlt={portalConfig.imageAlt}
+        />
+      }
+    >
+      <AuthFormContainer>
+        <AuthHeader
+          badge={portalConfig.badge}
+          icon={portalConfig.icon}
+          title={portalConfig.title}
+          description={portalConfig.description}
+        />
+
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {registered && (
             <div
               role="status"
@@ -194,7 +214,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               required
-              className="bg-background text-sm"
+              className="h-11 text-sm rounded-xl bg-background border-border/80 transition-all duration-200 hover:border-primary/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
             />
           </div>
 
@@ -202,80 +222,63 @@ function LoginForm() {
             <div className="flex items-center justify-between">
               <Label htmlFor="login-password">Password</Label>
             </div>
-            <Input
+            <PasswordInput
               id="login-password"
-              type="password"
               autoComplete="current-password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
               required
-              className="bg-background text-sm"
             />
           </div>
 
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full font-semibold shadow-xs mt-2"
+            className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-[#0c5f59] hover:shadow-[0_8px_20px_-4px_rgba(15,118,110,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 disabled:transform-none disabled:shadow-none motion-reduce:transform-none motion-reduce:transition-none cursor-pointer mt-2"
           >
             {isLoading ? "Signing in..." : "Sign in"}
           </Button>
 
           {isGoogleLoginEnabled && (
-            <div className="pt-2">
-              <div className="relative flex items-center justify-center my-3 text-xs uppercase text-muted-foreground">
-                <span className="w-full border-t border-border" />
-                <span className="bg-card px-2">or</span>
-                <span className="w-full border-t border-border" />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full font-medium"
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    const rawRedirect = searchParams.get("redirect");
-                    const targetPath = sanitizeRedirectTarget(rawRedirect);
-                    if (targetPath && targetPath !== "/" && targetPath !== "/login") {
-                      window.sessionStorage.setItem("swiftdrop_auth_redirect", targetPath);
-                    } else {
-                      window.sessionStorage.removeItem("swiftdrop_auth_redirect");
-                    }
-                  }
-                  const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
-                  window.location.assign(target);
-                }}
-              >
-                Sign in with Google
-              </Button>
+            <div className="pt-1">
+              <AuthDivider text="or" />
+              <SocialLoginButton
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                label="Sign in with Google"
+              />
             </div>
           )}
-        </CardContent>
 
-        <CardFooter className="flex flex-col gap-2 pt-2 border-t border-border/60 text-center text-xs text-muted-foreground">
-          <p>
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/signup"
-              className="font-semibold text-primary underline-offset-4 hover:underline"
-            >
-              Sign up
-            </Link>
-          </p>
-        </CardFooter>
-      </form>
-    </Card>
+          {isCustomerContext && (
+            <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup/customer"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Sign up
+              </Link>
+            </div>
+          )}
+        </form>
+      </AuthFormContainer>
+    </AuthLayout>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="container mx-auto flex-1 flex items-center justify-center px-4 py-12 min-h-[calc(100vh-3.5rem)]">
-      <Suspense fallback={<div className="h-96 w-full max-w-md animate-pulse rounded-xl bg-card border border-border" />}>
-        <LoginForm />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center min-h-screen">
+          <div className="h-96 w-full max-w-md animate-pulse rounded-2xl bg-card border border-border" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

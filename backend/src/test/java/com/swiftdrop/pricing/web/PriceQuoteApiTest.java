@@ -44,11 +44,23 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
-        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class
+        com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
+        com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
+        com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
+        com.swiftdrop.merchant.domain.MerchantEventAnomalyRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookDeliveryRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository.class,
+        com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository.class,
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class
 })
 class PriceQuoteApiTest {
 
@@ -108,10 +120,10 @@ class PriceQuoteApiTest {
     }
 
     @Test
-    void unpricedRouteReturnsConflictWithoutZoneIds() throws Exception {
+    void routeWithoutExplicitRuleUsesGlobalFallback() throws Exception {
         quote(TestPrincipal.customer(), body(KANDY, COLOMBO, "\"SMALL\"", "1000"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("No pricing for this route"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currency").value("LKR"));
     }
 
     @Test

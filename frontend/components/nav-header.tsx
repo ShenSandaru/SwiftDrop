@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { cn } from "cn";
 import { useAuth } from "@/lib/auth-context";
+import { NotificationBell } from "@/components/notification-bell";
+import { getUserAvatarUrl } from "@/lib/api";
 
 const HOVER_OPEN_MS = 150;
 const HOVER_CLOSE_MS = 250;
@@ -51,6 +53,9 @@ export function NavHeader() {
     links.push({ href: "/admin", label: "Admin" }, { href: "/dispatch", label: "Dispatch" });
   } else if (hasRole("DISPATCHER")) {
     links.push({ href: "/dispatch", label: "Dispatch" });
+  }
+  if (isAuthenticated) {
+    links.push({ href: "/profile", label: "Profile" });
   }
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const current = links.find((link) => isActive(link.href));
@@ -145,7 +150,18 @@ export function NavHeader() {
     <span className="mx-2 h-6 w-16 shrink-0 animate-pulse rounded-full bg-background/15" />
   ) : isAuthenticated && user ? (
     <>
-      <span className="max-w-40 shrink-0 truncate px-2 text-sm text-background/60">{user.fullName || user.email}</span>
+      <NotificationBell />
+      <Link
+        href="/profile"
+        onClick={close}
+        className={cn(
+          "max-w-44 shrink-0 truncate px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:bg-background/15",
+          isActive("/profile") ? "bg-background/20 text-background font-semibold" : "text-background/80 hover:text-background"
+        )}
+        title="View Profile"
+      >
+        {user.fullName || user.email}
+      </Link>
       <button type="button" onClick={() => { close(); logout(); }}
         className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-background/10 px-4 py-2 text-base text-background hover:bg-background/20">
         <LogOut className="size-3.5" aria-hidden="true" /> Sign Out
@@ -154,12 +170,17 @@ export function NavHeader() {
   ) : (
     <>
       <Link href="/login" onClick={close} className={linkClass("/login")}>Sign In</Link>
-      <Link href="/signup" onClick={close}
+      <Link href="/signup/customer" onClick={close}
         className="shrink-0 whitespace-nowrap rounded-full bg-primary px-5 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90">
         Register
       </Link>
     </>
   );
+
+  // Do not render the main website navbar on authentication routes (e.g. /login, /signup/customer)
+  if (pathname === "/login" || pathname.startsWith("/signup")) {
+    return null;
+  }
 
   return (
     // Same 3.5rem as the old bar, so pages sized with calc(100vh - 3.5rem) still fit. The 3.5rem pill
@@ -214,9 +235,21 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-              {initial}
-            </span>
+            <>
+              <NotificationBell />
+              {user.hasAvatar ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={getUserAvatarUrl(user.id, user.avatarUpdatedAt)}
+                  alt={user.fullName}
+                  className="size-9 shrink-0 rounded-full object-cover ring-2 ring-primary/30"
+                />
+              ) : (
+                <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                  {initial}
+                </span>
+              )}
+            </>
           )}
           <button
             type="button"

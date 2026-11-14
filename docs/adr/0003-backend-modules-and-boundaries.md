@@ -65,7 +65,7 @@ pricing      → none
 delivery     → identity, pricing
 dispatch     → identity, delivery
 merchant     → identity, delivery
-notification → identity, delivery
+notification → identity, delivery, merchant
 tracking     → delivery
 ```
 

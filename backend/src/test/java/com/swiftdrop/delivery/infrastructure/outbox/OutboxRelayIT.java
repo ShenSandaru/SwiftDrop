@@ -17,6 +17,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
@@ -69,6 +70,7 @@ class OutboxRelayIT {
     private static final String RABBIT_USER = "swiftdrop-test";
     private static final String RABBIT_PASSWORD = "swiftdrop-test-only";
     private static final String TEST_QUEUE = "test.outbox-relay";
+    private static final String MERCHANT_QUEUE = "merchant.parcel-status-changed";
     private static final Duration WAIT = Duration.ofSeconds(20);
 
     @Container
@@ -114,6 +116,7 @@ class OutboxRelayIT {
     @AfterEach
     void removeTestQueue() {
         admin.deleteQueue(TEST_QUEUE);
+        admin.declareBinding(merchantBinding());
     }
 
     @Test
@@ -137,6 +140,8 @@ class OutboxRelayIT {
 
     @Test
     void unroutableEventWaitsInTheOutboxUntilAQueueIsBound() {
+        // The merchant module binds its queue at startup; without that binding the event is unroutable.
+        admin.removeBinding(merchantBinding());
         ParcelStatusChanged event = createParcel();
 
         await().atMost(WAIT).untilAsserted(() -> assertThat(attempts(event)).isGreaterThanOrEqualTo(1));
@@ -170,6 +175,12 @@ class OutboxRelayIT {
             assertThat(message).isNotNull();
             assertThat(message.getMessageProperties().getMessageId()).isEqualTo(event.eventId().toString());
         }
+    }
+
+    /** The binding the merchant module declares for its event queue (ADR 0004 §5). */
+    private static Binding merchantBinding() {
+        return new Binding(MERCHANT_QUEUE, Binding.DestinationType.QUEUE, ParcelStatusChanged.EXCHANGE,
+                ParcelStatusChanged.EVENT_TYPE, null);
     }
 
     private void bindTestQueue() {

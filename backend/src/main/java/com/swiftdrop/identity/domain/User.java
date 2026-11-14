@@ -42,6 +42,17 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
+
+    @Column(name = "avatar_photo")
+    private byte[] avatarPhoto;
+
+    @Column(name = "avatar_content_type", length = 50)
+    private String avatarContentType;
+
+    @Column(name = "avatar_updated_at")
+    private Instant avatarUpdatedAt;
     @Column(nullable = false)
     private boolean enabled;
 
@@ -91,6 +102,38 @@ public class User {
         return fullName;
     }
 
+    public void setFullName(String fullName) {
+        this.fullName = Objects.requireNonNull(fullName, "fullName").trim();
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber != null && !phoneNumber.isBlank() ? phoneNumber.trim() : null;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    /**
+     * Customer accounts are considered complete when they have a human name
+     * (not empty, and not defaulting to their email address) and a contact phone number.
+     * Non-customer accounts (e.g. admin or staff) are always considered complete.
+     */
+    public boolean isProfileCompleted() {
+        if (!roles.contains(Role.CUSTOMER)) {
+            return true;
+        }
+        return fullName != null
+                && !fullName.isBlank()
+                && !fullName.trim().equalsIgnoreCase(email.trim())
+                && phoneNumber != null
+                && !phoneNumber.isBlank();
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -105,5 +148,33 @@ public class User {
 
     public Set<Role> getRoles() {
         return Collections.unmodifiableSet(roles);
+    }
+
+    public byte[] getAvatarPhoto() {
+        return avatarPhoto == null ? null : avatarPhoto.clone();
+    }
+
+    public String getAvatarContentType() {
+        return avatarContentType;
+    }
+
+    public Instant getAvatarUpdatedAt() {
+        return avatarUpdatedAt;
+    }
+
+    public boolean hasAvatar() {
+        return avatarPhoto != null && avatarPhoto.length > 0;
+    }
+
+    public void updateAvatar(byte[] photo, String contentType) {
+        this.avatarPhoto = photo == null ? null : photo.clone();
+        this.avatarContentType = contentType;
+        this.avatarUpdatedAt = Instant.now();
+    }
+
+    public void removeAvatar() {
+        this.avatarPhoto = null;
+        this.avatarContentType = null;
+        this.avatarUpdatedAt = Instant.now();
     }
 }
