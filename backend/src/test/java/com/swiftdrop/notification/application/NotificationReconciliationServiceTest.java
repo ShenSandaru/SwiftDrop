@@ -66,7 +66,8 @@ class NotificationReconciliationServiceTest {
                 templateResolver,
                 eventParser,
                 parcelEvents,
-                userDirectory);
+                userDirectory,
+                org.mockito.Mockito.mock(com.swiftdrop.merchant.api.MerchantLookup.class));
 
         NotificationReconciliationProperties properties = new NotificationReconciliationProperties(
                 true,
@@ -276,6 +277,16 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public List<UserSummary> findEnabledAdmins() {
+            return List.of();
+        }
+
+        @Override
+        public List<UserSummary> findEnabledDispatchers() {
+            return List.of();
+        }
+
+        @Override
         public UUID createMerchantUser(String fullName, String email, String rawPassword) {
             return UUID.randomUUID();
         }
@@ -433,6 +444,32 @@ class NotificationReconciliationServiceTest {
         public NotificationRecord save(NotificationRecord entity) {
             records.add(entity);
             return entity;
+        }
+
+        @Override
+        public int updateDeliveryStatus(UUID id, NotificationDeliveryStatus status) {
+            for (NotificationRecord r : records) {
+                if (r.getId().equals(id)) {
+                    if (status == NotificationDeliveryStatus.SENT) {
+                        r.markAsSent(java.time.Instant.now());
+                    } else if (status == NotificationDeliveryStatus.FAILED) {
+                        r.markAsFailed("Delivery failed");
+                    }
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        @Override
+        public List<NotificationRecord> findRetryEligibleRecords(java.time.Instant now, int maxAttempts, int limit) {
+            return records.stream()
+                    .filter(r -> r.getDeliveryStatus() == NotificationDeliveryStatus.FAILED)
+                    .filter(r -> r.getChannel() == NotificationChannel.EMAIL || r.getChannel() == NotificationChannel.SMS)
+                    .filter(r -> r.getRetryCount() < maxAttempts)
+                    .filter(r -> r.getNextRetryAt() == null || !r.getNextRetryAt().isAfter(now))
+                    .limit(limit)
+                    .toList();
         }
 
         @Override

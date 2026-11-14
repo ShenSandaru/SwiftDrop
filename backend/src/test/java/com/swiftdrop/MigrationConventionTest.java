@@ -217,6 +217,10 @@ class MigrationConventionTest {
                                 "merchant create event consumer tables",
                                 "merchant/V202611141100__merchant_create_event_consumer_tables.sql"),
                         tuple(
+                                "202611141200",
+                                "notification add retry columns",
+                                "notification/V202611141200__notification_add_retry_columns.sql"),
+                        tuple(
                                 "202611151000",
                                 "merchant create webhook attempts",
                                 "merchant/V202611151000__merchant_create_webhook_attempts.sql"),
