@@ -60,6 +60,43 @@ class NotificationEntityUnitTest {
     }
 
     @Test
+    @DisplayName("NotificationRecord handles non-parcel account notifications with null parcelId and trackingNumber")
+    void nonParcelNotificationRecord() {
+        UUID eventId = UUID.randomUUID();
+        UUID recipientUserId = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        NotificationRecord accountRecord = NotificationRecord.forAccount(
+                eventId,
+                recipientUserId,
+                "Merchant Account Approved",
+                "Your application has been approved.",
+                NotificationChannel.IN_APP,
+                NotificationDeliveryStatus.NOT_APPLICABLE,
+                now);
+
+        assertThat(accountRecord.getEventId()).isEqualTo(eventId);
+        assertThat(accountRecord.getRecipientUserId()).isEqualTo(recipientUserId);
+        assertThat(accountRecord.getParcelId()).isNull();
+        assertThat(accountRecord.getTrackingNumber()).isNull();
+        assertThat(accountRecord.getTitle()).isEqualTo("Merchant Account Approved");
+        assertThat(accountRecord.getMessage()).isEqualTo("Your application has been approved.");
+        assertThat(accountRecord.getChannel()).isEqualTo(NotificationChannel.IN_APP);
+        assertThat(accountRecord.getDeliveryStatus()).isEqualTo(NotificationDeliveryStatus.NOT_APPLICABLE);
+
+        // Parcel factory method rejects null parcelId or trackingNumber
+        assertThatThrownBy(() -> NotificationRecord.forParcel(
+                eventId, recipientUserId, null, "SD1234567890", "Title", "Msg", NotificationChannel.IN_APP, NotificationDeliveryStatus.NOT_APPLICABLE, now))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("parcelId");
+
+        assertThatThrownBy(() -> NotificationRecord.forParcel(
+                eventId, recipientUserId, UUID.randomUUID(), null, "Title", "Msg", NotificationChannel.IN_APP, NotificationDeliveryStatus.NOT_APPLICABLE, now))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("trackingNumber");
+    }
+
+    @Test
     @DisplayName("NotificationConsumerState tracks sequence and rejects backward steps")
     void notificationConsumerStateSequenceValidation() {
         UUID parcelId = UUID.randomUUID();

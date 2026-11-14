@@ -483,6 +483,15 @@ class NotificationReconciliationServiceTest {
             return null;
         }
 
+        @Override
+        public int insertIfAbsent(UUID id, UUID eventId, UUID recipientUserId, UUID parcelId, String trackingNumber, String title, String message, String channel, String deliveryStatus, java.time.Instant createdAt) {
+            if (existsByEventIdAndChannelAndRecipientUserId(eventId, NotificationChannel.valueOf(channel), recipientUserId)) {
+                return 0;
+            }
+            records.add(new NotificationRecord(eventId, recipientUserId, parcelId, trackingNumber, title, message, NotificationChannel.valueOf(channel), NotificationDeliveryStatus.valueOf(deliveryStatus), createdAt));
+            return 1;
+        }
+
         // Unused JPA methods
         @Override public void flush() {}
         @Override public <S extends NotificationRecord> S saveAndFlush(S entity) { return null; }

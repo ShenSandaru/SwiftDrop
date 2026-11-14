@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { cn } from "cn";
 import { useAuth } from "@/lib/auth-context";
+import { NotificationBell } from "@/components/notification-bell";
 import { getUserAvatarUrl } from "@/lib/api";
 
 const HOVER_OPEN_MS = 150;
@@ -149,6 +150,7 @@ export function NavHeader() {
     <span className="mx-2 h-6 w-16 shrink-0 animate-pulse rounded-full bg-background/15" />
   ) : isAuthenticated && user ? (
     <>
+      <NotificationBell />
       <Link
         href="/profile"
         onClick={close}
@@ -233,18 +235,21 @@ export function NavHeader() {
           </div>
 
           {!(open && sideways) && isAuthenticated && user && (
-            user.hasAvatar ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={getUserAvatarUrl(user.id, user.avatarUpdatedAt)}
-                alt={user.fullName}
-                className="size-9 shrink-0 rounded-full object-cover ring-2 ring-primary/30"
-              />
-            ) : (
-              <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                {initial}
-              </span>
-            )
+            <>
+              <NotificationBell />
+              {user.hasAvatar ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={getUserAvatarUrl(user.id, user.avatarUpdatedAt)}
+                  alt={user.fullName}
+                  className="size-9 shrink-0 rounded-full object-cover ring-2 ring-primary/30"
+                />
+              ) : (
+                <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                  {initial}
+                </span>
+              )}
+            </>
           )}
           <button
             type="button"
