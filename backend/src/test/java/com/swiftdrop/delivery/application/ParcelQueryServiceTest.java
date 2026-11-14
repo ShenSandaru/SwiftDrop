@@ -55,6 +55,7 @@ class ParcelQueryServiceTest {
     private ParcelAssignmentRepository assignments;
     private ParcelStatusHistoryRepository history;
     private ParcelQueryService service;
+    private final DeliveryEstimator estimator = mock(DeliveryEstimator.class);
     private Parcel parcel;
 
     @BeforeEach
@@ -63,7 +64,7 @@ class ParcelQueryServiceTest {
         assignments = mock(ParcelAssignmentRepository.class);
         history = mock(ParcelStatusHistoryRepository.class);
         service = new ParcelQueryService(parcels, assignments, history, mock(HubRepository.class),
-                DeliveryPolicy.defaults());
+                DeliveryPolicy.defaults(), estimator);
         parcel = Parcel.forMerchant("SD7K3M9Q2XWB", MERCHANT_ID, "ORD-1",
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(),
                         "00500"),
@@ -195,6 +196,21 @@ class ParcelQueryServiceTest {
                 .extracting(ParcelSummary::merchantOrderReference).isEqualTo("ORD-1");
         assertThat(service.findByMerchantReference(MERCHANT_ID, " ")).isEmpty();
         assertThat(service.findByMerchantReference(null, "ORD-1")).isEmpty();
+    }
+
+    @Test
+    void publicViewCarriesTheEstimateCountedFromThePickup() {
+        Instant pickedUp = NOW.plusSeconds(3600);
+        when(parcels.findByTrackingNumber("SD7K3M9Q2XWB")).thenReturn(Optional.of(parcel));
+        when(history.findByParcelIdOrderBySequenceAsc(PARCEL_ID)).thenReturn(List.of(
+                new ParcelStatusHistoryEntry(PARCEL_ID, 1, null, ParcelStatus.CREATED, null, ActorRole.MERCHANT, null,
+                        null, UUID.randomUUID(), NOW),
+                new ParcelStatusHistoryEntry(PARCEL_ID, 2, ParcelStatus.CREATED, ParcelStatus.PICKED_UP, null,
+                        ActorRole.COURIER, null, null, UUID.randomUUID(), pickedUp)));
+        when(estimator.estimate(parcel, pickedUp)).thenReturn(Optional.of(java.time.LocalDate.parse("2026-11-06")));
+
+        assertThat(service.findPublicTrackingView("SD7K3M9Q2XWB").orElseThrow().estimatedDelivery())
+                .isEqualTo("2026-11-06");
     }
 
     @Test

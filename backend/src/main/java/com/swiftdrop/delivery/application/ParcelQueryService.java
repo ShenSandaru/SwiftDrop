@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.application;
 
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -58,14 +59,17 @@ class ParcelQueryService implements ParcelQueries {
     private final ParcelStatusHistoryRepository history;
     private final HubRepository hubs;
     private final DeliveryPolicy policy;
+    private final DeliveryEstimator estimator;
 
     ParcelQueryService(ParcelRepository parcels, ParcelAssignmentRepository assignments,
-            ParcelStatusHistoryRepository history, HubRepository hubs, DeliveryPolicy policy) {
+            ParcelStatusHistoryRepository history, HubRepository hubs, DeliveryPolicy policy,
+            DeliveryEstimator estimator) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.history = history;
         this.hubs = hubs;
         this.policy = policy;
+        this.estimator = estimator;
     }
 
     @Override
@@ -151,12 +155,20 @@ class ParcelQueryService implements ParcelQueries {
         if (!TrackingNumberGenerator.isWellFormed(normalized)) {
             return Optional.empty();
         }
-        return parcels.findByTrackingNumber(normalized).map(parcel -> new PublicTrackingView(
-                parcel.getTrackingNumber(),
-                parcel.getStatus(),
-                parcel.getPickup().getCity(),
-                parcel.getDropoff().getCity(),
-                publicTimeline(parcel)));
+        return parcels.findByTrackingNumber(normalized).map(parcel -> {
+            List<PublicStatusEvent> timeline = publicTimeline(parcel);
+            Instant pickedUpAt = timeline.stream()
+                    .filter(event -> event.status() == ParcelStatus.PICKED_UP)
+                    .map(PublicStatusEvent::occurredAt)
+                    .findFirst().orElse(null);
+            return new PublicTrackingView(
+                    parcel.getTrackingNumber(),
+                    parcel.getStatus(),
+                    parcel.getPickup().getCity(),
+                    parcel.getDropoff().getCity(),
+                    timeline,
+                    estimator.estimate(parcel, pickedUpAt).orElse(null));
+        });
     }
 
     /** Status, time, hub name and attempt per step (ADR 0009 §7); hub names, never people or notes. */
