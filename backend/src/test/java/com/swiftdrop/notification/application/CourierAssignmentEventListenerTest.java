@@ -258,5 +258,66 @@ class CourierAssignmentEventListenerTest {
                 any(), eq(eventId), eq(COURIER_ID), eq(PARCEL_ID), eq(TRACKING_NUMBER),
                 any(), any(), any(), any(), any());
     }
+
+    @Test
+    @DisplayName("Notifies courier when active PICKUP, DELIVERY, or RETURN assignment is cancelled")
+    void notifiesCourierOnAssignmentCancellation() {
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "courier@swiftdrop.com", "Test Courier", Set.of("COURIER"), true)));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(any(), any(), any())).thenReturn(false);
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        for (ParcelAssignmentType type : ParcelAssignmentType.values()) {
+            UUID eventId = UUID.randomUUID();
+            com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled event =
+                    new com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled(
+                            eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, type, OCCURRED_AT);
+
+            listener.onParcelCourierAssignmentCancelled(event);
+
+            verify(recordRepository).insertIfAbsent(
+                    any(), eq(eventId), eq(COURIER_ID), eq(PARCEL_ID), eq(TRACKING_NUMBER),
+                    eq("Parcel Assignment Cancelled"),
+                    eq("The courier assignment for parcel " + TRACKING_NUMBER + " has been cancelled by the dispatcher."),
+                    eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(OCCURRED_AT));
+        }
+    }
+
+    @Test
+    @DisplayName("Skips cancellation notification when courier is missing or disabled")
+    void skipsCancellationWhenCourierMissingOrDisabled() {
+        UUID eventId = UUID.randomUUID();
+        com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled event =
+                new com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled(
+                        eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, ParcelAssignmentType.PICKUP, OCCURRED_AT);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.empty());
+        listener.onParcelCourierAssignmentCancelled(event);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "courier@swiftdrop.com", "Disabled Courier", Set.of("COURIER"), false)));
+        listener.onParcelCourierAssignmentCancelled(event);
+
+        verify(recordRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Skips duplicate cancellation event when already exists in repository pre-check")
+    void skipsDuplicateCancellationEvent() {
+        UUID eventId = UUID.randomUUID();
+        com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled event =
+                new com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled(
+                        eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, ParcelAssignmentType.DELIVERY, OCCURRED_AT);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "courier@swiftdrop.com", "Test Courier", Set.of("COURIER"), true)));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(eventId, NotificationChannel.IN_APP, COURIER_ID))
+                .thenReturn(true);
+
+        listener.onParcelCourierAssignmentCancelled(event);
+
+        verify(recordRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
 }
 

@@ -14,6 +14,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelCourierAssigned;
+import com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 import com.swiftdrop.notification.domain.NotificationChannel;
@@ -134,6 +135,50 @@ public class CourierAssignmentEventListener {
         } catch (RuntimeException ex) {
             log.warn("Failed to process reassignment notification for previous courier {} on event {}: {}",
                     previousCourierId, event.eventId(), ex.getMessage());
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onParcelCourierAssignmentCancelled(ParcelCourierAssignmentCancelled event) {
+        Objects.requireNonNull(event, "event must not be null");
+
+        UUID eventId = event.eventId();
+        UUID courierId = event.courierId();
+        UUID parcelId = event.parcelId();
+        String trackingNumber = event.trackingNumber();
+
+        Optional<UserSummary> userOpt = userDirectory.findUser(courierId);
+        if (userOpt.isEmpty() || !userOpt.get().enabled()) {
+            log.warn("Courier user {} not found or disabled. Skipping cancellation notification for event {}.",
+                    courierId, eventId);
+            return;
+        }
+
+        if (recordRepository.existsByEventIdAndChannelAndRecipientUserId(eventId, NotificationChannel.IN_APP, courierId)) {
+            log.debug("Cancellation notification already exists for event {} and recipient {}. Skipping duplicate.",
+                    eventId, courierId);
+            return;
+        }
+
+        int inserted = recordRepository.insertIfAbsent(
+                UUID.randomUUID(),
+                eventId,
+                courierId,
+                parcelId,
+                trackingNumber,
+                "Parcel Assignment Cancelled",
+                "The courier assignment for parcel " + trackingNumber + " has been cancelled by the dispatcher.",
+                NotificationChannel.IN_APP.name(),
+                NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                event.occurredAt());
+
+        if (inserted > 0) {
+            log.info("Created cancellation notification for courier user {} on {} assignment for parcel {}",
+                    courierId, event.assignmentType(), parcelId);
+        } else {
+            log.debug("Cancellation notification already existed for event {} and recipient {}. Skipped insert.",
+                    eventId, courierId);
         }
     }
 
