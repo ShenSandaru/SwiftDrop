@@ -447,6 +447,21 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public int updateDeliveryStatus(UUID id, NotificationDeliveryStatus status) {
+            for (NotificationRecord r : records) {
+                if (r.getId().equals(id)) {
+                    if (status == NotificationDeliveryStatus.SENT) {
+                        r.markSent(java.time.Instant.now());
+                    } else if (status == NotificationDeliveryStatus.FAILED) {
+                        r.markFailed("Delivery failed");
+                    }
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        @Override
         public Optional<NotificationRecord> findByIdAndRecipientUserIdAndChannel(UUID id, UUID recipientUserId, NotificationChannel channel) {
             return records.stream().filter(r -> r.getId().equals(id)
                     && r.getRecipientUserId().equals(recipientUserId)
