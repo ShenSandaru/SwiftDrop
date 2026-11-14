@@ -271,6 +271,16 @@ class NotificationReconciliationServiceTest {
             return Optional.empty();
         }
 
+
+        @Override
+        public List<UserSummary> findUsers(java.util.Set<UUID> ids) {
+            return ids.stream()
+                    .map(this::findUser)
+                    .flatMap(Optional::stream)
+                    .toList();
+        }
+
+
         @Override
         public List<UserSummary> findEnabledCouriers() {
             return List.of();
