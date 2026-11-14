@@ -180,4 +180,15 @@ class DispatchHubApiTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void aParcelOfAnotherHubIsRefusedWith403() throws Exception {
+        UUID dispatcherId = UUID.randomUUID();
+        doThrow(new com.swiftdrop.delivery.api.ParcelForbiddenException("This parcel is handled by another hub"))
+                .when(hubOperations).sendToNextHub(PARCEL, Staff.dispatcher(dispatcherId));
+
+        mvc.perform(post(BASE + "/transit").with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("This parcel is handled by another hub"));
+    }
 }

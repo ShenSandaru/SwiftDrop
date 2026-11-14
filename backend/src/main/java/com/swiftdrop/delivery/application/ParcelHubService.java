@@ -43,25 +43,23 @@ public class ParcelHubService implements ParcelHubOperations {
     private final DeliveryPolicy policy;
     private final Clock clock;
     private final ApplicationEventPublisher publisher;
-
-    public ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
-            ParcelEventRecorder recorder, DeliveryPolicy policy) {
-        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), null);
-    }
+    private final HubAuthority authority;
 
     @Autowired
     public ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
-            ParcelEventRecorder recorder, DeliveryPolicy policy, ApplicationEventPublisher publisher) {
-        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), publisher);
+            ParcelEventRecorder recorder, DeliveryPolicy policy, ApplicationEventPublisher publisher,
+            HubAuthority authority) {
+        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), publisher, authority);
     }
 
     ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
-            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock) {
-        this(parcels, hubs, assignments, recorder, policy, clock, null);
+            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, HubAuthority authority) {
+        this(parcels, hubs, assignments, recorder, policy, clock, null, authority);
     }
 
     ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
-            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, ApplicationEventPublisher publisher) {
+            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, ApplicationEventPublisher publisher,
+            HubAuthority authority) {
         this.parcels = parcels;
         this.hubs = hubs;
         this.assignments = assignments;
@@ -69,6 +67,7 @@ public class ParcelHubService implements ParcelHubOperations {
         this.policy = policy;
         this.clock = clock;
         this.publisher = publisher;
+        this.authority = authority;
     }
 
     @Override
@@ -76,7 +75,7 @@ public class ParcelHubService implements ParcelHubOperations {
     public void scanAtHub(UUID parcelId, UUID hubId, Staff staff) {
         Objects.requireNonNull(hubId, "hubId");
         Hub hub = hubs.findById(hubId).orElseThrow(() -> new ParcelConflictException("Unknown hub"));
-        Parcel parcel = lock(parcelId);
+        Parcel parcel = lockForStaff(parcelId, staff);
         ParcelStatus previous = parcel.getStatus();
         Instant now = clock.instant();
         parcel.scanAtHub(hub.getId(), now);
@@ -86,7 +85,7 @@ public class ParcelHubService implements ParcelHubOperations {
     @Override
     @Transactional
     public void sendToNextHub(UUID parcelId, Staff staff) {
-        Parcel parcel = lock(parcelId);
+        Parcel parcel = lockForStaff(parcelId, staff);
         ParcelStatus previous = parcel.getStatus();
         UUID leaving = parcel.getCurrentHubId();
         Instant now = clock.instant();
@@ -97,7 +96,7 @@ public class ParcelHubService implements ParcelHubOperations {
     @Override
     @Transactional
     public void startReturn(UUID parcelId, Staff staff) {
-        Parcel parcel = lock(parcelId);
+        Parcel parcel = lockForStaff(parcelId, staff);
         ParcelStatus previous = parcel.getStatus();
         Instant now = clock.instant();
         parcel.startReturn(policy.maxDeliveryAttempts(), now);
@@ -107,7 +106,7 @@ public class ParcelHubService implements ParcelHubOperations {
     @Override
     @Transactional
     public void markFailed(UUID parcelId, FailureReason reason, String note, Staff staff) {
-        Parcel parcel = lock(parcelId);
+        Parcel parcel = lockForStaff(parcelId, staff);
         ParcelStatus previous = parcel.getStatus();
         Instant now = clock.instant();
         parcel.markFailed(reason, now);
@@ -118,7 +117,7 @@ public class ParcelHubService implements ParcelHubOperations {
     @Override
     @Transactional
     public void cancel(UUID parcelId, Staff staff) {
-        cancel(lock(parcelId), Actor.staff(Objects.requireNonNull(staff, "staff")));
+        cancel(lockForStaff(parcelId, staff), Actor.staff(Objects.requireNonNull(staff, "staff")));
     }
 
     /**
@@ -162,6 +161,13 @@ public class ParcelHubService implements ParcelHubOperations {
                                 now));
                     }
                 });
+    }
+
+    /** Locks the parcel, then checks that one of the staff member's hubs is responsible for it (ADR 0012 §3). */
+    private Parcel lockForStaff(UUID parcelId, Staff staff) {
+        Parcel parcel = lock(parcelId);
+        authority.requireCanAct(parcel, staff);
+        return parcel;
     }
 
     private Parcel lock(UUID parcelId) {
