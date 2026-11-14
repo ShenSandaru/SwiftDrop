@@ -102,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(28);
+        assertThat(rows).hasSize(31);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -178,18 +178,27 @@ class DatabaseMigrationIT {
                 .containsEntry("script", "merchant/V202611131200__merchant_extend_webhook_event_types.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(23))
-                .containsEntry("script", "identity/V202611131900__identity_add_phone_number_to_users.sql")
+                .containsEntry("script", "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(24))
-                .containsEntry("script", "notification/V202611141000__notification_allow_non_parcel_notifications.sql")
+                .containsEntry("script", "pricing/V202611131600__pricing_add_coordinates_to_districts.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(25))
-                .containsEntry("script", "merchant/V202611141100__merchant_create_event_consumer_tables.sql")
+                .containsEntry("script", "pricing/V202611131700__pricing_create_pricing_config.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(26))
-                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
+                .containsEntry("script", "identity/V202611131900__identity_add_phone_number_to_users.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(27))
+                .containsEntry("script", "notification/V202611141000__notification_allow_non_parcel_notifications.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(28))
+                .containsEntry("script", "merchant/V202611141100__merchant_create_event_consumer_tables.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(29))
+                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(30))
                 .containsEntry("script", "merchant/V202611161000__merchant_create_webhook_redeliveries.sql")
                 .containsEntry("success", true);
 
@@ -209,6 +218,9 @@ class DatabaseMigrationIT {
 
         Integer zonesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM zones", Integer.class);
         assertThat(zonesCount).isNotNull();
+
+        Integer districtsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM districts", Integer.class);
+        assertThat(districtsCount).isEqualTo(25);
 
         Integer pricingRulesCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM pricing_rules", Integer.class);
         assertThat(pricingRulesCount).isNotNull();
