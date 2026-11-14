@@ -114,7 +114,7 @@ export function NotificationBell() {
           }
         }}
         className={cn(
-          "relative inline-flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
+          "relative inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
           "bg-background/10 text-background hover:bg-background/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           open && "bg-background/25 text-background",
         )}
@@ -134,7 +134,7 @@ export function NotificationBell() {
       {open && (
         <div
           className={cn(
-            "fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
+            "fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full sm:mt-2 z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
             "motion-safe:animate-in motion-safe:fade-in-50 motion-safe:zoom-in-95",
           )}
           role="region"
