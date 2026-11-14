@@ -29,6 +29,7 @@ import { ThemedSelect } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { IslandCoverageMap } from "@/components/admin/island-coverage-map";
+import { HubLinksCard } from "@/components/admin/hub-links-card";
 import { formatApiError } from "@/lib/api";
 import { createHub, deleteHub, listHubs, updateHub, type Hub } from "@/lib/hubs";
 import { listDistricts, type District } from "@/lib/districts";
@@ -883,6 +884,9 @@ export default function AdminHubsAndZonesPage() {
               </div>
             )}
           </section>
+
+          {/* Direct links between branches (ADR 0011) */}
+          {hubs !== null && hubs.length > 0 && <HubLinksCard hubs={hubs} />}
 
           {/* Add a Hub Form */}
           <form onSubmit={submitHub} className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-xs">
