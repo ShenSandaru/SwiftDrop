@@ -14,25 +14,30 @@ import org.springframework.transaction.annotation.Transactional;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubLink;
+import com.swiftdrop.delivery.domain.HubLinkRepository;
 import com.swiftdrop.delivery.domain.HubRepository;
 
 /**
- * Admins create, change and deactivate hubs (ADR 0009 §1). Uniqueness (code, name, zone, the single
- * central hub) is checked here for a clear message and enforced by the database for races.
+ * Admins create, change and deactivate hubs (ADR 0009 §1) and link branches that exchange parcels
+ * directly (ADR 0011 §1). Uniqueness (code, name, zone, the single central hub, one link per pair)
+ * is checked here for a clear message and enforced by the database for races.
  */
 @Service
 public class HubAdministration {
 
     private final HubRepository hubs;
+    private final HubLinkRepository links;
     private final Clock clock;
 
     @Autowired
-    public HubAdministration(HubRepository hubs) {
-        this(hubs, Clock.systemUTC());
+    public HubAdministration(HubRepository hubs, HubLinkRepository links) {
+        this(hubs, links, Clock.systemUTC());
     }
 
-    HubAdministration(HubRepository hubs, Clock clock) {
+    HubAdministration(HubRepository hubs, HubLinkRepository links, Clock clock) {
         this.hubs = hubs;
+        this.links = links;
         this.clock = clock;
     }
 
@@ -94,6 +99,64 @@ public class HubAdministration {
         } catch (DataIntegrityViolationException e) {
             throw new ParcelConflictException("Cannot delete hub '" + hub.getName()
                     + "': it is referenced by existing parcels or deliveries. Deactivate the hub instead.");
+        }
+    }
+
+    /** All direct links, oldest first. */
+    @Transactional(readOnly = true)
+    public List<HubLink> links() {
+        return links.findAllByOrderByCreatedAtAsc();
+    }
+
+    /**
+     * Links two branches so that parcels between them skip the central hub (ADR 0011 §1). The order
+     * of the two hubs does not matter.
+     *
+     * @throws IllegalArgumentException if both IDs name the same hub
+     * @throws ParcelNotFoundException if a hub does not exist
+     * @throws ParcelConflictException if a hub is central or inactive, or the hubs are already linked
+     */
+    @Transactional
+    public HubLink link(UUID hubId, UUID otherHubId, UUID adminId) {
+        Objects.requireNonNull(hubId, "hubId");
+        Objects.requireNonNull(otherHubId, "otherHubId");
+        Objects.requireNonNull(adminId, "adminId");
+        if (hubId.equals(otherHubId)) {
+            throw new IllegalArgumentException("A hub cannot be linked to itself");
+        }
+        requireLinkable(hubId);
+        requireLinkable(otherHubId);
+        if (links.areLinked(hubId, otherHubId)) {
+            throw new ParcelConflictException("These hubs are already linked");
+        }
+        try {
+            return links.saveAndFlush(new HubLink(hubId, otherHubId, adminId, clock.instant()));
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent request linked the same pair first
+            throw new ParcelConflictException("These hubs are already linked");
+        }
+    }
+
+    /**
+     * Removes a link. Parcels already picked up keep their stored route (ADR 0011 §2).
+     *
+     * @throws IllegalArgumentException if both IDs name the same hub
+     * @throws ParcelNotFoundException if the hubs are not linked
+     */
+    @Transactional
+    public void unlink(UUID hubId, UUID otherHubId) {
+        Objects.requireNonNull(hubId, "hubId");
+        Objects.requireNonNull(otherHubId, "otherHubId");
+        links.delete(links.findLink(hubId, otherHubId).orElseThrow(ParcelNotFoundException::new));
+    }
+
+    private void requireLinkable(UUID hubId) {
+        Hub hub = hubs.findById(hubId).orElseThrow(ParcelNotFoundException::new);
+        if (hub.isCentral()) {
+            throw new ParcelConflictException("The central hub is already connected to every branch");
+        }
+        if (!hub.isActive()) {
+            throw new ParcelConflictException("Hub " + hub.getCode() + " is not active");
         }
     }
 

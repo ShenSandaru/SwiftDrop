@@ -2,6 +2,7 @@ package com.swiftdrop.delivery.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -23,6 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
 import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubLink;
+import com.swiftdrop.delivery.domain.HubLinkRepository;
 import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
@@ -44,7 +47,6 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
-        com.swiftdrop.delivery.domain.HubLinkRepository.class,
         com.swiftdrop.pricing.domain.DistrictRepository.class,
         com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.identity.domain.UserAddressRepository.class,
@@ -74,6 +76,8 @@ class HubApiTest {
 
     @MockitoBean
     private HubRepository hubs;
+    @MockitoBean
+    private HubLinkRepository links;
     @MockitoBean
     private UserRepository users;
     @MockitoBean
@@ -173,5 +177,96 @@ class HubApiTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/hubs/" + id)
                         .with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isNoContent());
+    }
+
+    // ---- Direct links (ADR 0011 §3) ----
+
+    private Hub branch(String code, String city) {
+        Hub hub = new Hub(code, city + " branch", city, UUID.randomUUID(), false, NOW);
+        when(hubs.findById(hub.getId())).thenReturn(Optional.of(hub));
+        return hub;
+    }
+
+    private static String linkBody(UUID hubId, UUID otherHubId) {
+        return """
+                {"hubId": "%s", "otherHubId": "%s"}
+                """.formatted(hubId, otherHubId);
+    }
+
+    @Test
+    void dispatchersAndTheAdminReadTheLinks() throws Exception {
+        UUID badulla = UUID.randomUUID();
+        UUID monaragala = UUID.randomUUID();
+        HubLink link = new HubLink(badulla, monaragala, UUID.randomUUID(), NOW);
+        when(links.findAllByOrderByCreatedAtAsc()).thenReturn(List.of(link));
+
+        for (TestPrincipal caller : List.of(TestPrincipal.dispatcher(), TestPrincipal.admin())) {
+            mvc.perform(get("/api/v1/hubs/links").with(caller.postProcessor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].hubId").value(link.getFirstHubId().toString()))
+                    .andExpect(jsonPath("$[0].otherHubId").value(link.getSecondHubId().toString()))
+                    .andExpect(jsonPath("$[0].createdBy").doesNotExist());
+        }
+        mvc.perform(get("/api/v1/hubs/links").with(TestPrincipal.courier().postProcessor()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/hubs/links")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void onlyTheAdminLinksBranches() throws Exception {
+        Hub badulla = branch("BAD", "Badulla");
+        Hub monaragala = branch("MON", "Monaragala");
+        when(links.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        String body = linkBody(badulla.getId(), monaragala.getId());
+
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.hubId").exists())
+                .andExpect(jsonPath("$.otherHubId").exists());
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.dispatcher().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void invalidLinkIsRejected() throws Exception {
+        Hub badulla = branch("BAD", "Badulla");
+        Hub colombo = new Hub("CMB", "Colombo hub", "Colombo", UUID.randomUUID(), true, NOW);
+        when(hubs.findById(colombo.getId())).thenReturn(Optional.of(colombo));
+
+        // The same hub twice, and a missing hub ID
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON).content(linkBody(badulla.getId(), badulla.getId())))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"hubId\": \"%s\"}".formatted(badulla.getId())))
+                .andExpect(status().isBadRequest());
+        // An unknown hub, and the central hub
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(linkBody(badulla.getId(), UUID.randomUUID())))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/hubs/links").with(TestPrincipal.admin().postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON).content(linkBody(badulla.getId(), colombo.getId())))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void onlyTheAdminRemovesLinks() throws Exception {
+        UUID badulla = UUID.randomUUID();
+        UUID monaragala = UUID.randomUUID();
+        when(links.findLink(badulla, monaragala)).thenReturn(Optional.of(
+                new HubLink(badulla, monaragala, UUID.randomUUID(), NOW)));
+        String path = "/api/v1/hubs/links/" + badulla + "/" + monaragala;
+
+        mvc.perform(delete(path).with(TestPrincipal.dispatcher().postProcessor()))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete(path).with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/hubs/links/" + monaragala + "/" + UUID.randomUUID())
+                        .with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isNotFound());
     }
 }
