@@ -42,7 +42,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
 @MockitoBean(types = {
         com.swiftdrop.pricing.domain.DistrictRepository.class,
         com.swiftdrop.pricing.domain.PricingConfigRepository.class,com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class, com.swiftdrop.delivery.domain.HubRepository.class,
-        com.swiftdrop.delivery.domain.HubLinkRepository.class, com.swiftdrop.notification.domain.NotificationRecordRepository.class})
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class, com.swiftdrop.notification.domain.NotificationRecordRepository.class})
 class SwiftdropBackendApplicationTests {
 
     @MockitoBean

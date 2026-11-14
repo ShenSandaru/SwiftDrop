@@ -54,6 +54,19 @@ public final class TestHubs {
         }
     }
 
+    /** Makes the user a head office dispatcher, who works on every hub (ADR 0012 §2). */
+    public static void headOffice(JdbcTemplate jdbc, UUID userId) {
+        jdbc.update("INSERT INTO hub_staff (id, user_id, hub_id, created_by, created_at) "
+                + "VALUES (gen_random_uuid(), ?, NULL, NULL, now()) ON CONFLICT DO NOTHING", userId);
+    }
+
+    /** Makes the user work for one hub, by code (ADR 0012 §1). */
+    public static void worksAt(JdbcTemplate jdbc, UUID userId, String hubCode) {
+        jdbc.update("INSERT INTO hub_staff (id, user_id, hub_id, created_by, created_at) "
+                + "SELECT gen_random_uuid(), ?, id, NULL, now() FROM hubs WHERE code = ? ON CONFLICT DO NOTHING",
+                userId, hubCode);
+    }
+
     private static void insert(JdbcTemplate jdbc, String code, String name, String city, UUID zoneId, boolean central) {
         jdbc.update("INSERT INTO hubs (id, code, name, city, zone_id, central, active, created_at, updated_at) "
                 + "VALUES (?, ?, ?, ?, ?, ?, TRUE, now(), now()) ON CONFLICT (code) DO NOTHING",

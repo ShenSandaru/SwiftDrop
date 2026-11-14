@@ -58,6 +58,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.notification.domain.NotificationRecordRepository.class})
 class MerchantControllerTest {
 

@@ -44,7 +44,7 @@ class DispatchController {
     }
 
     @GetMapping("/parcels")
-    PageResponse<DispatchParcelSummary> parcels(
+    PageResponse<DispatchParcelSummary> parcels(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) ParcelStatus status,
             @RequestParam(required = false) ParcelSource source,
             @RequestParam(required = false) Boolean assigned,
@@ -52,25 +52,25 @@ class DispatchController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
+        return toResponse(dispatch.parcels(staff(jwt), status, source, assigned, search, request), request);
     }
 
     /** Unfinished parcels with no scan, status change or assignment for too long; longest waiting first. */
     @GetMapping("/stale-parcels")
-    PageResponse<DispatchParcelSummary> staleParcels(
+    PageResponse<DispatchParcelSummary> staleParcels(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.staleParcels(request), request);
+        return toResponse(dispatch.staleParcels(staff(jwt), request), request);
     }
 
     @GetMapping("/active-assignments")
-    PageResponse<ParcelAssignmentSummary> activeAssignments(
+    PageResponse<ParcelAssignmentSummary> activeAssignments(@AuthenticationPrincipal Jwt jwt,
             @RequestParam ParcelAssignmentType type,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.activeAssignments(type, request), request);
+        return toResponse(dispatch.activeAssignments(staff(jwt), type, request), request);
     }
 
     @GetMapping("/courier-workloads")

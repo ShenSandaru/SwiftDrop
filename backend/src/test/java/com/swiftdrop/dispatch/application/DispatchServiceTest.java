@@ -141,9 +141,9 @@ class DispatchServiceTest {
         com.swiftdrop.delivery.api.PageResult<com.swiftdrop.delivery.api.DispatchParcelSummary> expected =
                 com.swiftdrop.delivery.api.PageResult.of(List.of(), page, 0);
         // 24 hours before the fixed clock
-        when(parcels.findStaleParcels(Instant.parse("2026-11-13T08:00:00Z"), page)).thenReturn(expected);
+        when(parcels.findStaleParcels(DISPATCHER_ID, Instant.parse("2026-11-13T08:00:00Z"), page)).thenReturn(expected);
 
-        assertThat(service.staleParcels(page)).isSameAs(expected);
+        assertThat(service.staleParcels(Staff.dispatcher(DISPATCHER_ID), page)).isSameAs(expected);
     }
 
     @Test

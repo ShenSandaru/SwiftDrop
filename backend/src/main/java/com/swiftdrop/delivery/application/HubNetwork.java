@@ -1,6 +1,7 @@
 package com.swiftdrop.delivery.application;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,6 +50,11 @@ public class HubNetwork {
         } catch (IllegalStateException e) {
             throw new ParcelConflictException("No central hub is configured");
         }
+    }
+
+    /** The active branch hub of a zone, if it has one (ADR 0012 §3: who handles a parcel before pickup). */
+    public Optional<UUID> branchHubId(UUID zoneId) {
+        return zoneId == null ? Optional.empty() : hubs.findByZoneIdAndActiveTrue(zoneId).map(Hub::getId);
     }
 
     /** Checks at booking that both zones are served (ADR 0009 §1). */

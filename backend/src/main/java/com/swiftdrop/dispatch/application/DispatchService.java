@@ -64,19 +64,20 @@ public class DispatchService {
      * missed scan or a lost parcel does not stay hidden.
      */
     @Transactional(readOnly = true)
-    public PageResult<DispatchParcelSummary> staleParcels(PageRequest page) {
-        return parcels.findStaleParcels(clock.instant().minus(staleAfter), page);
+    public PageResult<DispatchParcelSummary> staleParcels(Staff staff, PageRequest page) {
+        return parcels.findStaleParcels(staff.userId(), clock.instant().minus(staleAfter), page);
     }
 
     @Transactional(readOnly = true)
-    public PageResult<DispatchParcelSummary> parcels(
+    public PageResult<DispatchParcelSummary> parcels(Staff staff,
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
-        return parcels.findDispatchParcels(status, source, assigned, search, page);
+        return parcels.findDispatchParcels(staff.userId(), status, source, assigned, search, page);
     }
 
     @Transactional(readOnly = true)
-    public PageResult<ParcelAssignmentSummary> activeAssignments(ParcelAssignmentType type, PageRequest page) {
-        return parcels.findActiveAssignments(type, page);
+    public PageResult<ParcelAssignmentSummary> activeAssignments(Staff staff, ParcelAssignmentType type,
+            PageRequest page) {
+        return parcels.findActiveAssignments(staff.userId(), type, page);
     }
 
     @Transactional(readOnly = true)

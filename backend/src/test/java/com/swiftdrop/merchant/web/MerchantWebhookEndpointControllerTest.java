@@ -64,6 +64,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantApiKeyRepository.class,
         com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
         com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,

@@ -52,6 +52,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -162,7 +163,7 @@ class DispatchHubApiTest {
 
     @Test
     void dispatchersAndTheAdminSeeStaleParcels() throws Exception {
-        org.mockito.Mockito.when(parcels.findByStatusNotInAndUpdatedAtBefore(any(), any(), any()))
+        org.mockito.Mockito.when(parcels.findStale(any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
         String path = "/api/v1/dispatch/stale-parcels";
 

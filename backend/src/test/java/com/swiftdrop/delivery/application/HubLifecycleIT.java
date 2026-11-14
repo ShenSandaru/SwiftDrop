@@ -100,7 +100,9 @@ class HubLifecycleIT {
                 + "ON CONFLICT (code) DO NOTHING", GALLE_ZONE);
         customerId = insertUser("CUSTOMER");
         courierId = insertUser("COURIER");
-        dispatcher = Staff.dispatcher(insertUser("DISPATCHER"));
+        UUID dispatcherId = insertUser("DISPATCHER");
+        TestHubs.headOffice(jdbc, dispatcherId);
+        dispatcher = Staff.dispatcher(dispatcherId);
     }
 
     @Test
@@ -194,7 +196,7 @@ class HubLifecycleIT {
     }
 
     private List<UUID> staleIds(Instant inactiveSince) {
-        return queries.findStaleParcels(inactiveSince, new PageRequest(0, 100)).items().stream()
+        return queries.findStaleParcels(dispatcher.userId(), inactiveSince, new PageRequest(0, 100)).items().stream()
                 .map(DispatchParcelSummary::id).toList();
     }
 
