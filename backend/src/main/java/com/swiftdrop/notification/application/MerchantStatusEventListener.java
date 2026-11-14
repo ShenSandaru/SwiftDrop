@@ -27,7 +27,7 @@ import com.swiftdrop.notification.domain.NotificationRecordRepository;
  * Resolves the recipient merchant user, validates the account is enabled, and creates
  * an idempotent in-app notification record.
  */
-@Component
+@Component("notificationMerchantStatusEventListener")
 public class MerchantStatusEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(MerchantStatusEventListener.class);

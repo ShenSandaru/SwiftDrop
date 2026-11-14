@@ -46,7 +46,7 @@ Application Development group project for a courier company operating island-wid
 | Frontend | Next.js App Router, React, TypeScript, Tailwind CSS, shadcn/ui on Base UI, npm | Implemented |
 | Backend | Java 21, Spring Boot 4.1 (Spring MVC), Maven Wrapper | Implemented |
 | Persistence | PostgreSQL 18, Spring Data JPA / Hibernate, Flyway | Implemented (identity, pricing and delivery tables) |
-| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; no consumers yet) |
+| Messaging | RabbitMQ 4.3, Spring AMQP | Implemented (outbox relay publishes status events to `swiftdrop.events`; merchant consumer creates webhook delivery records; webhook sender signs, sends and retries them) |
 | Security | Spring Security; OAuth2 client and resource-server starters | Implemented (defaults only, see section 9) |
 | API docs | springdoc-openapi | Implemented (default endpoints) |
 | Local infrastructure | Docker Compose (`compose.yaml`) | Implemented (database and broker only, see section 13) |
@@ -92,9 +92,11 @@ The frontend and backend share no code. They communicate only over HTTP.
   (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
   `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
   (sections 7 and 8).
+- **Implemented:** `merchant.infrastructure.webhook`, the SSRF-safe webhook HTTP client (SD-409,
+  section 7). It also provides the module's `WebhookUrlValidator` for endpoint registration.
 - **Decided:** the module layout, dependencies and package rules below
   ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
-  `delivery` and `tracking` have code so far; the decision is not an authorization to implement
+  `delivery`, `tracking` and `merchant` have code so far; the decision is not an authorization to implement
   another module: that needs an approved task.
 
 ### Modules (Decided, ADR 0003)
@@ -211,8 +213,40 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
 - **Decided:** RabbitMQ through Spring AMQP carries asynchronous work. Classic or quorum queues only;
   classic mirrored queues were removed in RabbitMQ 4.
 - **Implemented:** connection settings (`SWIFTDROP_RABBITMQ_*`) and the Actuator health check.
-  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5. **No queues or consumers
-  exist yet** (`notification`, `merchant`).
+  A connection smoke test against RabbitMQ 4.3 succeeded in Stage 5.
+- **Implemented (ADR 0004 §5.1, `merchant.infrastructure.messaging`):** `merchant` declares the durable
+  quorum queue `merchant.parcel-status-changed`, bound to `swiftdrop.events` with
+  `parcel.status-changed`, with dead-letter exchange `swiftdrop.dead-letter` (routing key = queue
+  name), delivery limit 5, maximum length 100,000, `reject-publish` and `at-least-once`
+  dead-lettering, plus its dead-letter queue `merchant.parcel-status-changed.dlq`.
+  `MerchantEventQueueIT` verifies on RabbitMQ 4.3 that the `stream_queue` feature flag is on, the
+  arguments are accepted and a rejected message is dead-lettered. `notification` has no queue yet.
+- **Implemented (SD-410, ADR 0004 §4.3, §6, §7.1):** the merchant consumer (`MerchantEventListener`,
+  `MerchantEventProcessor`) reads that queue. Customer parcels are ignored; for a merchant parcel it locks
+  the parcel's state row, recognizes duplicates in processed and pending events, applies events in
+  sequence order, keeps early events pending and quarantines contradicting events in
+  `merchant_event_anomalies`. Applying an event creates one `PENDING` row in
+  `merchant_webhook_deliveries` per enabled endpoint subscribed to the new status, if the merchant is
+  `APPROVED` when the event is processed. Listener retries: 3 attempts in total, invalid messages to
+  the `.dlq` at once. A reconciler closes gaps after 60 s from `ParcelEvents.eventsBetween` (contiguous
+  sequences only, `SKIP LOCKED` per parcel) and marks a parcel stuck after 5 failed attempts; processed
+  IDs are deleted after 30 days. Switch: `SWIFTDROP_MERCHANT_EVENTS_CONSUMER_ENABLED`. Details:
+  `docs/merchant-contracts.md` §4.8.
+- **Implemented (SD-411, ADR 0004 §7.1, §7.2):** the webhook sender claims due records every 5 s with
+  `SKIP LOCKED` and a per-claim lease token (2 min), checks endpoint and merchant at send time, decrypts the
+  signing secret, signs `"<timestamp>.<body>"` with HMAC-SHA256 (`X-SwiftDrop-Signature: v1=…`) and posts
+  the stored payload through the SSRF-safe client. 2xx succeeds; timeouts, network errors, 5xx, 408 and
+  429 are retried (30 s × 2, ±20 % jitter, 1 h cap, `Retry-After` honored, 8 attempts); other outcomes
+  fail. Every attempt is stored in `merchant_webhook_attempts` without bodies or secrets; an
+  undecryptable secret parks the record as `SECRET_UNAVAILABLE`. Switch:
+  `SWIFTDROP_MERCHANT_WEBHOOK_SENDER_ENABLED`. Details: `docs/merchant-contracts.md` §4.9.
+- **Implemented (SD-412, SD-413, ADR 0004 §7.5):** merchants list and inspect their own webhook
+  deliveries (`/api/v1/merchants/me/webhook-deliveries`, attempts grouped by series, no payloads or
+  secrets) and redeliver `FAILED` or `SECRET_UNAVAILABLE` records up to 3 times, each a new series of up
+  to 8 attempts; admins (`ADMIN`) do the same for all merchants at `/api/v1/webhook-deliveries`. Every
+  redelivery is audited in `merchant_webhook_redeliveries`. The portal screens are Member A's; the demo
+  receiver is `tools/webhook-receiver` and the merchant guide `docs/merchant-integration-guide.md`.
+  Details: `docs/merchant-contracts.md` §4.10.
 - **Implemented:** every status change writes its `parcel.status-changed` event
   (ADR 0004 §2 envelope, no personal data) to `parcel_outbox_events` in the same transaction as the
   status and history; the event is also published in-process after commit for `tracking`.
@@ -228,14 +262,15 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   `swiftdrop.outbox.*` gauges and logs one `ERROR` line (IDs only) when an ADR §9 threshold is
   crossed and one line when it clears; a daily job deletes published rows older than 7 days.
   Settings are `swiftdrop.outbox.relay.*` with the ADR defaults; the relay is switched off on the
-  test classpath and on with `swiftdrop.outbox.relay.enabled`. Until a consumer binds a queue,
-  every event is returned as unroutable and waits in the outbox, which the monitor reports.
+  test classpath and on with `swiftdrop.outbox.relay.enabled`. Events with no bound queue are
+  returned as unroutable and wait in the outbox, which the monitor reports; the merchant queue
+  (below) is bound at startup.
 - **Decided (ADR 0003):** `delivery` is the only publisher of status-change events;
   `notification` and `merchant` consume them through RabbitMQ; `tracking` may receive them
   in-process. Side effects never block or roll back the status change.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md), Accepted).** The
-  publishing side (outbox, relay, exchange) is implemented as above; **the consumer side
-  (queues, dead-lettering, consumers, webhooks, notifications) is not**, and the decision is not an
+  publishing side (outbox, relay, exchange) and the merchant queue are implemented as above; **the
+  rest of the consumer side (consumers, webhooks, notifications) is not**, and the decision is not an
   authorization to implement it without an approved task:
   - **Guarantee:** at-least-once delivery of committed status changes; no exactly-once promise.
     Duplicates are normal and absorbed by event IDs and per-parcel sequence numbers.
@@ -255,8 +290,16 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   - **Webhooks:** database-driven delivery records per event and endpoint with bounded exponential
     backoff; HMAC-SHA256 signatures with timestamp; secrets encrypted with AES-256-GCM and
     environment-supplied keys; SSRF protection with checks before every attempt and Apache
-    HttpClient 5 with a validating DNS resolver (approved dependency, not yet added); merchants see
-    only their own records; audited, bounded manual redelivery.
+    HttpClient 5 with a validating DNS resolver; merchants see only their own records; audited,
+    bounded manual redelivery.
+  - **Implemented (SD-409):** the SSRF-safe client in `merchant.infrastructure.webhook`: URL rules
+    and the full prohibited-range list of ADR 0004 §7.3, a validating `DnsResolver` as the only
+    address source, a check before every request, no redirects, no proxy, no connection reuse, no
+    automatic retries, standard TLS verification, and the local-only flag
+    `SWIFTDROP_WEBHOOK_ALLOW_LOCAL`. Hosts written only as numeric or hex labels other than a
+    dotted quad (for example `2130706433`, `0177.0.0.1`) are refused, because resolvers read them
+    differently. Tests cover the five mandatory checks against loopback servers; the SOCKS part of
+    "no proxy" is defense in depth that a loopback test cannot show. No sender uses the client yet.
   - **Notifications:** a mock SMS channel stored by `notification`; the owning customer of a
     customer-created parcel is notified on `PICKED_UP`, `OUT_FOR_DELIVERY`, `DELIVERED` and
     `FAILED`; merchant-created parcels are reported to the merchant by webhook only.
@@ -367,11 +410,26 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
 - **Decided (ADR 0003):** `identity` owns accounts, roles, local and Google login and the
   application's JWTs; `merchant` owns merchant API credentials; `config` wires both into the
   security filter chain.
+- **Decided ([ADR 0008](adr/0008-merchant-api-key-authentication.md), Accepted):** merchant systems
+  use API keys `sdk_<prefix>_<secret>` in `X-Api-Key`, stored as SHA-256 and checked in constant
+  time, with the merchant `APPROVED` on every request; no OAuth client credentials (resolves D-03).
+- **Implemented (SD-403, SD-404):** table `merchant_api_keys`; an approved merchant creates (full key
+  shown once, `Cache-Control: no-store`), lists and revokes keys at `/api/v1/merchants/me/api-keys`,
+  at most 5 active. `config` has a second, stateless filter chain for `/api/v1/merchant-orders/**`
+  that accepts only `X-Api-Key` through `merchant.api.MerchantAuthentication` and answers every
+  failure with the same `401` (`WWW-Authenticate: ApiKey`); its principal
+  (`AuthenticatedMerchant`) carries only the merchant and key IDs with the authority
+  `MERCHANT_API_KEY`. `last_used_at` is written at most once a minute.
+- **Implemented (SD-405):** `POST /api/v1/merchant-orders` takes the customer booking body plus
+  `merchantOrderReference` (letters, digits and `. _ : -`, at most 100) and calls
+  `delivery.api.ParcelCreation`: `201` with `Location` for a new order, `200` with the existing parcel
+  for a repeated reference (D-25). `GET /api/v1/merchant-orders/{merchantOrderReference}` returns the
+  caller's own order, `404` otherwise. The merchant always comes from the API key. Because `merchant`
+  may not use `pricing` (ADR 0003), it passes the size by name through
+  `NewMerchantParcel.withSizeName` in `delivery.api`. Webhook signing is decided in
+  [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
 - **Open:**
   - An authenticated flow for linking Google to an existing account.
-  - Merchant API authentication: API keys (no new dependency) or OAuth 2.0 client credentials
-    (needs an authorization server); key format and rotation. Webhook signing is decided in
-    [ADR 0004](adr/0004-messaging-and-integration-reliability.md).
   - How courier and dispatcher/admin accounts are created.
 
 ## 10. Security and personal data
@@ -390,7 +448,7 @@ passwords, no sensitive data in error messages or logs (SYS-7); no hard-coded se
 **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):**
 events and webhook payloads carry no personal data; webhook secrets are encrypted with AES-256-GCM
 (keys from the environment, rotation by key ID); outbound webhook requests are restricted to
-validated public destinations (not yet implemented).
+validated public destinations (the client is implemented in SD-409; the sender is not yet).
 
 **Open:** retention and deletion of personal data, storage for proof-of-delivery photos, and
 whether springdoc and Actuator details are exposed outside local development.

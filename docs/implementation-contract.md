@@ -171,7 +171,8 @@ user (JWT), `MKEY` merchant API key, `COU` Courier, `ADM` Dispatcher/Admin, `PUB
 | `GET /api/v1/merchant-orders/{merchantOrderReference}` | merchant | MKEY | Order status | MER-2 |
 | `GET /api/v1/merchants/me/orders` | merchant | MER | Dashboard list (paged, status filter) | MER-4 |
 | `PUT /api/v1/merchants/me/webhook-endpoint` | merchant | approved MER | Register/replace endpoint; secret shown once (**D-17**) | MER-3 |
-| `GET /api/v1/merchants/me/webhook-deliveries`, `POST .../{id}/redeliveries` | merchant | MER (own); ADM (all) | History and manual redelivery | MER-3 |
+| `GET /api/v1/merchants/me/webhook-deliveries`, `GET .../{id}`, `POST .../{id}/redeliveries` | merchant | MER (own) | History and manual redelivery (implemented, `merchant-contracts.md` §4.10) | MER-3 |
+| `GET /api/v1/webhook-deliveries`, `GET .../{id}`, `POST .../{id}/redeliveries` | merchant | ADM (all) | Admin view and redelivery (implemented) | MER-3 |
 | `GET /api/v1/notifications` | notification | CUS (own) | Mock SMS inbox | SYS-5, DEM-4 |
 
 ### 4.3 Request and response examples (Proposed)
@@ -479,7 +480,7 @@ team approval recorded in `architecture.md` is enough.
 |---|---|---|---|---|
 | D-01 | Frontend → backend calling pattern | Browser calls the REST API directly with the bearer token (CORS already in place); token kept in memory + `sessionStorage`; no BFF | Yes (architecture §5 open) | SD-008 and all UI |
 | D-02 | Google sign-in token handoff | Callback stores a one-time code (SHA-256 hashed, ≥ 256-bit entropy, 60 s, atomic single use) and redirects to `SWIFTDROP_FRONTEND_BASE_URL/auth/google/callback?code=…` (or `?error=…` on failure); frontend POSTs code to `/api/v1/auth/google/exchanges`. Tokens never in URLs | Resolved ([ADR 0005](adr/0005-google-oauth-token-handoff.md)) | — |
-| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes (architecture §9 open) | SD-403–405 |
+| D-03 | Merchant API authentication | API keys (hashed, prefix lookup), no OAuth client credentials | Yes: [ADR 0008](adr/0008-merchant-api-key-authentication.md) (Accepted) | SD-403–405 |
 | D-04 | Staff account creation | Env-bootstrapped first admin; admin creates couriers/admins | No | SD-101, SD-102 |
 | D-05 | Tracking-number format | `SD` + 10 random Crockford base32 chars (no I, L, O, U), unique, retry on collision | No | SD-205 |
 | D-06 | Open lifecycle rules | Table in §7: `FAILED` from `PICKED_UP`..`OUT_FOR_DELIVERY`; proof required for `DELIVERED`; reassignment only in `CREATED`; no cancel/retry/override | Yes (extends ADR 0003 §4) | SD-301, SD-306 |

@@ -157,6 +157,10 @@ class MigrationConventionTest {
                                 "delivery add parcel assignment version",
                                 "delivery/V202611051210__delivery_add_parcel_assignment_version.sql"),
                         tuple(
+                                "202611081000",
+                                "merchant create merchant api keys",
+                                "merchant/V202611081000__merchant_create_merchant_api_keys.sql"),
+                        tuple(
                                 "202611081400",
                                 "identity user profiles and addresses",
                                 "identity/V202611081400__identity_user_profiles_and_addresses.sql"),
@@ -185,12 +189,28 @@ class MigrationConventionTest {
                                 "notification create tables",
                                 "notification/V202611131000__notification_create_tables.sql"),
                         tuple(
+                                "202611131200",
+                                "merchant extend webhook event types",
+                                "merchant/V202611131200__merchant_extend_webhook_event_types.sql"),
+                        tuple(
                                 "202611131900",
                                 "identity add phone number to users",
                                 "identity/V202611131900__identity_add_phone_number_to_users.sql"),
                         tuple(
                                 "202611141000",
                                 "notification allow non parcel notifications",
-                                "notification/V202611141000__notification_allow_non_parcel_notifications.sql"));
+                                "notification/V202611141000__notification_allow_non_parcel_notifications.sql"),
+                        tuple(
+                                "202611141100",
+                                "merchant create event consumer tables",
+                                "merchant/V202611141100__merchant_create_event_consumer_tables.sql"),
+                        tuple(
+                                "202611151000",
+                                "merchant create webhook attempts",
+                                "merchant/V202611151000__merchant_create_webhook_attempts.sql"),
+                        tuple(
+                                "202611161000",
+                                "merchant create webhook redeliveries",
+                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"));
     }
 }

@@ -31,6 +31,7 @@ Sources were checked on 2026-10-24.
 | PostgreSQL JDBC driver | 42.7.x | Boot-managed |
 | Flyway | 12.x: `spring-boot-starter-flyway` + `org.flywaydb:flyway-database-postgresql` | Boot-managed |
 | RabbitMQ Java client (`amqp-client`) | 5.x | Boot-managed |
+| Apache HttpClient 5 (`httpclient5`) | 5.6.x (`httpcore5` 5.4.x) | Boot-managed; outbound merchant webhooks only ([ADR 0004](0004-messaging-and-integration-reliability.md) §7.3, SD-409) |
 | springdoc-openapi (`springdoc-openapi-starter-webmvc-ui`) | **3.2.0** | Pinned (not Boot-managed) |
 | JaCoCo (`jacoco-maven-plugin`) | **0.8.12** | Pinned (not Boot-managed; SD-004) |
 | JUnit Jupiter, Mockito, AssertJ, Spring Boot Test | 6.0.x, 5.x, 3.x | Boot-managed |
@@ -233,6 +234,13 @@ ESLint 10 is pending** until `eslint-config-next` and its plugins declare suppor
   <https://github.com/docker-library/docs/blob/master/rabbitmq/content.md>,
   <https://www.rabbitmq.com/docs/monitoring#health-checks>,
   <https://github.com/rabbitmq/rabbitmq-server/releases>
+- **SD-409 webhook client (2026-11-08), verified with `mvnw dependency:tree`:**
+  `org.apache.httpcomponents.client5:httpclient5` is declared without a version and resolves to
+  5.6.5 with `httpcore5` and `httpcore5-h2` 5.4.4 from the Spring Boot 4.1.2 BOM, as ADR 0004 §7.3
+  expected. It is used only by `merchant.infrastructure.webhook`. With it on the classpath,
+  `RestClient.builder()` without an explicit request factory (for example in `CourierFlowIT`)
+  selects Apache HttpClient instead of the JDK client; TLS verification and name resolution stay
+  standard for those clients.
 - Docker Desktop on Windows needs WSL 2.1.5 or later and Windows 11 23H2 or later. The current
   release is 4.96.3, with Engine 29.9.x and Compose v5.6.x.
   Sources: <https://docs.docker.com/desktop/setup/install/windows-install/>,
