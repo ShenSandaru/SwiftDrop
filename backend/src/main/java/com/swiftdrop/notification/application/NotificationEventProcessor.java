@@ -242,6 +242,38 @@ public class NotificationEventProcessor {
             }
             createInAppNotification(event, merchant.get().userId());
         }
+
+        notifyDispatchersIfApplicable(event);
+    }
+
+    private void notifyDispatchersIfApplicable(ParcelStatusChanged event) {
+        Optional<NotificationTemplateResolver.NotificationContent> dispatcherContent =
+                templateResolver.resolveForDispatcher(event);
+        if (dispatcherContent.isEmpty()) {
+            return;
+        }
+
+        List<UserSummary> dispatchers = userDirectory.findEnabledDispatchers();
+        if (dispatchers.isEmpty()) {
+            log.debug("No enabled dispatchers found for parcel {} status {}. Skipping dispatcher notifications.",
+                    event.data().parcelId(), event.data().newStatus());
+            return;
+        }
+
+        NotificationTemplateResolver.NotificationContent content = dispatcherContent.get();
+        for (UserSummary dispatcher : dispatchers) {
+            recordRepository.insertIfAbsent(
+                    UUID.randomUUID(),
+                    event.eventId(),
+                    dispatcher.id(),
+                    event.data().parcelId(),
+                    event.data().trackingNumber(),
+                    content.title(),
+                    content.message(),
+                    NotificationChannel.IN_APP.name(),
+                    NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                    event.occurredAt());
+        }
     }
 
     private void createInAppNotification(ParcelStatusChanged event, UUID recipientUserId) {

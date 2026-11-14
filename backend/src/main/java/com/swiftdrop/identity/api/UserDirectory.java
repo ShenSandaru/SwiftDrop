@@ -33,6 +33,13 @@ public interface UserDirectory {
     List<UserSummary> findEnabledAdmins();
 
     /**
+     * Retrieves all enabled users having the {@code DISPATCHER} role.
+     *
+     * @return list of enabled dispatcher user summaries
+     */
+    List<UserSummary> findEnabledDispatchers();
+
+    /**
      * Creates a new user with the {@code MERCHANT} role.
      *
      * @param fullName the user's full name

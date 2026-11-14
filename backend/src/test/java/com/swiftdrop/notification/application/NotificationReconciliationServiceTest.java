@@ -282,6 +282,11 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public List<UserSummary> findEnabledDispatchers() {
+            return List.of();
+        }
+
+        @Override
         public UUID createMerchantUser(String fullName, String email, String rawPassword) {
             return UUID.randomUUID();
         }

@@ -653,4 +653,100 @@ class NotificationEventProcessorTest {
                 eq("Parcel Booked"), eq("Booked"),
                 eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
     }
+
+    @Test
+    @DisplayName("Enabled dispatchers receive notifications for CREATED, DELIVERY_ATTEMPT_FAILED, FAILED, and RETURNED")
+    void dispatcherNotifiedForOperationalStatuses() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        UUID dispatcher1 = UUID.randomUUID();
+        UUID dispatcher2 = UUID.randomUUID();
+        when(userDirectory.findEnabledDispatchers()).thenReturn(List.of(
+                new UserSummary(dispatcher1, "Dispatcher One", "d1@swiftdrop.com", Set.of("DISPATCHER"), true),
+                new UserSummary(dispatcher2, "Dispatcher Two", "d2@swiftdrop.com", Set.of("DISPATCHER"), true)));
+
+        ParcelStatus[] statuses = {
+                ParcelStatus.CREATED,
+                ParcelStatus.DELIVERY_ATTEMPT_FAILED,
+                ParcelStatus.FAILED,
+                ParcelStatus.RETURNED
+        };
+
+        for (int i = 0; i < statuses.length; i++) {
+            ParcelStatus status = statuses[i];
+            int seq = i + 1;
+            com.swiftdrop.delivery.api.FailureReason reason =
+                    (status == ParcelStatus.DELIVERY_ATTEMPT_FAILED || status == ParcelStatus.FAILED)
+                            ? com.swiftdrop.delivery.api.FailureReason.RECIPIENT_UNAVAILABLE
+                            : null;
+            ParcelStatusChanged event = ParcelStatusChanged.of(
+                    UUID.randomUUID(),
+                    now,
+                    new ParcelStatusChangedData(
+                            parcelId, trackingNumber, null, status,
+                            seq, ParcelSource.CUSTOMER, customerId, null, null, reason));
+
+            when(consumerStateRepository.findById(parcelId))
+                    .thenReturn(seq == 1 ? Optional.empty() : Optional.of(new NotificationConsumerState(parcelId, seq - 1, now)));
+            when(userDirectory.findUser(customerId)).thenReturn(Optional.empty());
+            when(templateResolver.resolveForDispatcher(event))
+                    .thenReturn(Optional.of(new NotificationContent("Dispatcher Alert " + status, "Msg " + status)));
+
+            processor.process(event, "{\"sequence\":" + seq + "}");
+
+            verify(recordRepository).insertIfAbsent(
+                    any(), eq(event.eventId()), eq(dispatcher1), eq(parcelId), eq(trackingNumber),
+                    eq("Dispatcher Alert " + status), eq("Msg " + status),
+                    eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+            verify(recordRepository).insertIfAbsent(
+                    any(), eq(event.eventId()), eq(dispatcher2), eq(parcelId), eq(trackingNumber),
+                    eq("Dispatcher Alert " + status), eq("Msg " + status),
+                    eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+        }
+    }
+
+    @Test
+    @DisplayName("Normal lifecycle status does not notify dispatchers")
+    void normalLifecycleStatusDoesNotNotifyDispatchers() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, ParcelStatus.CREATED, ParcelStatus.PICKED_UP,
+                        1, ParcelSource.CUSTOMER, customerId, null, null, null));
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(userDirectory.findUser(customerId)).thenReturn(Optional.empty());
+        when(templateResolver.resolveForDispatcher(event)).thenReturn(Optional.empty());
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verify(userDirectory, never()).findEnabledDispatchers();
+        verifyNoInteractions(recordRepository);
+    }
+
+    @Test
+    @DisplayName("Empty enabled dispatchers list is handled safely")
+    void emptyDispatchersHandledSafely() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                now,
+                new ParcelStatusChangedData(
+                        parcelId, trackingNumber, null, ParcelStatus.CREATED,
+                        1, ParcelSource.CUSTOMER, customerId, null, null, null));
+
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.empty());
+        when(userDirectory.findUser(customerId)).thenReturn(Optional.empty());
+        when(templateResolver.resolveForDispatcher(event))
+                .thenReturn(Optional.of(new NotificationContent("New Parcel Awaiting Dispatch", "Awaiting dispatch")));
+        when(userDirectory.findEnabledDispatchers()).thenReturn(List.of());
+
+        processor.process(event, "{\"sequence\":1}");
+
+        verifyNoInteractions(recordRepository);
+    }
 }
