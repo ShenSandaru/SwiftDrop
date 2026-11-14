@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,5 +66,22 @@ class HubNetworkTest {
                 .hasMessage("No central hub is configured");
         // Within one branch no central hub is needed
         assertThat(network.routeFor(KANDY_ZONE, KANDY_ZONE).hubs()).containsExactly(kandy.getId());
+    }
+
+    @Test
+    void servedZoneIdsReturnsOnlyActiveHubZonesWithoutDuplicates() {
+        Hub inactiveGalle = new Hub("GAL", "Galle branch", "Galle", UUID.randomUUID(), false, NOW);
+        org.springframework.test.util.ReflectionTestUtils.setField(inactiveGalle, "active", false);
+        Hub secondColomboHub = new Hub("CMB2", "Colombo North", "Colombo", COLOMBO_ZONE, false, NOW);
+        when(hubs.findAll()).thenReturn(List.of(colombo, kandy, inactiveGalle, secondColomboHub));
+
+        assertThat(network.servedZoneIds()).containsExactlyInAnyOrder(COLOMBO_ZONE, KANDY_ZONE);
+    }
+
+    @Test
+    void servedZoneIdsReturnsEmptySetWhenNoHubsExist() {
+        when(hubs.findAll()).thenReturn(List.of());
+
+        assertThat(network.servedZoneIds()).isEmpty();
     }
 }

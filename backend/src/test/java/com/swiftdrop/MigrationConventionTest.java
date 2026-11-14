@@ -193,13 +193,21 @@ class MigrationConventionTest {
                                 "merchant extend webhook event types",
                                 "merchant/V202611131200__merchant_extend_webhook_event_types.sql"),
                         tuple(
-                                "202611131900",
-                                "identity add phone number to users",
-                                "identity/V202611131900__identity_add_phone_number_to_users.sql"),
-                        tuple(
                                 "202611131400",
                                 "pricing create districts and postal zones",
                                 "pricing/V202611131400__pricing_create_districts_and_postal_zones.sql"),
+                        tuple(
+                                "202611131600",
+                                "pricing add coordinates to districts",
+                                "pricing/V202611131600__pricing_add_coordinates_to_districts.sql"),
+                        tuple(
+                                "202611131700",
+                                "pricing create pricing config",
+                                "pricing/V202611131700__pricing_create_pricing_config.sql"),
+                        tuple(
+                                "202611131900",
+                                "identity add phone number to users",
+                                "identity/V202611131900__identity_add_phone_number_to_users.sql"),
                         tuple(
                                 "202611141000",
                                 "notification allow non parcel notifications",
