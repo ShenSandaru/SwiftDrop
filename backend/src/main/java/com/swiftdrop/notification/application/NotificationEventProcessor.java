@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -50,6 +51,8 @@ public class NotificationEventProcessor {
     private final ParcelEvents parcelEvents;
     private final UserDirectory userDirectory;
     private final MerchantLookup merchantLookup;
+    private final EmailNotificationSender emailSender;
+    private final SmsNotificationSender smsSender;
 
     public NotificationEventProcessor(
             NotificationConsumerStateRepository consumerStateRepository,
@@ -60,6 +63,22 @@ public class NotificationEventProcessor {
             ParcelEvents parcelEvents,
             UserDirectory userDirectory,
             MerchantLookup merchantLookup) {
+        this(consumerStateRepository, pendingEventRepository, recordRepository, templateResolver,
+                eventParser, parcelEvents, userDirectory, merchantLookup, null, null);
+    }
+
+    @Autowired
+    public NotificationEventProcessor(
+            NotificationConsumerStateRepository consumerStateRepository,
+            NotificationPendingEventRepository pendingEventRepository,
+            NotificationRecordRepository recordRepository,
+            NotificationTemplateResolver templateResolver,
+            ParcelStatusEventParser eventParser,
+            ParcelEvents parcelEvents,
+            UserDirectory userDirectory,
+            MerchantLookup merchantLookup,
+            EmailNotificationSender emailSender,
+            SmsNotificationSender smsSender) {
         this.consumerStateRepository = consumerStateRepository;
         this.pendingEventRepository = pendingEventRepository;
         this.recordRepository = recordRepository;
@@ -68,6 +87,8 @@ public class NotificationEventProcessor {
         this.parcelEvents = parcelEvents;
         this.userDirectory = userDirectory;
         this.merchantLookup = Objects.requireNonNull(merchantLookup, "merchantLookup must not be null");
+        this.emailSender = emailSender;
+        this.smsSender = smsSender;
     }
 
     /**
@@ -284,17 +305,75 @@ public class NotificationEventProcessor {
             return;
         }
 
-        templateResolver.resolve(event).ifPresent(content -> recordRepository.insertIfAbsent(
-                UUID.randomUUID(),
-                event.eventId(),
-                recipientUserId,
-                event.data().parcelId(),
-                event.data().trackingNumber(),
-                content.title(),
-                content.message(),
-                NotificationChannel.IN_APP.name(),
-                NotificationDeliveryStatus.NOT_APPLICABLE.name(),
-                event.occurredAt()));
+        templateResolver.resolve(event).ifPresent(content -> {
+            recordRepository.insertIfAbsent(
+                    UUID.randomUUID(),
+                    event.eventId(),
+                    recipientUserId,
+                    event.data().parcelId(),
+                    event.data().trackingNumber(),
+                    content.title(),
+                    content.message(),
+                    NotificationChannel.IN_APP.name(),
+                    NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                    event.occurredAt());
+            dispatchExternalChannels(event, user.get(), content);
+        });
+    }
+
+    private void dispatchExternalChannels(
+            ParcelStatusChanged event,
+            UserSummary user,
+            NotificationTemplateResolver.NotificationContent content) {
+        if (emailSender != null && user.email() != null && !user.email().isBlank()) {
+            UUID emailRecordId = UUID.randomUUID();
+            int inserted = recordRepository.insertIfAbsent(
+                    emailRecordId,
+                    event.eventId(),
+                    user.id(),
+                    event.data().parcelId(),
+                    event.data().trackingNumber(),
+                    content.title(),
+                    content.message(),
+                    NotificationChannel.EMAIL.name(),
+                    NotificationDeliveryStatus.PENDING.name(),
+                    event.occurredAt());
+            if (inserted > 0) {
+                try {
+                    emailSender.send(user.email(), content.title(), content.message());
+                    recordRepository.updateDeliveryStatus(emailRecordId, NotificationDeliveryStatus.SENT);
+                } catch (RuntimeException ex) {
+                    log.warn("Failed to dispatch EMAIL notification for parcel {} user {}: {}",
+                            event.data().parcelId(), user.id(), ex.getMessage());
+                    recordRepository.updateDeliveryStatus(emailRecordId, NotificationDeliveryStatus.FAILED);
+                }
+            }
+        }
+
+        if (smsSender != null && user.phoneNumber() != null && !user.phoneNumber().isBlank()) {
+            UUID smsRecordId = UUID.randomUUID();
+            int inserted = recordRepository.insertIfAbsent(
+                    smsRecordId,
+                    event.eventId(),
+                    user.id(),
+                    event.data().parcelId(),
+                    event.data().trackingNumber(),
+                    content.title(),
+                    content.message(),
+                    NotificationChannel.SMS.name(),
+                    NotificationDeliveryStatus.PENDING.name(),
+                    event.occurredAt());
+            if (inserted > 0) {
+                try {
+                    smsSender.send(user.phoneNumber(), content.message());
+                    recordRepository.updateDeliveryStatus(smsRecordId, NotificationDeliveryStatus.SENT);
+                } catch (RuntimeException ex) {
+                    log.warn("Failed to dispatch SMS notification for parcel {} user {}: {}",
+                            event.data().parcelId(), user.id(), ex.getMessage());
+                    recordRepository.updateDeliveryStatus(smsRecordId, NotificationDeliveryStatus.FAILED);
+                }
+            }
+        }
     }
 
     private NotificationConsumerState updateWatermark(

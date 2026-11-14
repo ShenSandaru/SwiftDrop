@@ -12,9 +12,11 @@ import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.merchant.api.MerchantLookup;
 import com.swiftdrop.notification.application.NotificationEventListener;
 import com.swiftdrop.notification.application.NotificationEventProcessor;
+import com.swiftdrop.notification.application.EmailNotificationSender;
 import com.swiftdrop.notification.application.NotificationReconciliationService;
 import com.swiftdrop.notification.application.NotificationTemplateResolver;
 import com.swiftdrop.notification.application.ParcelStatusEventParser;
+import com.swiftdrop.notification.application.SmsNotificationSender;
 import com.swiftdrop.notification.domain.NotificationConsumerStateRepository;
 import com.swiftdrop.notification.domain.NotificationPendingEventRepository;
 import com.swiftdrop.notification.domain.NotificationRecordRepository;
@@ -38,7 +40,9 @@ class NotificationConsumerConfigurationTest {
                 .withBean(ParcelStatusEventParser.class, () -> mock(ParcelStatusEventParser.class))
                 .withBean(ParcelEvents.class, () -> mock(ParcelEvents.class))
                 .withBean(UserDirectory.class, () -> mock(UserDirectory.class))
-                .withBean(MerchantLookup.class, () -> mock(MerchantLookup.class));
+                .withBean(MerchantLookup.class, () -> mock(MerchantLookup.class))
+                .withBean(EmailNotificationSender.class, () -> mock(EmailNotificationSender.class))
+                .withBean(SmsNotificationSender.class, () -> mock(SmsNotificationSender.class));
     }
 
     @Test
