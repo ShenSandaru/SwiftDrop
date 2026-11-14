@@ -108,6 +108,8 @@ class AuthenticationApiTest {
     private ZoneRepository zones;
     @MockitoBean
     private PricingRuleRepository pricingRules;
+    @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
 
     @BeforeEach
     void setUp() {

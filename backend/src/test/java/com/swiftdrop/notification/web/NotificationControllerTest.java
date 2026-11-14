@@ -57,6 +57,7 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
         com.swiftdrop.identity.domain.UserRepository.class,
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.identity.domain.ExternalIdentityRepository.class,
         com.swiftdrop.identity.domain.GoogleLoginCodeRepository.class,
         com.swiftdrop.pricing.domain.PricingRuleRepository.class,
