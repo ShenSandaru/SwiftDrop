@@ -178,5 +178,84 @@ class CourierAssignmentEventListenerTest {
 
         verify(recordRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
+
+    @Test
+    @DisplayName("Notifies both previous and new courier on reassignment")
+    void notifiesBothCouriersOnReassignment() {
+        UUID eventId = UUID.randomUUID();
+        UUID previousCourierId = UUID.randomUUID();
+        ParcelCourierAssigned event = new ParcelCourierAssigned(
+                eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.DELIVERY, OCCURRED_AT, previousCourierId);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "new@swiftdrop.com", "New Courier", Set.of("COURIER"), true)));
+        when(userDirectory.findUser(previousCourierId)).thenReturn(Optional.of(
+                new UserSummary(previousCourierId, "old@swiftdrop.com", "Old Courier", Set.of("COURIER"), true)));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(any(), any(), any())).thenReturn(false);
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        listener.onParcelCourierAssigned(event);
+
+        verify(recordRepository).insertIfAbsent(
+                any(), eq(eventId), eq(COURIER_ID), eq(PARCEL_ID), eq(TRACKING_NUMBER),
+                eq("New Delivery Task"), eq("You have been assigned to deliver parcel " + TRACKING_NUMBER + "."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(OCCURRED_AT));
+        verify(recordRepository).insertIfAbsent(
+                any(), eq(eventId), eq(previousCourierId), eq(PARCEL_ID), eq(TRACKING_NUMBER),
+                eq("Parcel Assignment Transferred"),
+                eq("Parcel " + TRACKING_NUMBER + " has been reassigned to another courier."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(OCCURRED_AT));
+    }
+
+    @Test
+    @DisplayName("Skips previous courier notification when missing or disabled without affecting new courier")
+    void skipsMissingOrDisabledPreviousCourier() {
+        UUID eventId = UUID.randomUUID();
+        UUID previousCourierId = UUID.randomUUID();
+        ParcelCourierAssigned event = new ParcelCourierAssigned(
+                eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.RETURN, OCCURRED_AT, previousCourierId);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "new@swiftdrop.com", "New Courier", Set.of("COURIER"), true)));
+        when(userDirectory.findUser(previousCourierId)).thenReturn(Optional.of(
+                new UserSummary(previousCourierId, "old@swiftdrop.com", "Old Courier", Set.of("COURIER"), false)));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(any(), any(), any())).thenReturn(false);
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        listener.onParcelCourierAssigned(event);
+
+        verify(recordRepository, times(1)).insertIfAbsent(
+                any(), eq(eventId), eq(COURIER_ID), eq(PARCEL_ID), eq(TRACKING_NUMBER),
+                any(), any(), any(), any(), any());
+        verify(recordRepository, never()).insertIfAbsent(
+                any(), any(), eq(previousCourierId), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Failure in previous-courier processing does not suppress new-courier notification")
+    void failureInPreviousCourierDoesNotSuppressNewCourier() {
+        UUID eventId = UUID.randomUUID();
+        UUID previousCourierId = UUID.randomUUID();
+        ParcelCourierAssigned event = new ParcelCourierAssigned(
+                eventId, PARCEL_ID, TRACKING_NUMBER, COURIER_ID, DISPATCHER_ID,
+                ParcelAssignmentType.PICKUP, OCCURRED_AT, previousCourierId);
+
+        when(userDirectory.findUser(COURIER_ID)).thenReturn(Optional.of(
+                new UserSummary(COURIER_ID, "new@swiftdrop.com", "New Courier", Set.of("COURIER"), true)));
+        when(userDirectory.findUser(previousCourierId)).thenThrow(new RuntimeException("Transient lookup error"));
+        when(recordRepository.existsByEventIdAndChannelAndRecipientUserId(any(), any(), any())).thenReturn(false);
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        listener.onParcelCourierAssigned(event);
+
+        verify(recordRepository, times(1)).insertIfAbsent(
+                any(), eq(eventId), eq(COURIER_ID), eq(PARCEL_ID), eq(TRACKING_NUMBER),
+                any(), any(), any(), any(), any());
+    }
 }
 

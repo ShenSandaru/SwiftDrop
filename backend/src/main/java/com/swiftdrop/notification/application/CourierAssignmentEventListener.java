@@ -87,6 +87,54 @@ public class CourierAssignmentEventListener {
         } else {
             log.debug("Notification record already existed for event {} and recipient {}. Skipped insert.", eventId, courierId);
         }
+
+        notifyPreviousCourierIfReassigned(event);
+    }
+
+    private void notifyPreviousCourierIfReassigned(ParcelCourierAssigned event) {
+        UUID previousCourierId = event.previousCourierId();
+        if (previousCourierId == null || previousCourierId.equals(event.courierId())) {
+            return;
+        }
+
+        try {
+            Optional<UserSummary> prevUserOpt = userDirectory.findUser(previousCourierId);
+            if (prevUserOpt.isEmpty() || !prevUserOpt.get().enabled()) {
+                log.warn("Previous courier user {} not found or disabled. Skipping reassignment notification for event {}.",
+                        previousCourierId, event.eventId());
+                return;
+            }
+
+            if (recordRepository.existsByEventIdAndChannelAndRecipientUserId(
+                    event.eventId(), NotificationChannel.IN_APP, previousCourierId)) {
+                log.debug("Reassignment notification already exists for event {} and recipient {}. Skipping duplicate.",
+                        event.eventId(), previousCourierId);
+                return;
+            }
+
+            int inserted = recordRepository.insertIfAbsent(
+                    UUID.randomUUID(),
+                    event.eventId(),
+                    previousCourierId,
+                    event.parcelId(),
+                    event.trackingNumber(),
+                    "Parcel Assignment Transferred",
+                    "Parcel " + event.trackingNumber() + " has been reassigned to another courier.",
+                    NotificationChannel.IN_APP.name(),
+                    NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                    event.occurredAt());
+
+            if (inserted > 0) {
+                log.info("Created reassignment notification for previous courier user {} on parcel {}",
+                        previousCourierId, event.parcelId());
+            } else {
+                log.debug("Reassignment notification already existed for event {} and recipient {}. Skipped insert.",
+                        event.eventId(), previousCourierId);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Failed to process reassignment notification for previous courier {} on event {}: {}",
+                    previousCourierId, event.eventId(), ex.getMessage());
+        }
     }
 
     private static CourierAssignmentNotificationContent resolveContent(ParcelAssignmentType type, String trackingNumber) {

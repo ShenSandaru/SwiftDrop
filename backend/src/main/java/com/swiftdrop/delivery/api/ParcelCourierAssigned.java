@@ -11,14 +11,15 @@ import java.util.UUID;
  * listeners can process it
  * after commit.
  *
- * @param eventId        unique identifier for this assignment occurrence (used
- *                       for idempotency)
- * @param parcelId       the parcel being assigned
- * @param trackingNumber the human-readable tracking number
- * @param courierId      the assigned courier user ID
- * @param dispatcherId   the dispatcher or admin who made the assignment
- * @param assignmentType the type of assignment task (PICKUP, DELIVERY, RETURN)
- * @param occurredAt     the timestamp when the assignment was recorded
+ * @param eventId           unique identifier for this assignment occurrence (used
+ *                          for idempotency)
+ * @param parcelId          the parcel being assigned
+ * @param trackingNumber    the human-readable tracking number
+ * @param courierId         the assigned courier user ID
+ * @param dispatcherId      the dispatcher or admin who made the assignment
+ * @param assignmentType    the type of assignment task (PICKUP, DELIVERY, RETURN)
+ * @param occurredAt        the timestamp when the assignment was recorded
+ * @param previousCourierId the previous courier user ID if this was a reassignment, or {@code null}
  */
 public record ParcelCourierAssigned(
         UUID eventId,
@@ -27,7 +28,19 @@ public record ParcelCourierAssigned(
         UUID courierId,
         UUID dispatcherId,
         ParcelAssignmentType assignmentType,
-        Instant occurredAt) {
+        Instant occurredAt,
+        UUID previousCourierId) {
+
+    public ParcelCourierAssigned(
+            UUID eventId,
+            UUID parcelId,
+            String trackingNumber,
+            UUID courierId,
+            UUID dispatcherId,
+            ParcelAssignmentType assignmentType,
+            Instant occurredAt) {
+        this(eventId, parcelId, trackingNumber, courierId, dispatcherId, assignmentType, occurredAt, null);
+    }
 
     public ParcelCourierAssigned {
         Objects.requireNonNull(eventId, "eventId must not be null");

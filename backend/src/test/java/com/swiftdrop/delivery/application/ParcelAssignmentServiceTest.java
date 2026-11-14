@@ -83,6 +83,7 @@ class ParcelAssignmentServiceTest {
         assertThat(event.dispatcherId()).isEqualTo(DISPATCHER_ID);
         assertThat(event.assignmentType()).isEqualTo(ParcelAssignmentType.PICKUP);
         assertThat(event.occurredAt()).isEqualTo(NOW);
+        assertThat(event.previousCourierId()).isNull();
     }
 
     @Test
@@ -178,6 +179,7 @@ class ParcelAssignmentServiceTest {
         assertThat(event.parcelId()).isEqualTo(PARCEL_ID);
         assertThat(event.courierId()).isEqualTo(replacementCourierId);
         assertThat(event.assignmentType()).isEqualTo(ParcelAssignmentType.PICKUP);
+        assertThat(event.previousCourierId()).isEqualTo(COURIER_ID);
     }
 
     @Test

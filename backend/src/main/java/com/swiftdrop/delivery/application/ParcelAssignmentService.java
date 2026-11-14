@@ -89,6 +89,8 @@ class ParcelAssignmentService implements ParcelAssignment {
                 .findFirstByParcelIdAndStatus(parcelId, ParcelAssignmentStatus.ACTIVE)
                 .orElse(null);
 
+        UUID previousCourierId = current != null ? current.getCourierId() : null;
+
         if (current != null) {
             if (current.getType() != type) {
                 throw new ParcelConflictException("The parcel has another active courier task");
@@ -126,7 +128,8 @@ class ParcelAssignmentService implements ParcelAssignment {
                     courierUserId,
                     dispatcherUserId,
                     type,
-                    now));
+                    now,
+                    previousCourierId));
         }
 
         return assignment.toSummary();
