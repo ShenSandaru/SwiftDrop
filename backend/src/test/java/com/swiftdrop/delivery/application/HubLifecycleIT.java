@@ -38,9 +38,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The hub lifecycle against real PostgreSQL (ADR 0009 §3, §7): a route between two branches through
- * the central hub, the attempt limit, the return, and the hub code and attempt in history and
- * outbox events.
+ * The hub lifecycle against real PostgreSQL (ADR 0009 §3, §7, ADR 0011 §2): a route between two
+ * branches through the central hub or over a direct link, the attempt limit, the return, and the hub
+ * code and attempt in history and outbox events.
  */
 @SpringBootTest(properties = {
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
@@ -67,6 +67,8 @@ class HubLifecycleIT {
     private ParcelHubOperations hubOperations;
     @Autowired
     private DeliveryProofService proofs;
+    @Autowired
+    private HubAdministration hubAdministration;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -117,6 +119,37 @@ class HubLifecycleIT {
                 parcel));
         assertThat(hubEvent.get("data").get("newStatus").asString()).isEqualTo("AT_HUB");
         assertThat(hubEvent.get("data").get("hubCode").asString()).isEqualTo("CMB");
+    }
+
+    @Test
+    void linkedBranchesTravelDirectlyAndKeepTheirRouteWhenTheLinkIsRemoved() {
+        UUID galle = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'GAL'", UUID.class);
+        UUID kandy = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'KDY'", UUID.class);
+        UUID admin = insertUser("ADMIN");
+        UUID parcel = bookGalleToKandy();
+
+        hubAdministration.link(galle, kandy, admin);
+        try {
+            // The pair is stored once, whichever order it is given in
+            assertThatThrownBy(() -> hubAdministration.link(kandy, galle, admin))
+                    .isInstanceOf(ParcelConflictException.class);
+            assertThat(hubAdministration.links()).hasSize(1);
+            pickUp(parcel);
+        } finally {
+            hubAdministration.unlink(kandy, galle);
+        }
+
+        assertThat(jdbc.queryForObject("SELECT via_hub_id IS NULL FROM parcels WHERE id = ?", Boolean.class, parcel))
+                .as("route skips the central hub").isTrue();
+        // The link is gone, but the route was fixed at pickup
+        TestHubs.toDestinationHub(hubOperations, jdbc, parcel, dispatcher);
+        assertThat(historyOf(parcel)).containsExactly(
+                "CREATED", "PICKED_UP", "AT_HUB@GAL", "IN_TRANSIT@GAL", "AT_HUB@KDY");
+
+        UUID later = bookGalleToKandy();
+        pickUp(later);
+        assertThat(jdbc.queryForObject("SELECT via_hub_id = (SELECT id FROM hubs WHERE code = 'CMB') FROM parcels "
+                + "WHERE id = ?", Boolean.class, later)).as("a parcel picked up after the link was removed").isTrue();
     }
 
     @Test

@@ -349,6 +349,10 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
     reassignment while `CREATED` is allowed.
   - Events gain optional `hubCode` and `attempt` fields (`schemaVersion` 1). Cash on delivery
     needs a separate ADR.
+- **Proposed ([ADR 0011](adr/0011-direct-links-between-branch-hubs.md)); implemented:** an admin
+  links two active branch hubs, and parcels picked up between them travel origin → destination
+  without the central hub. Links do not chain, the route is still fixed at pickup, and returns use
+  it reversed. This amends only the route rule of ADR 0009 §1.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
@@ -363,7 +367,8 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
   - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
-    (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
+    (ADMIN). Direct links (ADR 0011): `GET /api/v1/hubs/links` (ADMIN, DISPATCHER), `POST
+    /api/v1/hubs/links` and `DELETE /api/v1/hubs/links/{hubId}/{otherHubId}` (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
     the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
     task (`PICKUP`, `DELIVERY`, `RETURN`).
   - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,

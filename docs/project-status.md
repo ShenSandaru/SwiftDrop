@@ -22,7 +22,7 @@ Core feature development across all primary user roles (Customer, Merchant, Cour
 |---|---|---|
 | `identity` | **Implemented and tested** | Email/password registration, JWT auth, Google OAuth2 exchange, user profiles, avatars, saved addresses, admin user management. |
 | `pricing` | **Implemented and tested** | Zones, zone-pair pricing rules, fee calculator, admin zone/pricing management (`/admin/pricing`). |
-| `delivery` | **Implemented and tested** | Parcel booking, lifecycle transitions, hub network (`hubs`), delivery proofs, receipts, transactional outbox relay. |
+| `delivery` | **Implemented and tested** | Parcel booking, lifecycle transitions, hub network (`hubs`) with direct links between branches (`hub_links`, ADR 0011), delivery proofs, receipts, transactional outbox relay. |
 | `dispatch` | **Implemented and tested** | Courier assignment, handoff history, hub queries, concurrency control (`/dispatch`). |
 | `tracking` | **Implemented and tested** | Public parcel tracking and real-time Server-Sent Events (SSE) stream (`/track`). |
 | `merchant` | **Implemented and tested** | Merchant registration, admin approval lifecycle, API keys (`sdk_...`), order API, SSRF-safe webhooks, RabbitMQ consumer, redelivery retries (`/merchant/*`). |
