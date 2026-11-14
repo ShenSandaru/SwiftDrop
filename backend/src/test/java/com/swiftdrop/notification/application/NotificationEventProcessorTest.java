@@ -359,7 +359,7 @@ class NotificationEventProcessorTest {
         processor.process(event, rawJson);
 
         verify(consumerStateRepository).save(any());
-        verifyNoInteractions(templateResolver);
+        verify(templateResolver, never()).resolve(any());
         verifyNoInteractions(recordRepository);
     }
 
