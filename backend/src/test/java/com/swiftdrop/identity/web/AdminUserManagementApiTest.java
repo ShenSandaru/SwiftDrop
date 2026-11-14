@@ -287,6 +287,53 @@ class AdminUserManagementApiTest {
     }
 
     @Test
+    void createStaffCourierWithHubIdReturns201AndHubId() throws Exception {
+        UUID hubId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(users.findByEmail("colombocourier@swiftdrop.com")).thenReturn(Optional.empty());
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Colombo Courier",
+                                  "email": "colombocourier@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "COURIER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("colombocourier@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("COURIER")))
+                .andExpect(jsonPath("$.hubId").value(hubId.toString()));
+    }
+
+    @Test
+    void createStaffCourierAllowsMultipleCouriersInSameHub() throws Exception {
+        UUID hubId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(users.findByEmail("secondcourier@swiftdrop.com")).thenReturn(Optional.empty());
+        when(users.existsByHubIdAndRole(hubId, Role.COURIER)).thenReturn(true);
+
+        mvc.perform(post("/api/v1/staff-users")
+                        .with(TestPrincipal.admin(ADMIN_ID).postProcessor())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Second Courier",
+                                  "email": "secondcourier@swiftdrop.com",
+                                  "password": "secure-pass-123",
+                                  "role": "COURIER",
+                                  "hubId": "%s"
+                                }
+                                """.formatted(hubId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("secondcourier@swiftdrop.com"))
+                .andExpect(jsonPath("$.roles", contains("COURIER")))
+                .andExpect(jsonPath("$.hubId").value(hubId.toString()));
+    }
+
+    @Test
     void createStaffRejectsAdminRole() throws Exception {
         mvc.perform(post("/api/v1/staff-users")
                         .with(TestPrincipal.admin(ADMIN_ID).postProcessor())

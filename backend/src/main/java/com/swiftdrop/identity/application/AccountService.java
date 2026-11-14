@@ -85,7 +85,7 @@ public class AccountService implements UserDirectory {
         if (role == Role.DISPATCHER && hubId != null && users.existsByHubIdAndRole(hubId, Role.DISPATCHER)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This hub already has an assigned dispatcher");
         }
-        return registerUser(fullName, email, rawPassword, EnumSet.of(role), role == Role.DISPATCHER ? hubId : null);
+        return registerUser(fullName, email, rawPassword, EnumSet.of(role), hubId);
     }
 
     private User registerUser(String fullName, String email, String rawPassword, Set<Role> roles) {

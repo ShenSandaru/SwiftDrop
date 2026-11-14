@@ -92,18 +92,19 @@ export default function NewStaffUserPage() {
 
   const activeHubs = hubs.filter((h) => h.active);
   const assignedActiveHubCount = activeHubs.filter((h) => assignedDispatcherHubIds.has(h.id)).length;
+  const isDispatcher = role === "DISPATCHER";
 
   const hubSelectOptions: SelectOption[] = hubs.map((hub) => {
-    const alreadyAssigned = assignedDispatcherHubIds.has(hub.id);
+    const hasDispatcher = isDispatcher && assignedDispatcherHubIds.has(hub.id);
     let badge: string | undefined;
     let badgeVariant: SelectOption["badgeVariant"] = "outline";
-    if (!hub.active && alreadyAssigned) {
+    if (!hub.active && hasDispatcher) {
       badge = "Inactive · Assigned";
       badgeVariant = "warning";
     } else if (!hub.active) {
       badge = "Inactive";
       badgeVariant = "warning";
-    } else if (alreadyAssigned) {
+    } else if (hasDispatcher) {
       badge = "Dispatcher assigned";
       badgeVariant = "outline";
     } else if (hub.central) {
@@ -116,7 +117,7 @@ export default function NewStaffUserPage() {
       description: `${hub.city} · ${hub.central ? "Central Hub" : "Sub-hub"}`,
       badge,
       badgeVariant,
-      disabled: !hub.active || alreadyAssigned,
+      disabled: !hub.active || hasDispatcher,
     };
   });
 
@@ -156,15 +157,19 @@ export default function NewStaffUserPage() {
       nextErrors.role = "Role must be COURIER or DISPATCHER.";
     }
 
-    if (role === "DISPATCHER") {
-      const selectedHub = hubs.find((h) => h.id === hubId);
-      if (!hubId) {
-        nextErrors.hubId = "Please select an assigned hub for this dispatcher.";
-      } else if (selectedHub && !selectedHub.active) {
-        nextErrors.hubId = "Cannot assign a dispatcher to an inactive hub.";
-      } else if (assignedDispatcherHubIds.has(hubId)) {
-        nextErrors.hubId = "This hub already has an assigned dispatcher.";
-      }
+    const selectedHub = hubs.find((h) => h.id === hubId);
+    if (!hubId) {
+      nextErrors.hubId =
+        role === "DISPATCHER"
+          ? "Please select an assigned hub for this dispatcher."
+          : "Please select an assigned hub for this courier.";
+    } else if (selectedHub && !selectedHub.active) {
+      nextErrors.hubId =
+        role === "DISPATCHER"
+          ? "Cannot assign a dispatcher to an inactive hub."
+          : "Cannot assign a courier to an inactive hub.";
+    } else if (role === "DISPATCHER" && assignedDispatcherHubIds.has(hubId)) {
+      nextErrors.hubId = "This hub already has an assigned dispatcher.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -179,7 +184,7 @@ export default function NewStaffUserPage() {
       email: trimmedEmail,
       password,
       role,
-      ...(role === "DISPATCHER" && hubId ? { hubId } : {}),
+      ...(hubId ? { hubId } : {}),
     };
 
     try {
@@ -367,9 +372,15 @@ export default function NewStaffUserPage() {
                         onChange={() => {
                           if (!isSubmitting) {
                             setRole(r.value);
-                            if (r.value !== "DISPATCHER") {
+                            if (r.value === "DISPATCHER" && hubId && assignedDispatcherHubIds.has(hubId)) {
                               setHubId("");
                             }
+                            setErrors((prev) => {
+                              if (!prev.hubId) return prev;
+                              const next = { ...prev };
+                              delete next.hubId;
+                              return next;
+                            });
                           }
                         }}
                         disabled={isSubmitting}
@@ -407,49 +418,57 @@ export default function NewStaffUserPage() {
               )}
             </div>
 
-            {role === "DISPATCHER" && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="staff-hub">Assigned Hub</Label>
-                  {!hubsLoading && activeHubs.length > 0 && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {assignedActiveHubCount} / {activeHubs.length} hubs assigned
-                    </span>
-                  )}
-                </div>
-                {hubsError ? (
-                  <p className="text-[11px] text-destructive font-medium" role="alert">
-                    Failed to load hubs: {hubsError}
-                  </p>
-                ) : (
-                  <ThemedSelect
-                    id="staff-hub"
-                    value={hubId}
-                    onChange={(val) => setHubId(val)}
-                    options={hubSelectOptions}
-                    placeholder={hubsLoading ? "Loading hubs..." : "Select a hub for this dispatcher"}
-                    disabled={isSubmitting || hubsLoading}
-                    searchable={hubs.length > 6}
-                    searchPlaceholder="Search hubs by name, city, or code..."
-                    placement="top"
-                    className={errors.hubId ? "border-destructive focus-visible:ring-destructive" : ""}
-                  />
-                )}
-                {errors.hubId ? (
-                  <p id="staff-hub-error" className="text-[11px] text-destructive font-medium" role="alert">
-                    {errors.hubId}
-                  </p>
-                ) : !hubsLoading && !hubsError && activeHubs.length === 0 ? (
-                  <p id="staff-hub-hint" className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    No active hubs available. Activate or create hubs in Admin &rarr; Hubs (/admin/hubs) first.
-                  </p>
-                ) : (
-                  <p id="staff-hub-hint" className="text-[11px] text-muted-foreground">
-                    Each active hub can have one dispatcher. Inactive or already-assigned hubs are disabled.
-                  </p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="staff-hub">Assigned Hub</Label>
+                {!hubsLoading && activeHubs.length > 0 && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {isDispatcher
+                      ? `${assignedActiveHubCount} / ${activeHubs.length} hubs assigned`
+                      : `${activeHubs.length} active hubs available`}
+                  </span>
                 )}
               </div>
-            )}
+              {hubsError ? (
+                <p className="text-[11px] text-destructive font-medium" role="alert">
+                  Failed to load hubs: {hubsError}
+                </p>
+              ) : (
+                <ThemedSelect
+                  id="staff-hub"
+                  value={hubId}
+                  onChange={(val) => setHubId(val)}
+                  options={hubSelectOptions}
+                  placeholder={
+                    hubsLoading
+                      ? "Loading hubs..."
+                      : isDispatcher
+                        ? "Select a hub for this dispatcher"
+                        : "Select a hub for this courier"
+                  }
+                  disabled={isSubmitting || hubsLoading}
+                  searchable={hubs.length > 6}
+                  searchPlaceholder="Search hubs by name, city, or code..."
+                  placement="top"
+                  className={errors.hubId ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+              )}
+              {errors.hubId ? (
+                <p id="staff-hub-error" className="text-[11px] text-destructive font-medium" role="alert">
+                  {errors.hubId}
+                </p>
+              ) : !hubsLoading && !hubsError && activeHubs.length === 0 ? (
+                <p id="staff-hub-hint" className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  No active hubs available. Activate or create hubs in Admin &rarr; Hubs (/admin/hubs) first.
+                </p>
+              ) : (
+                <p id="staff-hub-hint" className="text-[11px] text-muted-foreground">
+                  {isDispatcher
+                    ? "Each active hub can have one dispatcher. Inactive or already-assigned hubs are disabled."
+                    : "Each courier belongs to one active hub. Multiple couriers can be assigned to the same hub."}
+                </p>
+              )}
+            </div>
           </CardContent>
 
           <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/20 rounded-b-xl">
