@@ -12,6 +12,9 @@ public interface HubStaffDirectory {
     /** Whether the user works for every hub: an admin or a head office dispatcher. */
     boolean worksEverywhere(UUID userId);
 
+    /** Where the user works, by hub name; for the dispatcher portal. */
+    StaffScopeView scopeOf(UUID userId);
+
     /**
      * The users who work for at least one hub the given user works for, the user included. Empty
      * for someone with no hub. Staff who work everywhere are not listed; check {@link #worksEverywhere}.

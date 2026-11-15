@@ -27,7 +27,8 @@ class HubStaffDirectoryServiceTest {
 
     private final StaffScopes scopes = mock(StaffScopes.class);
     private final HubStaffRepository staff = mock(HubStaffRepository.class);
-    private final HubStaffDirectoryService directory = new HubStaffDirectoryService(scopes, staff);
+    private final com.swiftdrop.delivery.domain.HubRepository hubs = mock(com.swiftdrop.delivery.domain.HubRepository.class);
+    private final HubStaffDirectoryService directory = new HubStaffDirectoryService(scopes, staff, hubs);
 
     @Test
     void colleaguesAreEveryoneWhoWorksForOneOfTheUsersHubs() {
@@ -54,5 +55,35 @@ class HubStaffDirectoryServiceTest {
         assertThat(directory.colleaguesOf(DISPATCHER)).isEmpty();
         when(scopes.scopeOf(COURIER)).thenReturn(HubScope.of(Set.of(BADULLA)));
         assertThat(directory.worksEverywhere(COURIER)).isFalse();
+    }
+
+    @Test
+    void theScopeNamesTheHubsAlphabetically() {
+        com.swiftdrop.delivery.domain.Hub kandy = new com.swiftdrop.delivery.domain.Hub("KDY", "Kandy branch", "Kandy",
+                UUID.randomUUID(), false, NOW);
+        com.swiftdrop.delivery.domain.Hub badulla = new com.swiftdrop.delivery.domain.Hub("BAD", "Badulla branch",
+                "Badulla", UUID.randomUUID(), false, NOW);
+        when(scopes.scopeOf(DISPATCHER)).thenReturn(HubScope.of(Set.of(kandy.getId(), badulla.getId())));
+        when(hubs.findAllById(Set.of(kandy.getId(), badulla.getId()))).thenReturn(List.of(kandy, badulla));
+
+        com.swiftdrop.delivery.api.StaffScopeView view = directory.scopeOf(DISPATCHER);
+
+        assertThat(view.everywhere()).isFalse();
+        assertThat(view.hubs()).extracting(com.swiftdrop.delivery.api.StaffScopeView.HubRef::code)
+                .containsExactly("BAD", "KDY");
+    }
+
+    @Test
+    void anEverywhereScopeListsNoHubs() {
+        when(scopes.scopeOf(DISPATCHER)).thenReturn(HubScope.EVERYWHERE);
+
+        assertThat(directory.scopeOf(DISPATCHER)).isEqualTo(new com.swiftdrop.delivery.api.StaffScopeView(true, List.of()));
+    }
+
+    @Test
+    void someoneWithNoHubHasAnEmptyScope() {
+        when(scopes.scopeOf(DISPATCHER)).thenReturn(HubScope.NONE);
+
+        assertThat(directory.scopeOf(DISPATCHER)).isEqualTo(new com.swiftdrop.delivery.api.StaffScopeView(false, List.of()));
     }
 }

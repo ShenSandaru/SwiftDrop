@@ -26,6 +26,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.StaffScopeView;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.dispatch.application.DispatchService;
 import com.swiftdrop.identity.api.IdentityClaims;
@@ -71,6 +72,12 @@ class DispatchController {
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
         return toResponse(dispatch.activeAssignments(staff(jwt), type, request), request);
+    }
+
+    /** The hubs the caller works for: the portal says so, and why a list may be empty. */
+    @GetMapping("/scope")
+    StaffScopeView scope(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.scope(staff(jwt));
     }
 
     @GetMapping("/courier-workloads")

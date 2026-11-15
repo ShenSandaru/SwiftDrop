@@ -30,6 +30,7 @@ import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.Staff;
+import com.swiftdrop.delivery.api.StaffScopeView;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
@@ -85,6 +86,12 @@ public class DispatchService {
     public PageResult<ParcelAssignmentSummary> activeAssignments(Staff staff, ParcelAssignmentType type,
             PageRequest page) {
         return parcels.findActiveAssignments(staff.userId(), type, page);
+    }
+
+    /** Where the caller works, so the portal can explain a short or empty list (ADR 0012 §5). */
+    @Transactional(readOnly = true)
+    public StaffScopeView scope(Staff staff) {
+        return staff.admin() ? new StaffScopeView(true, List.of()) : hubStaff.scopeOf(staff.userId());
     }
 
     /** Active parcels per courier, for the couriers the caller may assign (ADR 0012 §4). */

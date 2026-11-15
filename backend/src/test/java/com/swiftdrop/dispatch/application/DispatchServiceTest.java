@@ -204,4 +204,19 @@ class DispatchServiceTest {
         when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(true);
         assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine, someoneElses);
     }
+
+    @Test
+    void anAdminWorksEverywhereWithoutALookup() {
+        assertThat(service.scope(Staff.admin(DISPATCHER_ID)).everywhere()).isTrue();
+        verify(hubStaff, never()).scopeOf(DISPATCHER_ID);
+    }
+
+    @Test
+    void aDispatchersScopeComesFromTheHubDirectory() {
+        com.swiftdrop.delivery.api.StaffScopeView scope = new com.swiftdrop.delivery.api.StaffScopeView(false,
+                List.of(new com.swiftdrop.delivery.api.StaffScopeView.HubRef(UUID.randomUUID(), "BAD", "Badulla branch")));
+        when(hubStaff.scopeOf(DISPATCHER_ID)).thenReturn(scope);
+
+        assertThat(service.scope(Staff.dispatcher(DISPATCHER_ID))).isSameAs(scope);
+    }
 }

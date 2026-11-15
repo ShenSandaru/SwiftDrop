@@ -78,6 +78,8 @@ class DispatchHubApiTest {
     @MockitoBean
     private ParcelHubService hubOperations;
     @MockitoBean
+    private com.swiftdrop.delivery.api.HubStaffDirectory hubStaff;
+    @MockitoBean
     private UserRepository users;
     @MockitoBean
     private ExternalIdentityRepository identities;
@@ -190,5 +192,24 @@ class DispatchHubApiTest {
         mvc.perform(post(BASE + "/transit").with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.detail").value("This parcel is handled by another hub"));
+    }
+
+    @Test
+    void dispatchersAndAdminsSeeTheirOwnScope() throws Exception {
+        UUID dispatcherId = UUID.randomUUID();
+        UUID hubId = UUID.randomUUID();
+        org.mockito.Mockito.when(hubStaff.scopeOf(dispatcherId)).thenReturn(new com.swiftdrop.delivery.api.StaffScopeView(
+                false, java.util.List.of(new com.swiftdrop.delivery.api.StaffScopeView.HubRef(hubId, "BAD", "Badulla branch"))));
+        var get = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/dispatch/scope");
+
+        mvc.perform(get.with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.everywhere").value(false))
+                .andExpect(jsonPath("$.hubs[0].code").value("BAD"));
+        mvc.perform(get.with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.everywhere").value(true))
+                .andExpect(jsonPath("$.hubs").isEmpty());
+        mvc.perform(get.with(TestPrincipal.courier().postProcessor())).andExpect(status().isForbidden());
     }
 }
