@@ -13,7 +13,6 @@ import {
   ChevronRight,
   ClipboardList,
   History,
-  LayoutDashboard,
   Loader2,
   MapPin,
   MapPinned,
@@ -655,57 +654,60 @@ export default function DispatchPage() {
       )}
 
       {/* Main Operational Tabs Bar */}
-      <div className="border-b border-border">
-        <nav aria-label="Dispatch navigation tabs" className="flex gap-2 overflow-x-auto pb-px">
-          <TabButton
-            active={activeTab === "overview"}
-            onClick={() => setActiveTab("overview")}
-            icon={LayoutDashboard}
-            label="Overview"
-          />
-          <TabButton
-            active={activeTab === "pickup"}
-            onClick={() => setActiveTab("pickup")}
-            icon={PackagePlus}
-            label="Pickup Operations"
-            badge={metrics.pendingPickup ?? 0}
-            badgeVariant="warning"
-          />
-          <TabButton
-            active={activeTab === "warehouse"}
-            onClick={() => setActiveTab("warehouse")}
-            icon={Warehouse}
-            label="Warehouse & Sorting"
-            badge={warehouseCount}
-            badgeVariant="accent"
-          />
-          <TabButton
-            active={activeTab === "delivery"}
-            onClick={() => setActiveTab("delivery")}
-            icon={Truck}
-            label="Delivery Operations"
-            badge={metrics.activeDeliveries ?? 0}
-            badgeVariant="primary"
-          />
-          <TabButton
-            active={activeTab === "history"}
-            onClick={() => setActiveTab("history")}
-            icon={History}
-            label="Order History"
-            badge={
-              (historyCounts.delivered ?? 0) +
-              (historyCounts.failed ?? 0) +
-              (historyCounts.cancelled ?? 0)
-            }
-          />
-          <TabButton
-            active={activeTab === "tracking"}
-            onClick={() => setActiveTab("tracking")}
-            icon={MapPin}
-            label="Live Tracking"
-          />
-        </nav>
-      </div>
+      <nav
+        aria-label="Dispatch navigation tabs"
+        className="flex items-center gap-1 border-b border-border overflow-x-auto pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <TabButton
+          active={activeTab === "overview"}
+          onClick={() => setActiveTab("overview")}
+          label="Overview"
+        />
+        <TabButton
+          active={activeTab === "pickup"}
+          onClick={() => setActiveTab("pickup")}
+          label="Pickup Operations"
+          badge={metrics.pendingPickup ?? 0}
+          badgeVariant="warning"
+        />
+        <TabButton
+          active={activeTab === "warehouse"}
+          onClick={() => setActiveTab("warehouse")}
+          label="Warehouse & Sorting"
+          badge={warehouseCount}
+          badgeVariant="accent"
+        />
+        <TabButton
+          active={activeTab === "delivery"}
+          onClick={() => setActiveTab("delivery")}
+          label="Delivery Operations"
+          badge={metrics.activeDeliveries ?? 0}
+          badgeVariant="primary"
+        />
+        <TabButton
+          active={activeTab === "history"}
+          onClick={() => setActiveTab("history")}
+          label="Order History"
+          badge={
+            (historyCounts.delivered ?? 0) +
+            (historyCounts.failed ?? 0) +
+            (historyCounts.cancelled ?? 0)
+          }
+        />
+        <TabButton
+          active={activeTab === "tracking"}
+          onClick={() => setActiveTab("tracking")}
+          label="Live Tracking"
+        />
+        {!isAdmin && (
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
+          >
+            My Profile
+          </Link>
+        )}
+      </nav>
 
       {assignmentFeedback && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-accent p-4 text-sm font-medium text-primary">
@@ -1619,43 +1621,36 @@ export default function DispatchPage() {
 function TabButton({
   active,
   onClick,
-  icon: Icon,
   label,
   badge,
   badgeVariant = "default",
 }: {
   active: boolean;
   onClick: () => void;
-  icon: typeof LayoutDashboard;
   label: string;
   badge?: number;
   badgeVariant?: "default" | "primary" | "warning" | "accent";
 }) {
   const badgeClasses = {
     default: "bg-muted text-muted-foreground",
-    primary: "bg-primary text-primary-foreground",
-    warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold",
-    accent: "bg-accent text-primary font-bold",
+    primary: "bg-accent text-primary",
+    warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+    accent: "bg-accent text-primary",
   }[badgeVariant];
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap transition-all rounded-lg border ${
+      className={`inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
         active
-          ? "border-primary/20 bg-primary text-primary-foreground shadow-xs"
-          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "border-primary text-foreground font-semibold"
+          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
       }`}
     >
-      <Icon className={`size-4 shrink-0 ${active ? "text-primary-foreground" : "text-primary"}`} aria-hidden="true" />
       <span>{label}</span>
       {typeof badge === "number" && (
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-mono transition-colors ${
-            active ? "bg-primary-foreground/20 text-primary-foreground" : badgeClasses
-          }`}
-        >
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badgeClasses}`}>
           {badge}
         </span>
       )}
