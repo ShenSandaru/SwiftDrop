@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** The route rule of ADR 0009 §1. */
+/** The route rule of ADR 0009 §1 and ADR 0011 §2. */
 class HubRouteTest {
 
     private static final Instant NOW = Instant.parse("2026-11-11T08:00:00Z");
@@ -19,7 +19,7 @@ class HubRouteTest {
 
     @Test
     void twoBranchesTravelThroughTheCentralHub() {
-        HubRoute route = HubRoute.between(kandy, jaffna, colombo);
+        HubRoute route = HubRoute.between(kandy, jaffna, colombo, false);
 
         assertThat(route.hubs()).containsExactly(kandy.getId(), colombo.getId(), jaffna.getId());
         assertThat(route.nextAfter(kandy.getId())).isEqualTo(colombo.getId());
@@ -29,13 +29,13 @@ class HubRouteTest {
 
     @Test
     void fromOrToTheCentralHubThereIsNoDetour() {
-        assertThat(HubRoute.between(colombo, jaffna, colombo).hubs()).containsExactly(colombo.getId(), jaffna.getId());
-        assertThat(HubRoute.between(kandy, colombo, colombo).hubs()).containsExactly(kandy.getId(), colombo.getId());
+        assertThat(HubRoute.between(colombo, jaffna, colombo, false).hubs()).containsExactly(colombo.getId(), jaffna.getId());
+        assertThat(HubRoute.between(kandy, colombo, colombo, false).hubs()).containsExactly(kandy.getId(), colombo.getId());
     }
 
     @Test
     void withinOneBranchTheRouteIsThatHubOnly() {
-        HubRoute route = HubRoute.between(kandy, kandy, colombo);
+        HubRoute route = HubRoute.between(kandy, kandy, colombo, false);
 
         assertThat(route.hubs()).containsExactly(kandy.getId());
         assertThat(route.nextAfter(kandy.getId())).isNull();
@@ -43,22 +43,38 @@ class HubRouteTest {
 
     @Test
     void betweenBranchesWithoutACentralHubThereIsNoRoute() {
-        assertThatThrownBy(() -> HubRoute.between(kandy, jaffna, null))
+        assertThatThrownBy(() -> HubRoute.between(kandy, jaffna, null, false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("No central hub is configured");
     }
 
     @Test
     void returnTripVisitsTheSameHubsBackwards() {
-        HubRoute back = HubRoute.between(kandy, jaffna, colombo).reversed();
+        HubRoute back = HubRoute.between(kandy, jaffna, colombo, false).reversed();
 
         assertThat(back.hubs()).containsExactly(jaffna.getId(), colombo.getId(), kandy.getId());
     }
 
     @Test
     void hubOffTheRouteHasNoNextHub() {
-        HubRoute route = HubRoute.between(colombo, jaffna, colombo);
+        HubRoute route = HubRoute.between(colombo, jaffna, colombo, false);
 
         assertThatThrownBy(() -> route.nextAfter(kandy.getId())).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void linkedBranchesSkipTheCentralHub() {
+        HubRoute route = HubRoute.between(kandy, jaffna, colombo, true);
+
+        assertThat(route.via()).isNull();
+        assertThat(route.hubs()).containsExactly(kandy.getId(), jaffna.getId());
+        assertThat(route.nextAfter(kandy.getId())).isEqualTo(jaffna.getId());
+        assertThat(route.reversed().hubs()).containsExactly(jaffna.getId(), kandy.getId());
+    }
+
+    @Test
+    void linkedBranchesNeedNoCentralHub() {
+        assertThat(HubRoute.between(kandy, jaffna, null, true).hubs())
+                .containsExactly(kandy.getId(), jaffna.getId());
     }
 }

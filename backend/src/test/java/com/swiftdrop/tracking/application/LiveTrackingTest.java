@@ -34,6 +34,7 @@ import com.swiftdrop.delivery.api.PublicTrackingView;
 class LiveTrackingTest {
 
     private static final String NUMBER = "SD7K3M9Q2XWB";
+    private static final String CLIENT = "203.0.113.5";
     private static final Instant NOW = Instant.parse("2026-11-03T12:00:00Z");
 
     private ParcelQueries queries;
@@ -54,7 +55,7 @@ class LiveTrackingTest {
 
     @Test
     void snapshotIsSentFirstThenCommittedChangesOfThatParcel() {
-        tracking.subscribe(NUMBER.toLowerCase());
+        tracking.subscribe(NUMBER.toLowerCase(), CLIENT);
         tracking.onStatusChanged(event(NUMBER, ParcelStatus.OUT_FOR_DELIVERY, 4, null));
         givenStatus("SD0000000001", ParcelStatus.CREATED);
         tracking.onStatusChanged(event("SD0000000001", ParcelStatus.PICKED_UP, 2, null));
@@ -69,7 +70,7 @@ class LiveTrackingTest {
 
     @Test
     void statusEventsCarryOnlyStatusTimeAndSequence() {
-        tracking.subscribe(NUMBER);
+        tracking.subscribe(NUMBER, CLIENT);
         UUID owner = UUID.randomUUID();
         tracking.onStatusChanged(new ParcelStatusChanged(UUID.randomUUID(), "parcel.status-changed", 1, NOW,
                 "delivery", new ParcelStatusChangedData(UUID.randomUUID(), NUMBER, ParcelStatus.OUT_FOR_DELIVERY,
@@ -81,7 +82,7 @@ class LiveTrackingTest {
 
     @Test
     void finalStatusClosesTheStreamAndFreesItsSlot() {
-        tracking.subscribe(NUMBER);
+        tracking.subscribe(NUMBER, CLIENT);
         tracking.onStatusChanged(event(NUMBER, ParcelStatus.FAILED, 5, FailureReason.DAMAGED));
 
         assertThat(created.getFirst().completed).isTrue();
@@ -92,7 +93,7 @@ class LiveTrackingTest {
     void finishedParcelGetsItsSnapshotAndIsClosedAtOnce() {
         givenStatus(NUMBER, ParcelStatus.DELIVERED);
 
-        tracking.subscribe(NUMBER);
+        tracking.subscribe(NUMBER, CLIENT);
 
         assertThat(created.getFirst().events).singleElement().asString().contains("event:snapshot");
         assertThat(created.getFirst().completed).isTrue();
@@ -103,7 +104,7 @@ class LiveTrackingTest {
     void unknownNumberOpensNoStream() {
         when(queries.findPublicTrackingView("SD0000000000")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> tracking.subscribe("SD0000000000")).isInstanceOf(UnknownTrackingNumberException.class);
+        assertThatThrownBy(() -> tracking.subscribe("SD0000000000", CLIENT)).isInstanceOf(UnknownTrackingNumberException.class);
         assertThat(created).isEmpty();
         assertThat(tracking.openStreams()).isZero();
     }
@@ -111,14 +112,14 @@ class LiveTrackingTest {
     @Test
     void streamsPerParcelAreLimited() {
         for (int i = 0; i < LiveTracking.MAX_STREAMS_PER_PARCEL; i++) {
-            tracking.subscribe(NUMBER);
+            tracking.subscribe(NUMBER, CLIENT);
         }
 
-        assertThatThrownBy(() -> tracking.subscribe(NUMBER)).isInstanceOf(TooManyStreamsException.class);
+        assertThatThrownBy(() -> tracking.subscribe(NUMBER, CLIENT)).isInstanceOf(TooManyStreamsException.class);
         assertThat(tracking.openStreams()).isEqualTo(LiveTracking.MAX_STREAMS_PER_PARCEL);
         // Other parcels still get streams
         givenStatus("SD0000000001", ParcelStatus.CREATED);
-        tracking.subscribe("SD0000000001");
+        tracking.subscribe("SD0000000001", CLIENT);
     }
 
     @Test
@@ -126,17 +127,33 @@ class LiveTrackingTest {
         when(queries.findPublicTrackingView(any())).thenAnswer(call -> Optional.of(view(call.getArgument(0),
                 ParcelStatus.CREATED)));
         for (int i = 0; i < LiveTracking.MAX_STREAMS; i++) {
-            tracking.subscribe(String.format("SD%010d", i));
+            tracking.subscribe(String.format("SD%010d", i), "client-" + i);
         }
 
-        assertThatThrownBy(() -> tracking.subscribe("SDZZZZZZZZZZ")).isInstanceOf(TooManyStreamsException.class);
+        assertThatThrownBy(() -> tracking.subscribe("SDZZZZZZZZZZ", CLIENT)).isInstanceOf(TooManyStreamsException.class);
         assertThat(tracking.openStreams()).isEqualTo(LiveTracking.MAX_STREAMS);
     }
 
     @Test
+    void streamsPerClientAreLimitedAndFreedWhenTheyClose() {
+        for (int i = 0; i < LiveTracking.MAX_STREAMS_PER_CLIENT; i++) {
+            givenStatus(String.format("SD%010d", i), ParcelStatus.CREATED);
+            tracking.subscribe(String.format("SD%010d", i), CLIENT);
+        }
+        givenStatus("SDZZZZZZZZZZ", ParcelStatus.CREATED);
+
+        assertThatThrownBy(() -> tracking.subscribe("SDZZZZZZZZZZ", CLIENT)).isInstanceOf(TooManyStreamsException.class);
+        // Another client is not affected, and a stream that closes frees its client's slot
+        tracking.subscribe("SDZZZZZZZZZZ", "203.0.113.77");
+        tracking.onStatusChanged(event("SD0000000000", ParcelStatus.DELIVERED, 2, null));
+        tracking.subscribe("SDZZZZZZZZZZ", CLIENT);
+        assertThat(tracking.openStreams()).isEqualTo(LiveTracking.MAX_STREAMS_PER_CLIENT + 1);
+    }
+
+    @Test
     void disconnectedClientsAreDroppedOnTheNextSend() {
-        tracking.subscribe(NUMBER);
-        tracking.subscribe(NUMBER);
+        tracking.subscribe(NUMBER, CLIENT);
+        tracking.subscribe(NUMBER, CLIENT);
         created.getFirst().broken = true;
 
         tracking.onStatusChanged(event(NUMBER, ParcelStatus.OUT_FOR_DELIVERY, 4, null));
@@ -147,9 +164,9 @@ class LiveTrackingTest {
 
     @Test
     void heartbeatsGoToEveryOpenStream() {
-        tracking.subscribe(NUMBER);
+        tracking.subscribe(NUMBER, CLIENT);
         givenStatus("SD0000000001", ParcelStatus.CREATED);
-        tracking.subscribe("SD0000000001");
+        tracking.subscribe("SD0000000001", CLIENT);
 
         tracking.sendHeartbeats();
 

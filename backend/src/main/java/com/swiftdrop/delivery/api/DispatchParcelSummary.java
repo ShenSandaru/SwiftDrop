@@ -16,6 +16,8 @@ import com.swiftdrop.pricing.api.ParcelSize;
  * @param nextHubCode the hub it travels to, while {@code IN_TRANSIT}
  * @param expectedHubId the hub to scan it in at next, when {@link DispatchAction#SCAN_AT_HUB} applies
  * @param deliveryAttempts delivery attempts started so far
+ * @param readOnly the caller's hubs are on the parcel's route but not responsible for it now (ADR 0012
+ *                 §3): they may follow it, so no actions are offered
  * @param actions what a dispatcher may do next
  */
 public record DispatchParcelSummary(
@@ -40,6 +42,7 @@ public record DispatchParcelSummary(
         String expectedHubCode,
         int deliveryAttempts,
         FailureReason lastFailureReason,
+        boolean readOnly,
         Set<DispatchAction> actions
 ) {
     public DispatchParcelSummary {
@@ -60,6 +63,7 @@ public record DispatchParcelSummary(
             String merchantOrderReference, UUID assignedCourierId, ParcelSize size, int weightGrams, String pickupCity,
             String dropoffCity, Instant createdAt, Instant updatedAt) {
         this(id, trackingNumber, status, source, merchantOrderReference, assignedCourierId, size, weightGrams,
-                pickupCity, dropoffCity, createdAt, updatedAt, null, null, null, null, null, null, null, 0, null, Set.of());
+                pickupCity, dropoffCity, createdAt, updatedAt, null, null, null, null, null, null, null, 0, null, false,
+                Set.of());
     }
 }

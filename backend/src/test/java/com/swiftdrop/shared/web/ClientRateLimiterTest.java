@@ -1,4 +1,4 @@
-package com.swiftdrop.assistant.application;
+package com.swiftdrop.shared.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

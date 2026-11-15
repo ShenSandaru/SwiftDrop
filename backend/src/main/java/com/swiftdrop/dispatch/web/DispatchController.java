@@ -26,6 +26,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.StaffScopeView;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.dispatch.application.DispatchService;
 import com.swiftdrop.identity.api.IdentityClaims;
@@ -44,7 +45,7 @@ class DispatchController {
     }
 
     @GetMapping("/parcels")
-    PageResponse<DispatchParcelSummary> parcels(
+    PageResponse<DispatchParcelSummary> parcels(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) ParcelStatus status,
             @RequestParam(required = false) ParcelSource source,
             @RequestParam(required = false) Boolean assigned,
@@ -52,26 +53,41 @@ class DispatchController {
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(status, source, assigned, search, request), request);
+        return toResponse(dispatch.parcels(staff(jwt), status, source, assigned, search, request), request);
+    }
+
+    /** Unfinished parcels with no scan, status change or assignment for too long; longest waiting first. */
+    @GetMapping("/stale-parcels")
+    PageResponse<DispatchParcelSummary> staleParcels(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
+        return toResponse(dispatch.staleParcels(staff(jwt), request), request);
     }
 
     @GetMapping("/active-assignments")
-    PageResponse<ParcelAssignmentSummary> activeAssignments(
+    PageResponse<ParcelAssignmentSummary> activeAssignments(@AuthenticationPrincipal Jwt jwt,
             @RequestParam ParcelAssignmentType type,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.activeAssignments(type, request), request);
+        return toResponse(dispatch.activeAssignments(staff(jwt), type, request), request);
+    }
+
+    /** The hubs the caller works for: the portal says so, and why a list may be empty. */
+    @GetMapping("/scope")
+    StaffScopeView scope(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.scope(staff(jwt));
     }
 
     @GetMapping("/courier-workloads")
-    Map<UUID, Long> courierWorkloads() {
-        return dispatch.courierWorkloads();
+    Map<UUID, Long> courierWorkloads(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.courierWorkloads(staff(jwt));
     }
 
     @GetMapping("/couriers")
-    List<DispatchCourierResponse> couriers() {
-        return dispatch.activeCouriers().stream()
+    List<DispatchCourierResponse> couriers(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.activeCouriers(staff(jwt)).stream()
                 .map(DispatchCourierResponse::from)
                 .toList();
     }

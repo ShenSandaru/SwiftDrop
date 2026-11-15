@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, Info, Loader2, MapPin, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/delivery/status-badge";
+import { ReadOnlyBadge } from "@/components/dispatch/read-only-badge";
 import { StatusTimeline } from "@/components/delivery/status-timeline";
 import { formatDateTime, formatWeight, SIZE_LABELS, STATUS_LABELS } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
@@ -281,7 +282,7 @@ export function ParcelDialog({
                   )}
                   <p className="mt-2 text-xs text-muted-foreground">Parcel ID: {detail.id}</p>
                 </div>
-                <StatusBadge status={detail.status} />
+                <span className="flex flex-col items-end gap-1"><StatusBadge status={detail.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
