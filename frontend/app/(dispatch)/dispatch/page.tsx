@@ -847,34 +847,6 @@ export default function DispatchPage() {
               <p className="text-sm opacity-90 sm:text-base leading-relaxed">
                 Connect customer bookings to couriers, intake and sort parcels at regional warehouse hubs, and assign transfer routes to destination branches for final delivery.
               </p>
-              <div className="flex flex-wrap gap-2.5 pt-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setActiveTab("pickup")}
-                  className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 font-semibold"
-                >
-                  <PackagePlus className="size-4 mr-1.5" /> First-Mile Pickups ({metrics.pendingPickup ?? 0})
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveTab("warehouse")}
-                  className="border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 font-semibold"
-                >
-                  <Warehouse className="size-4 mr-1.5" /> Warehouse & Sorting ({warehouseCount})
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveTab("delivery")}
-                  className="border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 font-semibold"
-                >
-                  <Truck className="size-4 mr-1.5" /> Final Deliveries ({metrics.activeDeliveries ?? 0})
-                </Button>
-              </div>
             </div>
           </section>
 
