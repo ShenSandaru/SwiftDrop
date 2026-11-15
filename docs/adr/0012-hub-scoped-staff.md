@@ -68,12 +68,20 @@ a parcel it dispatched and both ends can see how it finished. Parcels picked up 
 
 ### 5. API
 
-- `GET /api/v1/hubs/staff` (`ADMIN`): every assignment, with `hubId` empty for head office.
-- `PUT` and `DELETE /api/v1/hubs/{hubId}/staff/{userId}` (`ADMIN`): add to or remove from a hub.
-- `PUT` and `DELETE /api/v1/hubs/head-office-staff/{userId}` (`ADMIN`): head office.
-- `GET /api/v1/dispatch/scope` (`DISPATCHER`, `ADMIN`): the caller's own scope, for the portal.
-- `delivery.api` gains the caller on the dispatch list queries and on courier assignment, and a
-  small directory that tells `dispatch` which users share a hub with the caller.
+All admin endpoints are `ADMIN` only: they decide who sees which parcels.
+
+- `GET /api/v1/hubs/staff`: every enabled dispatcher and courier by name, with `headOffice` and
+  their `hubIds`. Someone who is neither head office nor at a hub shows an empty list, so the admin
+  page can list who still needs a hub. Emails are not returned.
+- `PUT /api/v1/hubs/{hubId}/staff/{userId}` and `DELETE` of the same path: add to or remove from a
+  hub. Adding is idempotent, and `404` for an unknown hub or user, `409` for an inactive hub or a
+  user who is not a dispatcher or courier.
+- `PUT /api/v1/hubs/head-office-staff/{userId}` and `DELETE` of the same path: head office, for
+  dispatchers only. Idempotent.
+- A person is head office or works for hubs, never both: adding a hub to a head office dispatcher
+  makes them a hub dispatcher, and making someone head office replaces their hubs.
+- `delivery.api` gains the caller on the dispatch list queries, and a small directory that tells
+  `dispatch` who shares a hub with the caller.
 
 ### 6. What does not change
 
