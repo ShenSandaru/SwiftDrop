@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  ArrowRight,
   ArrowUpRight,
   CalendarDays,
   CheckCircle2,
@@ -921,6 +922,82 @@ export default function DispatchPage() {
               loading={metricsLoading}
             />
           </div>
+
+          <section aria-labelledby="lifecycle-overview" className="space-y-3">
+            <SectionHeading
+              id="lifecycle-overview"
+              eyebrow="Workflow"
+              title="Dispatch Stages"
+              description="Quick access to each stage of your hub's parcel flow."
+            />
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-foreground">1. Pickup Operations</h3>
+                    <span className="text-xs font-semibold text-primary">{metrics.pendingPickup ?? 0} pending</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Assign pickup couriers or receive walk-in drop-offs at the hub.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("pickup")}
+                  className="mt-4 w-full justify-between"
+                >
+                  <span>Open Pickup Queue</span>
+                  <ArrowRight className="size-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-foreground">2. Hub Sorting</h3>
+                    <span className="text-xs font-semibold text-primary">{warehouseCount} in hub</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Scan parcels into the hub, send onwards, or assign delivery couriers.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("warehouse")}
+                  className="mt-4 w-full justify-between"
+                >
+                  <span>Open Hub Sorting</span>
+                  <ArrowRight className="size-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-foreground">3. Delivery Operations</h3>
+                    <span className="text-xs font-semibold text-primary">{metrics.activeDeliveries ?? 0} active</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Monitor active delivery runs and handover completion.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab("delivery")}
+                  className="mt-4 w-full justify-between"
+                >
+                  <span>Open Deliveries</span>
+                  <ArrowRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 
