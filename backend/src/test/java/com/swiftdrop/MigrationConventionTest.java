@@ -229,6 +229,14 @@ class MigrationConventionTest {
                                 "merchant create webhook redeliveries",
                                 "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"),
                         tuple(
+                                "202611161100",
+                                "pricing seed district primary zones",
+                                "pricing/V202611161100__pricing_seed_district_primary_zones.sql"),
+                        tuple(
+                                "202611161200",
+                                "delivery seed district hubs",
+                                "delivery/V202611161200__delivery_seed_district_hubs.sql"),
+                        tuple(
                                 "202611171000",
                                 "delivery create hub links",
                                 "delivery/V202611171000__delivery_create_hub_links.sql"),
