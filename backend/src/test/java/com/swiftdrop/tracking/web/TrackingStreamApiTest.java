@@ -51,6 +51,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -134,6 +136,32 @@ class TrackingStreamApiTest {
         mvc.perform(get(EVENTS.formatted("SD1111111111")).accept(MediaType.TEXT_EVENT_STREAM))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(header().string("Retry-After", "30"));
+    }
+
+    @Test
+    void aClientOverTheRateLimitGets429WithRetryAfter() throws Exception {
+        when(queries.findPublicTrackingView("SD0000000000")).thenReturn(Optional.empty());
+        // The lookup and the stream share one limit of 60 a minute; another address is not affected
+        for (int i = 0; i < 60; i++) {
+            mvc.perform(get(i % 2 == 0 ? EVENTS.formatted("SD0000000000") : "/api/v1/tracked-parcels/SD0000000000")
+                            .with(from("203.0.113.9")))
+                    .andExpect(status().isNotFound());
+        }
+
+        mvc.perform(get(EVENTS.formatted("SD0000000000")).with(from("203.0.113.9")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"));
+        mvc.perform(get("/api/v1/tracked-parcels/SD0000000000").with(from("203.0.113.9")))
+                .andExpect(status().isTooManyRequests());
+        mvc.perform(get(EVENTS.formatted("SD0000000000")).with(from("203.0.113.10")))
+                .andExpect(status().isNotFound());
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor from(String address) {
+        return request -> {
+            request.setRemoteAddr(address);
+            return request;
+        };
     }
 
     private void givenParcel(String number, ParcelStatus status) {

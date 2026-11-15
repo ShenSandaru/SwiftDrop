@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.api;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,37 +20,32 @@ public interface ParcelQueries {
      */
     Map<UUID, Long> countActiveParcelsByCourier();
 
-    /** Dispatcher parcel list with explicit current-assignment and source/status filtering. */
-    default PageResult<DispatchParcelSummary> findDispatchParcels(
-            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
-        return findDispatchParcels(status, source, assigned, search, null, page);
-    }
+    /**
+     * Unfinished parcels with no status change and no assignment since the given time, longest
+     * waiting first: a missed scan, a parcel nobody collected, or one that is lost. Only parcels the
+     * staff member's hubs may see (ADR 0012 §3).
+     *
+     * @param staffUserId the dispatcher or admin asking
+     */
+    PageResult<DispatchParcelSummary> findStaleParcels(UUID staffUserId, Instant inactiveSince, PageRequest page);
 
-    /** Dispatcher parcel list scoped optionally to a single hub ({@code null} returns all hubs). */
-    PageResult<DispatchParcelSummary> findDispatchParcels(
-            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId, PageRequest page);
+    /** Dispatcher parcel list with explicit current-assignment and source/status filtering. */
+    PageResult<DispatchParcelSummary> findDispatchParcels(UUID staffUserId,
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page);
 
     /**
-     * Dispatcher parcel list with optional hub scope and optional terminal-only filter
+     * Dispatcher parcel list with optional terminal-only filter
      * ({@code DELIVERED}, {@code FAILED}, {@code CANCELLED} when {@code terminal == true} and {@code status == null}).
      */
-    default PageResult<DispatchParcelSummary> findDispatchParcels(
-            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId,
-            Boolean terminal, PageRequest page) {
-        return findDispatchParcels(status, source, assigned, search, hubId, page);
+    default PageResult<DispatchParcelSummary> findDispatchParcels(UUID staffUserId,
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, Boolean terminal,
+            PageRequest page) {
+        return findDispatchParcels(staffUserId, status, source, assigned, search, page);
     }
 
     /** Active assignment rows of one task type, oldest first. */
-    default PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
-        return findActiveAssignments(type, null, page);
-    }
-
-    /** Active assignment rows of one task type, optionally scoped to a single hub. */
-    PageResult<ParcelAssignmentSummary> findActiveAssignments(
-            ParcelAssignmentType type, UUID hubId, PageRequest page);
-
-    /** Returns {@code true} if the parcel belongs to or is routed through the given hub. */
-    boolean isParcelInHub(UUID parcelId, UUID hubId);
+    PageResult<ParcelAssignmentSummary> findActiveAssignments(UUID staffUserId, ParcelAssignmentType type,
+            PageRequest page);
 
     /** Assignment history, empty when the parcel does not exist. */
     Optional<ParcelAssignmentHistory> findAssignmentHistory(UUID parcelId);

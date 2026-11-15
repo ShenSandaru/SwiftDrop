@@ -1,5 +1,7 @@
 package com.swiftdrop.tracking.web;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,7 +24,7 @@ class TrackingStreamController {
     }
 
     @GetMapping(path = "/api/v1/tracked-parcels/{trackingNumber}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    SseEmitter stream(@PathVariable String trackingNumber) {
-        return liveTracking.subscribe(trackingNumber);
+    SseEmitter stream(@PathVariable String trackingNumber, HttpServletRequest request) {
+        return liveTracking.subscribe(trackingNumber, request.getRemoteAddr());
     }
 }

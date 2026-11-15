@@ -49,6 +49,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -98,7 +100,8 @@ class TrackingApiTest {
         when(queries.findPublicTrackingView("sd7k3m9q2xwb")).thenReturn(Optional.of(new PublicTrackingView(
                 "SD7K3M9Q2XWB", ParcelStatus.IN_TRANSIT, "Colombo", "Kandy", List.of(
                         new PublicStatusEvent(ParcelStatus.CREATED, Instant.parse("2026-11-03T10:15:30Z")),
-                        new PublicStatusEvent(ParcelStatus.PICKED_UP, Instant.parse("2026-11-03T12:01:02Z"))))));
+                        new PublicStatusEvent(ParcelStatus.PICKED_UP, Instant.parse("2026-11-03T12:01:02Z"))),
+                java.time.LocalDate.parse("2026-11-06"))));
 
         mvc.perform(get(PATH + "sd7k3m9q2xwb"))
                 .andExpect(status().isOk())
@@ -108,7 +111,8 @@ class TrackingApiTest {
                 .andExpect(jsonPath("$.history[1].status").value("PICKED_UP"))
                 .andExpect(jsonPath("$.history[1].occurredAt").value("2026-11-03T12:01:02Z"))
                 // Exactly the public fields: nothing else can leak
-                .andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$.estimatedDelivery").value("2026-11-06"))
+                .andExpect(jsonPath("$.length()").value(6))
                 // status, occurredAt, hubName, attempt: never an actor or a note (ADR 0009 §7)
                 .andExpect(jsonPath("$.history[0].length()").value(4));
     }

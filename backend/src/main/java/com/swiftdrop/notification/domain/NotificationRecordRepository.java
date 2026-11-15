@@ -77,8 +77,13 @@ public interface NotificationRecordRepository extends JpaRepository<Notification
     long countByRecipientUserIdAndChannelAndIsReadFalse(UUID recipientUserId, NotificationChannel channel);
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query(
-            "UPDATE NotificationRecord r SET r.deliveryStatus = :status WHERE r.id = :id")
+    @org.springframework.data.jpa.repository.Query("""
+            UPDATE NotificationRecord r
+            SET r.deliveryStatus = :status,
+                r.sentAt = CASE WHEN :status = com.swiftdrop.notification.domain.NotificationDeliveryStatus.SENT
+                    THEN CURRENT_TIMESTAMP ELSE r.sentAt END
+            WHERE r.id = :id
+            """)
     int updateDeliveryStatus(
             @org.springframework.data.repository.query.Param("id") UUID id,
             @org.springframework.data.repository.query.Param("status") NotificationDeliveryStatus status);

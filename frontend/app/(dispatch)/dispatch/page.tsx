@@ -30,6 +30,9 @@ import { Input } from "@/components/ui/input";
 import { ThemedSelect, type SelectOption } from "@/components/ui/select";
 import { BookDeliveryForm } from "@/components/delivery/book-delivery-form";
 import { StatusBadge } from "@/components/delivery/status-badge";
+import { ReadOnlyBadge } from "@/components/dispatch/read-only-badge";
+import { ScopeBanner } from "@/components/dispatch/scope-banner";
+import { StaleParcelsCard } from "@/components/dispatch/stale-parcels-card";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
@@ -648,6 +651,8 @@ function DispatchPageContent() {
         )}
       </nav>
 
+      <ScopeBanner />
+
       {/* Top Operations Header & Quick Status */}
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="space-y-1">
@@ -946,6 +951,12 @@ function DispatchPageContent() {
               loading={metricsLoading}
             />
           </div>
+
+          {/* Parcels with no recent scan, status change or assignment */}
+          <StaleParcelsCard
+            refreshKey={refreshKey}
+            onDetails={(parcel) => setSelectedParcel({ parcel, mode: "details" })}
+          />
 
           <section aria-labelledby="lifecycle-overview" className="space-y-3">
             <SectionHeading
@@ -1694,7 +1705,12 @@ function ParcelTableRow({
       </td>
       <td className="px-4 py-3 text-foreground">{parcelSourceLabel(parcel.source)}</td>
       <td className="px-4 py-3 text-muted-foreground">{parcelLocation(parcel)}</td>
-      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
+      <td className="px-4 py-3">
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
+      </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(parcel.createdAt)}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
@@ -1745,7 +1761,10 @@ function ParcelMobileCard({
           <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}… · {parcelSourceLabel(parcel.source)}</p>
         </div>
-        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -1802,7 +1821,12 @@ function ActiveDeliveryRow({
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Not assigned"}
       </td>
-      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
+      <td className="px-4 py-3">
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
+      </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
       <td className="px-4 py-3">
         <Button type="button" variant="ghost" size="sm" onClick={onDetails}>View details</Button>
@@ -1833,7 +1857,10 @@ function ActiveDeliveryCard({
           </Link>
           <span className="mt-1 block text-xs text-muted-foreground">Destination: {parcel.dropoffCity}</span>
         </span>
-        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>

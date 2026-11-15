@@ -230,7 +230,23 @@ class MigrationConventionTest {
                                 "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"),
                         tuple(
                                 "202611171000",
+                                "delivery create hub links",
+                                "delivery/V202611171000__delivery_create_hub_links.sql"),
+                        tuple(
+                                "202611171100",
+                                "delivery create hub staff",
+                                "delivery/V202611171100__delivery_create_hub_staff.sql"),
+                        tuple(
+                                "202611171200",
+                                "delivery remove head office",
+                                "delivery/V202611171200__delivery_remove_head_office.sql"),
+                        tuple(
+                                "202611171300",
+                                "delivery allow walk in customer parcels",
+                                "delivery/V202611171300__delivery_allow_walk_in_customer_parcels.sql"),
+                        tuple(
+                                "202611171400",
                                 "identity add hub id to users",
-                                "identity/V202611171000__identity_add_hub_id_to_users.sql"));
+                                "identity/V202611171400__identity_add_hub_id_to_users.sql"));
     }
 }

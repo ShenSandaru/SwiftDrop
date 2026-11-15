@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 740" width="760" height="740" font-family="Inter, -apple-system, 'Segoe UI', DejaVu Sans, sans-serif" font-size="13" role="img" aria-labelledby="t d">
+  <title id="t">SwiftDrop system architecture</title>
+  <desc id="d">Next.js portals, the public tracking page, merchant systems and MCP clients call a Spring Boot modular monolith with eight business modules. The monolith uses PostgreSQL and RabbitMQ, calls the Gemini API and sends signed webhooks to merchants.</desc>
+  <defs>
+    <marker id="grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9b998f"/></marker>
+    <marker id="teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0f766e"/></marker>
+  </defs>
+  <rect width="760" height="740" fill="#ffffff"/>
+
+  <text x="24" y="30" font-size="17" font-weight="700" fill="#1f1e1d">SwiftDrop system architecture</text>
+  <text x="736" y="30" text-anchor="end" font-size="11.5" fill="#5f5e5a">Modular monolith · REST · SSE · RabbitMQ</text>
+
+  <!-- Presentation layer -->
+  <rect x="24" y="46" width="712" height="112" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
+  <text x="40" y="66" font-weight="600" fill="#5f5e5a">Presentation layer</text>
+
+  <rect x="40" y="78" width="158" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="119" y="100" text-anchor="middle" font-weight="600" fill="#1f1e1d">Next.js web app</text>
+  <text x="119" y="117" text-anchor="middle" font-size="11" fill="#5f5e5a">Role portals + chat widget</text>
+  <text x="119" y="132" text-anchor="middle" font-size="11" fill="#5f5e5a">Calls the REST API directly</text>
+
+  <rect x="214" y="78" width="158" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="293" y="100" text-anchor="middle" font-weight="600" fill="#1f1e1d">Public tracking page</text>
+  <text x="293" y="117" text-anchor="middle" font-size="11" fill="#5f5e5a">No login, tracking number</text>
+  <text x="293" y="132" text-anchor="middle" font-size="11" fill="#5f5e5a">Live updates over SSE</text>
+
+  <rect x="388" y="78" width="158" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="467" y="100" text-anchor="middle" font-weight="600" fill="#1f1e1d">Merchant systems</text>
+  <text x="467" y="117" text-anchor="middle" font-size="11" fill="#5f5e5a">External, X-Api-Key header</text>
+  <text x="467" y="132" text-anchor="middle" font-size="11" fill="#5f5e5a">Orders in, webhooks out</text>
+
+  <rect x="562" y="78" width="158" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="641" y="100" text-anchor="middle" font-weight="600" fill="#1f1e1d">AI apps (MCP clients)</text>
+  <text x="641" y="117" text-anchor="middle" font-size="11" fill="#5f5e5a">Claude Code, MCP Inspector</text>
+  <text x="641" y="132" text-anchor="middle" font-size="11" fill="#5f5e5a">POST /mcp, read-only tools</text>
+
+  <!-- Business logic layer -->
+  <rect x="24" y="190" width="712" height="312" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
+
+  <rect x="40" y="222" width="680" height="268" rx="10" fill="#e6f4f2" stroke="#0f766e" stroke-width="2"/>
+  <text x="56" y="244" font-weight="700" fill="#1f1e1d">Core API: Spring Boot 4 modular monolith (Java 21, one deployable)</text>
+  <text x="56" y="262" font-size="11" fill="#33504c">REST /api/v1 · validation · central error handler · Spring Security: JWT, Google OAuth2, API keys</text>
+
+  <g fill="#ffffff" stroke="#9fd3cb">
+    <rect x="56" y="276" width="154" height="56" rx="7"/>
+    <rect x="222" y="276" width="154" height="56" rx="7"/>
+    <rect x="388" y="276" width="154" height="56" rx="7"/>
+    <rect x="554" y="276" width="154" height="56" rx="7"/>
+    <rect x="56" y="340" width="154" height="56" rx="7"/>
+    <rect x="222" y="340" width="154" height="56" rx="7"/>
+    <rect x="388" y="340" width="154" height="56" rx="7"/>
+    <rect x="554" y="340" width="154" height="56" rx="7"/>
+  </g>
+  <g font-size="12" font-weight="700" fill="#0f766e">
+    <text x="66" y="295">identity</text><text x="232" y="295">pricing</text><text x="398" y="295">delivery</text><text x="564" y="295">dispatch</text>
+    <text x="66" y="359">tracking</text><text x="232" y="359">merchant</text><text x="398" y="359">notification</text><text x="564" y="359">assistant</text>
+  </g>
+  <g font-size="10.5" fill="#1f1e1d">
+    <text x="66" y="311">Auth · users · profiles</text><text x="66" y="324">Saved addresses</text>
+    <text x="232" y="311">Zones · fee calculator</text><text x="232" y="324">Distance-based fares</text>
+    <text x="398" y="311">Parcels · lifecycle</text><text x="398" y="324">Hubs · links · proofs</text>
+    <text x="564" y="311">Courier assignment</text><text x="564" y="324">Hub steps · stale list</text>
+    <text x="66" y="375">Public SSE stream</text><text x="66" y="388">Rate limited</text>
+    <text x="232" y="375">API keys · orders</text><text x="232" y="388">HMAC webhooks · retries</text>
+    <text x="398" y="375">In-app notifications</text><text x="398" y="388">Mock email and SMS</text>
+    <text x="564" y="375">Chat + MCP server</text><text x="564" y="388">Gemini tool calling</text>
+  </g>
+  <g font-size="11" fill="#33504c">
+    <text x="56" y="418">One transaction: status change, history row and outbox event (State pattern guards the moves)</text>
+    <text x="56" y="434">Outbox relay publishes events to RabbitMQ; notification and merchant consume them</text>
+    <text x="56" y="450">Hub network: central hub, direct links between branches, hub-scoped dispatchers and couriers</text>
+    <text x="56" y="466">Flyway owns the schema · public endpoints are rate limited · SSE for live tracking, no WebSocket</text>
+  </g>
+
+  <!-- Data and external services -->
+  <rect x="24" y="530" width="712" height="134" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
+
+  <rect x="40" y="562" width="158" height="88" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="119" y="584" text-anchor="middle" font-weight="600" fill="#1f1e1d">PostgreSQL 18</text>
+  <text x="119" y="602" text-anchor="middle" font-size="11" fill="#5f5e5a">Flyway migrations</text>
+  <text x="119" y="617" text-anchor="middle" font-size="11" fill="#5f5e5a">Parcels, history, outbox</text>
+  <text x="119" y="632" text-anchor="middle" font-size="11" fill="#5f5e5a">Proof photos (BYTEA)</text>
+
+  <rect x="214" y="562" width="158" height="88" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="293" y="584" text-anchor="middle" font-weight="600" fill="#1f1e1d">RabbitMQ 4.3</text>
+  <text x="293" y="602" text-anchor="middle" font-size="11" fill="#5f5e5a">Exchange swiftdrop.events</text>
+  <text x="293" y="617" text-anchor="middle" font-size="11" fill="#5f5e5a">Durable queues + DLQ</text>
+  <text x="293" y="632" text-anchor="middle" font-size="11" fill="#5f5e5a">Publisher confirms</text>
+
+  <rect x="388" y="562" width="158" height="88" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="467" y="584" text-anchor="middle" font-weight="600" fill="#1f1e1d">Gemini API</text>
+  <text x="467" y="602" text-anchor="middle" font-size="11" fill="#5f5e5a">External, free tier</text>
+  <text x="467" y="617" text-anchor="middle" font-size="11" fill="#5f5e5a">Public data only</text>
+  <text x="467" y="632" text-anchor="middle" font-size="11" fill="#5f5e5a">Fallback message if down</text>
+
+  <rect x="562" y="562" width="158" height="88" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="641" y="584" text-anchor="middle" font-weight="600" fill="#1f1e1d">Merchant endpoints</text>
+  <text x="641" y="602" text-anchor="middle" font-size="11" fill="#5f5e5a">HTTPS, SSRF-safe</text>
+  <text x="641" y="617" text-anchor="middle" font-size="11" fill="#5f5e5a">HMAC-signed requests</text>
+  <text x="641" y="632" text-anchor="middle" font-size="11" fill="#5f5e5a">Retries with backoff</text>
+
+  <!-- Arrows: drawn before the panel titles so the titles stay readable -->
+  <g fill="none" stroke="#9b998f" stroke-width="1.5">
+    <path d="M119 144V222" marker-end="url(#grey)"/>
+    <path d="M293 144V222" marker-end="url(#grey)"/>
+    <path d="M467 144V222" marker-end="url(#grey)"/>
+    <path d="M641 144V222" marker-end="url(#grey)"/>
+    <path d="M119 490V562" marker-start="url(#grey)" marker-end="url(#grey)"/>
+    <path d="M467 490V562" marker-end="url(#grey)"/>
+  </g>
+  <g fill="none" stroke="#0f766e" stroke-width="1.75" stroke-dasharray="6 4">
+    <path d="M293 490V562" marker-start="url(#teal)" marker-end="url(#teal)"/>
+    <path d="M641 490V562" marker-end="url(#teal)"/>
+  </g>
+  <g font-size="10.5" fill="#5f5e5a">
+    <text x="127" y="180">REST + JWT</text>
+    <text x="301" y="180">REST + SSE</text>
+    <text x="475" y="180">REST + API key</text>
+    <text x="649" y="180">MCP over HTTP</text>
+    <text x="127" y="520">JPA · SQL</text>
+    <text x="475" y="520">HTTPS</text>
+  </g>
+  <g font-size="10.5" fill="#0f766e">
+    <text x="301" y="520">outbox relay and consumers</text>
+    <text x="649" y="520">signed webhooks</text>
+  </g>
+
+  <!-- Panel titles on their own background, so arrows pass under them -->
+  <rect x="32" y="197" width="118" height="17" rx="4" fill="#f3f2ee"/>
+  <text x="40" y="210" font-weight="600" fill="#5f5e5a">Business logic layer</text>
+  <rect x="32" y="537" width="172" height="17" rx="4" fill="#f3f2ee"/>
+  <text x="40" y="550" font-weight="600" fill="#5f5e5a">Data and external services</text>
+
+  <!-- Legend -->
+  <line x1="24" y1="690" x2="60" y2="690" stroke="#9b998f" stroke-width="1.5"/>
+  <text x="68" y="694" font-size="11" fill="#1f1e1d">Synchronous call (REST, SQL, HTTPS)</text>
+  <line x1="320" y1="690" x2="356" y2="690" stroke="#0f766e" stroke-width="1.75" stroke-dasharray="6 4"/>
+  <text x="364" y="694" font-size="11" fill="#1f1e1d">Asynchronous (RabbitMQ, webhooks)</text>
+  <rect x="600" y="683" width="18" height="13" rx="3" fill="#ffffff" stroke="#9b998f" stroke-dasharray="4 3"/>
+  <text x="626" y="694" font-size="11" fill="#1f1e1d">External system</text>
+  <text x="24" y="722" font-size="11" fill="#5f5e5a">Local infrastructure: Docker Compose (PostgreSQL and RabbitMQ). No API gateway, Kubernetes or WebSocket is used.</text>
+</svg>

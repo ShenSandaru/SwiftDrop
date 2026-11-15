@@ -2,6 +2,7 @@ package com.swiftdrop.dispatch.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,12 +18,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.HubStaffDirectory;
 import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
-import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelCreation;
+import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.identity.api.UserDirectory;
@@ -39,6 +41,7 @@ class DispatchServiceTest {
     private ParcelHubOperations hubOperations;
     private ParcelCreation parcelCreation;
     private UserDirectory users;
+    private final HubStaffDirectory hubStaff = mock(HubStaffDirectory.class);
     private DispatchService service;
 
     @BeforeEach
@@ -48,7 +51,9 @@ class DispatchServiceTest {
         hubOperations = mock(ParcelHubOperations.class);
         parcelCreation = mock(ParcelCreation.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, hubOperations, parcelCreation, users);
+        service = new DispatchService(parcels, assignments, hubOperations, parcelCreation, users, hubStaff,
+                java.time.Duration.ofHours(24),
+                java.time.Clock.fixed(Instant.parse("2026-11-14T08:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
     @Test
@@ -112,7 +117,7 @@ class DispatchServiceTest {
         UserSummary courier = new UserSummary(COURIER_ID, "Courier", "courier@example.com", Set.of("COURIER"), true);
         when(users.findEnabledCouriers()).thenReturn(List.of(courier));
 
-        List<UserSummary> active = service.activeCouriers();
+        List<UserSummary> active = service.activeCouriers(Staff.admin(DISPATCHER_ID));
 
         assertThat(active).containsExactly(courier);
         verify(users).findEnabledCouriers();
@@ -138,106 +143,82 @@ class DispatchServiceTest {
     }
 
     @Test
-    void hubAssignedDispatcherOnlySeesCouriersAndWorkloadsInTheirHub() {
-        UUID dispatcherHub = UUID.randomUUID();
-        UUID otherHub = UUID.randomUUID();
-        UUID otherCourierId = UUID.randomUUID();
-        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
-                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
-        UserSummary hubCourier = new UserSummary(COURIER_ID, "Colombo Courier", "c1@example.com",
-                null, Set.of("COURIER"), true, true, dispatcherHub);
-        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
-        when(users.findEnabledCouriersByHub(dispatcherHub)).thenReturn(List.of(hubCourier));
-        when(parcels.countActiveParcelsByCourier()).thenReturn(java.util.Map.of(COURIER_ID, 3L, otherCourierId, 5L));
+    void staleParcelsAreThoseUntouchedForTheConfiguredTime() {
+        com.swiftdrop.delivery.api.PageRequest page = new com.swiftdrop.delivery.api.PageRequest(0, 20);
+        com.swiftdrop.delivery.api.PageResult<com.swiftdrop.delivery.api.DispatchParcelSummary> expected =
+                com.swiftdrop.delivery.api.PageResult.of(List.of(), page, 0);
+        // 24 hours before the fixed clock
+        when(parcels.findStaleParcels(DISPATCHER_ID, Instant.parse("2026-11-13T08:00:00Z"), page)).thenReturn(expected);
 
-        Staff caller = Staff.dispatcher(DISPATCHER_ID);
-        assertThat(service.activeCouriers(otherHub, caller)).containsExactly(hubCourier);
-        assertThat(service.courierWorkloads(otherHub, caller)).containsExactlyEntriesOf(java.util.Map.of(COURIER_ID, 3L));
-        verify(users, never()).findEnabledCouriersByHub(otherHub);
+        assertThat(service.staleParcels(Staff.dispatcher(DISPATCHER_ID), page)).isSameAs(expected);
     }
 
     @Test
-    void hubAssignedDispatcherCannotAssignCourierOrParcelFromAnotherHub() {
-        UUID dispatcherHub = UUID.randomUUID();
-        UUID otherHub = UUID.randomUUID();
-        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
-                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
-        UserSummary otherCourier = new UserSummary(COURIER_ID, "Kandy Courier", "kandy@example.com",
-                null, Set.of("COURIER"), true, true, otherHub);
-        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
-        when(users.findUser(COURIER_ID)).thenReturn(Optional.of(otherCourier));
+    void theStaleTimeMustBePositive() {
+        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, parcelCreation, users, hubStaff, 0))
+                .isInstanceOf(IllegalStateException.class);
+    }
 
-        Staff caller = Staff.dispatcher(DISPATCHER_ID);
-        assertThatThrownBy(() -> service.assign(PARCEL_ID, COURIER_ID, caller, ParcelAssignmentType.PICKUP))
-                .isInstanceOf(DispatchCourierUnavailableException.class)
-                .hasMessageContaining("not assigned to your hub");
+    // ---- Hub scope of the courier lists (ADR 0012 §4) ----
 
-        UserSummary sameHubCourier = new UserSummary(COURIER_ID, "Colombo Courier", "cmb@example.com",
-                null, Set.of("COURIER"), true, true, dispatcherHub);
-        when(users.findUser(COURIER_ID)).thenReturn(Optional.of(sameHubCourier));
-        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(false);
-
-        assertThatThrownBy(() -> service.assign(PARCEL_ID, COURIER_ID, caller, ParcelAssignmentType.PICKUP))
-                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
-                .hasMessageContaining("does not belong to your hub");
-
-        verify(assignments, never()).assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID, ParcelAssignmentType.PICKUP);
+    private static UserSummary courier(UUID id) {
+        return new UserSummary(id, "Courier", "courier-" + id + "@example.com", Set.of("COURIER"), true);
     }
 
     @Test
-    void hubAssignedDispatcherCannotScanAtAnotherHub() {
-        UUID dispatcherHub = UUID.randomUUID();
-        UUID otherHub = UUID.randomUUID();
-        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
-                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
-        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+    void aHubDispatcherSeesOnlyTheCouriersOfTheirHubs() {
+        UUID mine = UUID.randomUUID();
+        UUID someoneElses = UUID.randomUUID();
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(mine), courier(someoneElses)));
+        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(false);
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of(DISPATCHER_ID, mine));
 
-        Staff caller = Staff.dispatcher(DISPATCHER_ID);
-        assertThatThrownBy(() -> service.scanAtHub(PARCEL_ID, otherHub, caller))
-                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
-                .hasMessageContaining("assigned hub");
-        verify(hubOperations, never()).scanAtHub(PARCEL_ID, otherHub, caller);
-
-        assertThatThrownBy(() -> service.receiveAtHub(PARCEL_ID, otherHub, caller))
-                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
-                .hasMessageContaining("assigned hub");
-        verify(hubOperations, never()).receiveAtHub(PARCEL_ID, otherHub, caller);
-
-        service.receiveAtHub(PARCEL_ID, dispatcherHub, caller);
-        verify(hubOperations).receiveAtHub(PARCEL_ID, dispatcherHub, caller);
+        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).extracting(UserSummary::id)
+                .containsExactly(mine);
     }
 
     @Test
-    void adminCanQueryAcrossAllHubsOrFilterByRequestedHub() {
-        UUID adminId = UUID.randomUUID();
-        UUID requestedHub = UUID.randomUUID();
-        Staff admin = Staff.admin(adminId);
+    void aDispatcherWithNoHubSeesNoCouriers() {
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(UUID.randomUUID())));
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of());
 
-        service.activeCouriers(null, admin);
-        verify(users).findEnabledCouriers();
-
-        service.activeCouriers(requestedHub, admin);
-        verify(users).findEnabledCouriersByHub(requestedHub);
+        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).isEmpty();
     }
 
     @Test
-    void hubAssignedDispatcherCannotReadAssignmentHistoryForOtherHubs() {
-        UUID dispatcherHub = UUID.randomUUID();
-        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
-                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
-        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+    void adminsSeeEveryCourier() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(users.findEnabledCouriers()).thenReturn(List.of(courier(first), courier(second)));
 
-        com.swiftdrop.delivery.api.ParcelAssignmentHistory history =
-                new com.swiftdrop.delivery.api.ParcelAssignmentHistory(PARCEL_ID, List.of());
-        when(parcels.findAssignmentHistory(PARCEL_ID)).thenReturn(Optional.of(history));
-        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(false);
+        assertThat(service.activeCouriers(Staff.admin(UUID.randomUUID()))).hasSize(2);
+        verify(hubStaff, never()).colleaguesOf(any());
+    }
 
-        Staff caller = Staff.dispatcher(DISPATCHER_ID);
-        assertThatThrownBy(() -> service.assignmentHistory(PARCEL_ID, caller))
-                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
-                .hasMessageContaining("does not belong to your hub");
+    @Test
+    void workloadsAreShownOnlyForTheCouriersTheCallerMayAssign() {
+        UUID mine = UUID.randomUUID();
+        UUID someoneElses = UUID.randomUUID();
+        when(parcels.countActiveParcelsByCourier()).thenReturn(java.util.Map.of(mine, 3L, someoneElses, 5L));
+        when(hubStaff.colleaguesOf(DISPATCHER_ID)).thenReturn(Set.of(mine));
 
-        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(true);
-        assertThat(service.assignmentHistory(PARCEL_ID, caller)).isEqualTo(history);
+        assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine);
+
+        assertThat(service.courierWorkloads(Staff.admin(DISPATCHER_ID))).containsOnlyKeys(mine, someoneElses);
+    }
+
+    @Test
+    void anAdminWorksEverywhereWithoutALookup() {
+        assertThat(service.scope(Staff.admin(DISPATCHER_ID)).everywhere()).isTrue();
+        verify(hubStaff, never()).scopeOf(DISPATCHER_ID);
+    }
+
+    @Test
+    void aDispatchersScopeComesFromTheHubDirectory() {
+        com.swiftdrop.delivery.api.StaffScopeView scope = new com.swiftdrop.delivery.api.StaffScopeView(false,
+                List.of(new com.swiftdrop.delivery.api.StaffScopeView.HubRef(UUID.randomUUID(), "BAD", "Badulla branch")));
+        when(hubStaff.scopeOf(DISPATCHER_ID)).thenReturn(scope);
+
+        assertThat(service.scope(Staff.dispatcher(DISPATCHER_ID))).isSameAs(scope);
     }
 }

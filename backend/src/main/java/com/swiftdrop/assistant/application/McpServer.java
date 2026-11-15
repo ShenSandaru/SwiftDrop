@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 
 import tools.jackson.databind.json.JsonMapper;
 
+import com.swiftdrop.shared.web.ClientRateLimiter;
+
 /**
  * The tool part of the Model Context Protocol, hand-written (ADR 0010 §5). It serves the stateless
  * 2026-07-28 revision ({@code server/discover}, headers checked against the body) and, for clients

@@ -19,6 +19,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.test.security.TestPrincipal;
 
 @SpringBootTest(properties = {
@@ -88,10 +89,15 @@ class DispatchQueriesIT {
         UUID disabledCourierId = insertUser("Disabled Courier", "COURIER", false);
         UUID customerId = insertUser("Customer User", "CUSTOMER", true);
         UUID merchantId = insertUser("Merchant User", "MERCHANT", true);
+        // A hub dispatcher sees the couriers of their own hub (ADR 0012 §4)
+        TestHubs.install(jdbc);
+        UUID dispatcherId = insertUser("Dispatcher", "DISPATCHER", true);
+        TestHubs.worksAt(jdbc, dispatcherId, "KDY");
+        TestHubs.worksAt(jdbc, activeCourierId, "KDY");
 
         // DISPATCHER can retrieve couriers
         mvc.perform(get("/api/v1/dispatch/couriers")
-                        .with(TestPrincipal.dispatcher().postProcessor()))
+                        .with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[?(@.id == '" + activeCourierId + "')].fullName").value("Active Courier"))

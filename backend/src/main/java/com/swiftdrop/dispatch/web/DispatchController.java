@@ -26,6 +26,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
+import com.swiftdrop.delivery.api.StaffScopeView;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.dispatch.application.DispatchService;
 import com.swiftdrop.identity.api.IdentityClaims;
@@ -44,56 +45,64 @@ class DispatchController {
     }
 
     @GetMapping("/parcels")
-    PageResponse<DispatchParcelSummary> parcels(
-            @AuthenticationPrincipal Jwt jwt,
+    PageResponse<DispatchParcelSummary> parcels(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) ParcelStatus status,
             @RequestParam(required = false) ParcelSource source,
             @RequestParam(required = false) Boolean assigned,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) UUID hubId,
             @RequestParam(required = false) Boolean terminal,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(status, source, assigned, search, hubId, terminal, staff(jwt), request),
-                request);
+        return toResponse(dispatch.parcels(staff(jwt), status, source, assigned, search, terminal, request), request);
     }
 
-    @GetMapping("/active-assignments")
-    PageResponse<ParcelAssignmentSummary> activeAssignments(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestParam ParcelAssignmentType type,
-            @RequestParam(required = false) UUID hubId,
+    /** Unfinished parcels with no scan, status change or assignment for too long; longest waiting first. */
+    @GetMapping("/stale-parcels")
+    PageResponse<DispatchParcelSummary> staleParcels(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.activeAssignments(type, hubId, staff(jwt), request), request);
+        return toResponse(dispatch.staleParcels(staff(jwt), request), request);
+    }
+
+    @GetMapping("/active-assignments")
+    PageResponse<ParcelAssignmentSummary> activeAssignments(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam ParcelAssignmentType type,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
+        return toResponse(dispatch.activeAssignments(staff(jwt), type, request), request);
+    }
+
+    /** The hubs the caller works for: the portal says so, and why a list may be empty. */
+    @GetMapping("/scope")
+    StaffScopeView scope(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.scope(staff(jwt));
     }
 
     @GetMapping("/courier-workloads")
-    Map<UUID, Long> courierWorkloads(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) UUID hubId) {
-        return dispatch.courierWorkloads(hubId, staff(jwt));
+    Map<UUID, Long> courierWorkloads(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.courierWorkloads(staff(jwt));
     }
 
     @GetMapping("/couriers")
-    List<DispatchCourierResponse> couriers(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(required = false) UUID hubId) {
-        return dispatch.activeCouriers(hubId, staff(jwt)).stream()
+    List<DispatchCourierResponse> couriers(@AuthenticationPrincipal Jwt jwt) {
+        return dispatch.activeCouriers(staff(jwt)).stream()
                 .map(DispatchCourierResponse::from)
                 .toList();
     }
 
     @GetMapping("/parcels/{id}/assignment-history")
-    ParcelAssignmentHistory assignmentHistory(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        return dispatch.assignmentHistory(id, staff(jwt));
+    ParcelAssignmentHistory assignmentHistory(@PathVariable UUID id) {
+        return dispatch.assignmentHistory(id);
     }
 
     @PostMapping("/parcel-assignments")
     @ResponseStatus(HttpStatus.CREATED)
     ParcelAssignmentSummary assign(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody DispatchAssignmentRequest request) {
-        return dispatch.assign(request.parcelId(), request.courierId(), staff(jwt), request.type());
+        return dispatch.assign(request.parcelId(), request.courierId(), staff(jwt).userId(), request.type());
     }
 
     // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----

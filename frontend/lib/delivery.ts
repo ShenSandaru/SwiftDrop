@@ -186,6 +186,11 @@ export interface PublicTracking {
   pickupCity: string;
   dropoffCity: string;
   history: PublicStatusEvent[];
+  /**
+   * The day the parcel is expected (YYYY-MM-DD, Sri Lanka time), estimated from its route. Absent
+   * when the parcel is finished or returning, or its route is not known.
+   */
+  estimatedDelivery?: string | null;
 }
 
 export interface Zone {

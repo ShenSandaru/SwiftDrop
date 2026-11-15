@@ -5,6 +5,7 @@ import { ArrowRight, Loader2, PackageX, RotateCcw, ScanLine, Truck, UserPlus, Wa
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/delivery/status-badge";
+import { ReadOnlyBadge } from "@/components/dispatch/read-only-badge";
 import { FAILURE_REASON_LABELS } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
 import type { FailureReason } from "@/lib/delivery";
@@ -154,7 +155,10 @@ function HubCard({ parcel, couriers, busy, run }: {
             <span className="capitalize">{parcel.pickupCity}</span> → <span className="capitalize">{parcel.dropoffCity}</span>
           </p>
         </div>
-        <StatusBadge status={parcel.status} label={workflowLabel} />
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={workflowLabel} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
 
       <RouteStrip parcel={parcel} />

@@ -90,7 +90,20 @@ public class NotificationTemplateResolver {
                         "Your parcel " + trackingNumber + " could not be delivered. Reason: " + reasonDesc + "."));
             }
 
-            case AT_HUB, IN_TRANSIT, RETURNING -> Optional.empty();
+            case AT_HUB -> {
+                String hubLocation = (data.hubCode() != null && !data.hubCode().isBlank())
+                        ? "hub " + data.hubCode()
+                        : "a sorting hub";
+                yield Optional.of(new NotificationContent(
+                        "Parcel Arrived at Hub",
+                        "Your parcel " + trackingNumber + " has arrived at " + hubLocation + "."));
+            }
+
+            case IN_TRANSIT -> Optional.of(new NotificationContent(
+                    "Parcel In Transit",
+                    "Your parcel " + trackingNumber + " is on its way to the next hub."));
+
+            case RETURNING -> Optional.empty();
         };
     }
 
