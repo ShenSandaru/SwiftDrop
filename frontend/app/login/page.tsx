@@ -108,6 +108,7 @@ function LoginForm() {
 
   // Google button and public customer signup prompt are enabled only for customer authentication
   const isCustomerContext = portalContext === "CUSTOMER";
+  const isMerchantContext = portalContext === "MERCHANT";
   const isGoogleLoginEnabled = checkGoogleLoginEnabled() && isCustomerContext;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -260,6 +261,18 @@ function LoginForm() {
                 className="font-semibold text-primary underline-offset-4 hover:underline"
               >
                 Sign up
+              </Link>
+            </div>
+          )}
+
+          {isMerchantContext && (
+            <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
+              New business?{" "}
+              <Link
+                href="/signup/merchant"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Register your business
               </Link>
             </div>
           )}
