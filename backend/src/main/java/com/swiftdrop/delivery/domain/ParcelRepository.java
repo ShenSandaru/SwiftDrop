@@ -1,5 +1,6 @@
 package com.swiftdrop.delivery.domain;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +39,33 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     /** Parcels waiting for a courier (ADM-1); uses the partial index {@code ix_parcels_unassigned}. */
     Page<Parcel> findByStatusAndAssignedCourierIdIsNull(ParcelStatus status, Pageable pageable);
 
+    /**
+     * The parcels a staff member's hubs may see (ADR 0012 §3): those with one of the hubs on their
+     * route, and, before pickup, those whose pickup zone a hub serves. Needs {@code :everywhere},
+     * {@code :hubIds} and {@code :zoneIds}; the collections must not be empty, use {@link #NOBODY}.
+     */
+    String IN_SCOPE = """
+            (:everywhere = true
+             OR p.originHubId IN :hubIds OR p.viaHubId IN :hubIds OR p.destinationHubId IN :hubIds
+             OR p.currentHubId IN :hubIds OR p.nextHubId IN :hubIds
+             OR (p.status IN (com.swiftdrop.delivery.api.ParcelStatus.CREATED,
+                              com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+                 AND p.pickup.zoneId IN :zoneIds))
+            """;
+
+    /** Stands in for an empty collection, which {@code IN} does not accept everywhere. */
+    UUID NOBODY_ID = new UUID(0, 0);
+    Collection<UUID> NOBODY = java.util.List.of(NOBODY_ID);
+
+    /** Unfinished parcels last changed or assigned before a time (stale parcels), in a staff scope. */
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE p.status NOT IN :statuses AND p.updatedAt < :before
+              AND """ + IN_SCOPE)
+    Page<Parcel> findStale(@Param("statuses") Collection<ParcelStatus> statuses, @Param("before") Instant before,
+            @Param("everywhere") boolean everywhere, @Param("hubIds") Collection<UUID> hubIds,
+            @Param("zoneIds") Collection<UUID> zoneIds, Pageable pageable);
+
     @Query("""
             SELECT p FROM Parcel p
             WHERE (:status IS NULL OR p.status = :status)
@@ -45,10 +73,13 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
               AND (:assigned IS NULL
                    OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
                    OR (:assigned = false AND p.assignedCourierId IS NULL))
-            """)
+              AND """ + IN_SCOPE)
     Page<Parcel> findForDispatch(@Param("status") ParcelStatus status,
             @Param("source") ParcelSource source,
             @Param("assigned") Boolean assigned,
+            @Param("everywhere") boolean everywhere,
+            @Param("hubIds") Collection<UUID> hubIds,
+            @Param("zoneIds") Collection<UUID> zoneIds,
             Pageable pageable);
 
     @Query("""
@@ -60,12 +91,15 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
                    OR (:assigned = false AND p.assignedCourierId IS NULL))
               AND (LOWER(p.trackingNumber) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR (:parcelId IS NOT NULL AND p.id = :parcelId))
-            """)
+              AND """ + IN_SCOPE)
     Page<Parcel> findForDispatchBySearch(@Param("status") ParcelStatus status,
             @Param("source") ParcelSource source,
             @Param("assigned") Boolean assigned,
             @Param("search") String search,
             @Param("parcelId") UUID parcelId,
+            @Param("everywhere") boolean everywhere,
+            @Param("hubIds") Collection<UUID> hubIds,
+            @Param("zoneIds") Collection<UUID> zoneIds,
             Pageable pageable);
 
     /** A merchant's parcels (MER-4); always scoped by merchant, never across merchants. */

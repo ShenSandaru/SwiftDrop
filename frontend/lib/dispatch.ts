@@ -40,7 +40,19 @@ export interface DispatchParcelItem {
   expectedHubCode: string | null;
   deliveryAttempts: number;
   lastFailureReason: FailureReason | null;
+  /** One of the caller's hubs is on the route but not responsible now (ADR 0012): follow only, no actions. */
+  readOnly: boolean;
   actions: DispatchAction[];
+}
+
+/** Where the signed-in dispatcher or admin works (ADR 0012). */
+export interface DispatchScope {
+  everywhere: boolean;
+  hubs: { id: string; code: string; name: string }[];
+}
+
+export function getDispatchScope(): Promise<DispatchScope> {
+  return api.get<DispatchScope>("/api/v1/dispatch/scope");
 }
 
 export interface DispatchAssignment {
@@ -95,6 +107,15 @@ export function listDispatchParcels({
     query.set("search", search.trim());
   }
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/parcels?${query.toString()}`);
+}
+
+/**
+ * Unfinished parcels with no scan, status change or assignment for longer than the backend's
+ * configured time, longest waiting first.
+ */
+export function listStaleDispatchParcels(page = 0, size = 5): Promise<PageResponse<DispatchParcelItem>> {
+  const query = new URLSearchParams({ page: String(page), size: String(size) });
+  return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/stale-parcels?${query.toString()}`);
 }
 
 export async function countDispatchParcels(status?: ParcelStatus): Promise<number> {

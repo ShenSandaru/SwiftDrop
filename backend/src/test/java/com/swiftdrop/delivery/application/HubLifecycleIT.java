@@ -7,6 +7,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,11 +26,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.swiftdrop.delivery.TestHubs;
 import com.swiftdrop.delivery.api.DeliveryContact;
+import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.ParcelAssignment;
+import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.ParcelStatusChanged;
 import com.swiftdrop.delivery.api.Staff;
@@ -38,9 +44,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The hub lifecycle against real PostgreSQL (ADR 0009 §3, §7): a route between two branches through
- * the central hub, the attempt limit, the return, and the hub code and attempt in history and
- * outbox events.
+ * The hub lifecycle against real PostgreSQL (ADR 0009 §3, §7, ADR 0011 §2): a route between two
+ * branches through the central hub or over a direct link, the attempt limit, the return, and the hub
+ * code and attempt in history and outbox events.
  */
 @SpringBootTest(properties = {
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",
@@ -68,6 +74,10 @@ class HubLifecycleIT {
     @Autowired
     private DeliveryProofService proofs;
     @Autowired
+    private HubAdministration hubAdministration;
+    @Autowired
+    private ParcelQueries queries;
+    @Autowired
     private JdbcTemplate jdbc;
 
     @MockitoBean
@@ -90,7 +100,7 @@ class HubLifecycleIT {
                 + "ON CONFLICT (code) DO NOTHING", GALLE_ZONE);
         customerId = insertUser("CUSTOMER");
         courierId = insertUser("COURIER");
-        dispatcher = Staff.dispatcher(insertUser("DISPATCHER"));
+        dispatcher = Staff.dispatcher(TestHubs.adminUser(jdbc));
     }
 
     @Test
@@ -117,6 +127,75 @@ class HubLifecycleIT {
                 parcel));
         assertThat(hubEvent.get("data").get("newStatus").asString()).isEqualTo("AT_HUB");
         assertThat(hubEvent.get("data").get("hubCode").asString()).isEqualTo("CMB");
+    }
+
+    @Test
+    void linkedBranchesTravelDirectlyAndKeepTheirRouteWhenTheLinkIsRemoved() {
+        UUID galle = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'GAL'", UUID.class);
+        UUID kandy = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'KDY'", UUID.class);
+        UUID admin = TestHubs.adminUser(jdbc);
+        UUID parcel = bookGalleToKandy();
+
+        hubAdministration.link(galle, kandy, admin);
+        try {
+            // The pair is stored once, whichever order it is given in
+            assertThatThrownBy(() -> hubAdministration.link(kandy, galle, admin))
+                    .isInstanceOf(ParcelConflictException.class);
+            assertThat(hubAdministration.links()).hasSize(1);
+            pickUp(parcel);
+        } finally {
+            hubAdministration.unlink(kandy, galle);
+        }
+
+        assertThat(jdbc.queryForObject("SELECT via_hub_id IS NULL FROM parcels WHERE id = ?", Boolean.class, parcel))
+                .as("route skips the central hub").isTrue();
+        // The link is gone, but the route was fixed at pickup
+        TestHubs.toDestinationHub(hubOperations, jdbc, parcel, dispatcher);
+        assertThat(historyOf(parcel)).containsExactly(
+                "CREATED", "PICKED_UP", "AT_HUB@GAL", "IN_TRANSIT@GAL", "AT_HUB@KDY");
+
+        UUID later = bookGalleToKandy();
+        pickUp(later);
+        assertThat(jdbc.queryForObject("SELECT via_hub_id = (SELECT id FROM hubs WHERE code = 'CMB') FROM parcels "
+                + "WHERE id = ?", Boolean.class, later)).as("a parcel picked up after the link was removed").isTrue();
+    }
+
+    @Test
+    void publicTrackingEstimatesTheDeliveryDayFromTheRoute() {
+        UUID parcel = bookGalleToKandy();
+        String number = jdbc.queryForObject("SELECT tracking_number FROM parcels WHERE id = ?", String.class, parcel);
+        LocalDate booked = jdbc.queryForObject(
+                "SELECT (created_at AT TIME ZONE 'Asia/Colombo')::date FROM parcels WHERE id = ?", LocalDate.class,
+                parcel);
+
+        // Galle to Kandy passes through the central hub: three days by default
+        assertThat(queries.findPublicTrackingView(number).orElseThrow().estimatedDelivery())
+                .isEqualTo(booked.plusDays(3));
+
+        hubOperations.cancel(parcel, dispatcher);
+        assertThat(queries.findPublicTrackingView(number).orElseThrow().estimatedDelivery())
+                .as("a finished parcel has no estimate").isNull();
+    }
+
+    @Test
+    void parcelsWithNoRecentActivityAreStaleUntilTheyFinish() {
+        UUID parcel = bookGalleToKandy();
+        Instant anHourAgo = Instant.now().minus(1, ChronoUnit.HOURS);
+
+        assertThat(staleIds(anHourAgo)).doesNotContain(parcel);
+
+        jdbc.update("UPDATE parcels SET updated_at = now() - interval '2 days' WHERE id = ?", parcel);
+        assertThat(staleIds(anHourAgo)).contains(parcel);
+        assertThat(staleIds(Instant.now().minus(3, ChronoUnit.DAYS))).doesNotContain(parcel);
+
+        hubOperations.cancel(parcel, dispatcher);
+        jdbc.update("UPDATE parcels SET updated_at = now() - interval '2 days' WHERE id = ?", parcel);
+        assertThat(staleIds(anHourAgo)).as("a finished parcel is never stale").doesNotContain(parcel);
+    }
+
+    private List<UUID> staleIds(Instant inactiveSince) {
+        return queries.findStaleParcels(dispatcher.userId(), inactiveSince, new PageRequest(0, 100)).items().stream()
+                .map(DispatchParcelSummary::id).toList();
     }
 
     @Test

@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, MapPinned, PackageSearch, Search, XCircle } from "lucide-react";
 import { AssistantWidget } from "@/components/assistant/assistant-widget";
+import { DeliveryEstimate } from "@/components/delivery/delivery-estimate";
 import { JourneyNotice, attemptsIn, lastHubName } from "@/components/delivery/journey-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,6 +137,7 @@ function Result({ code, connection, view }: {
         </div>
         <RouteProgress status={view.status} history={view.history} live={connection === "live"} />
         <JourneyNotice status={view.status} attempts={attemptsIn(view.history)} hubName={lastHubName(view.history)} />
+        <DeliveryEstimate day={view.estimatedDelivery} />
       </section>
 
       {view.status === "DELIVERED" && last && (

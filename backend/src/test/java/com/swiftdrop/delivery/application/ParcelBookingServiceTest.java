@@ -91,7 +91,7 @@ class ParcelBookingServiceTest {
                 new BigDecimal("100.00"), RULE_ID));
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(),
                 mock(ApplicationEventPublisher.class));
-        service = new ParcelBookingService(parcels, feeCalculator, new HubNetwork(hubs), trackingNumbers, recorder,
+        service = new ParcelBookingService(parcels, feeCalculator, new HubNetwork(hubs, mock(com.swiftdrop.delivery.domain.HubLinkRepository.class)), trackingNumbers, recorder,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
