@@ -73,6 +73,7 @@ export interface DispatchParcelPageRequest {
   assigned?: boolean;
   search?: string;
   hubId?: string;
+  terminal?: boolean;
 }
 
 export function listDispatchParcels({
@@ -83,6 +84,7 @@ export function listDispatchParcels({
   assigned,
   search,
   hubId,
+  terminal,
 }: DispatchParcelPageRequest): Promise<PageResponse<DispatchParcelItem>> {
   const query = new URLSearchParams({ page: String(page), size: String(size) });
   if (status) {
@@ -99,6 +101,9 @@ export function listDispatchParcels({
   }
   if (hubId) {
     query.set("hubId", hubId);
+  }
+  if (terminal !== undefined) {
+    query.set("terminal", String(terminal));
   }
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/parcels?${query.toString()}`);
 }

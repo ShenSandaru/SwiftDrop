@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  History,
   LayoutDashboard,
   Loader2,
   MapPin,
@@ -55,16 +56,22 @@ const FILTER_STATUSES: Array<ParcelStatus | "ALL"> = [
   "ALL",
   "CREATED",
   "PICKED_UP",
+  "AT_HUB",
   "IN_TRANSIT",
   "OUT_FOR_DELIVERY",
+  "DELIVERY_ATTEMPT_FAILED",
+  "RETURNING",
   "DELIVERED",
   "FAILED",
+  "CANCELLED",
 ];
 
 const SOURCE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT"] as const;
 type SourceFilter = (typeof SOURCE_FILTERS)[number];
 
-type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "tracking";
+type HistoryStatusFilter = "COMPLETED" | "DELIVERED" | "FAILED" | "CANCELLED" | "ALL";
+
+type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "history" | "tracking";
 
 interface DashboardMetrics {
   total: number | null;
@@ -121,6 +128,19 @@ export default function DispatchPage() {
   const [incomingLoading, setIncomingLoading] = useState(true);
   const [receivingParcelId, setReceivingParcelId] = useState<string | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
+
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>("COMPLETED");
+  const [historySource, setHistorySource] = useState<SourceFilter>("ALL");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPageNumber, setHistoryPageNumber] = useState(0);
+  const [historyPage, setHistoryPage] = useState<PageResponse<DispatchParcelItem> | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyCounts, setHistoryCounts] = useState<{
+    delivered: number | null;
+    failed: number | null;
+    cancelled: number | null;
+  }>({ delivered: null, failed: null, cancelled: null });
 
   const [couriers, setCouriers] = useState<DispatchCourier[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
@@ -294,6 +314,65 @@ export default function DispatchPage() {
     };
   }, [parcelPageNumber, parcelStatus, sourceFilter, assignmentFilter, search, refreshKey, effectiveHubFilter]);
 
+  // 2b. Order History Counts & Paginated List
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      countDispatchParcels("DELIVERED", effectiveHubFilter),
+      countDispatchParcels("FAILED", effectiveHubFilter),
+      countDispatchParcels("CANCELLED", effectiveHubFilter),
+    ]).then(([deliveredRes, failedRes, cancelledRes]) => {
+      if (!active) {
+        return;
+      }
+      setHistoryCounts({
+        delivered: deliveredRes.status === "fulfilled" ? deliveredRes.value : null,
+        failed: failedRes.status === "fulfilled" ? failedRes.value : null,
+        cancelled: cancelledRes.status === "fulfilled" ? cancelledRes.value : null,
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshKey, effectiveHubFilter]);
+
+  useEffect(() => {
+    let active = true;
+    listDispatchParcels({
+      page: historyPageNumber,
+      size: PARCEL_PAGE_SIZE,
+      status:
+        historyStatus === "COMPLETED" || historyStatus === "ALL"
+          ? undefined
+          : historyStatus,
+      terminal: historyStatus === "COMPLETED" ? true : undefined,
+      source: historySource === "ALL" ? undefined : historySource,
+      search: historySearch,
+      hubId: effectiveHubFilter,
+    })
+      .then((loaded) => {
+        if (active) {
+          setHistoryPage(loaded);
+          setHistoryError(null);
+        }
+      })
+      .catch((failure: unknown) => {
+        if (active) {
+          setHistoryError(formatApiError(failure));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [historyPageNumber, historyStatus, historySource, historySearch, refreshKey, effectiveHubFilter]);
+
   // 3. Active Deliveries
   useEffect(() => {
     let active = true;
@@ -444,6 +523,7 @@ export default function DispatchPage() {
     setMetricsLoading(true);
     setIncomingLoading(true);
     setParcelPageLoading(true);
+    setHistoryLoading(true);
     setActiveLoading(true);
     setWarehouseLoading(true);
     setCouriersLoading(true);
@@ -606,6 +686,17 @@ export default function DispatchPage() {
             label="Delivery Operations"
             badge={metrics.activeDeliveries ?? 0}
             badgeVariant="primary"
+          />
+          <TabButton
+            active={activeTab === "history"}
+            onClick={() => setActiveTab("history")}
+            icon={History}
+            label="Order History"
+            badge={
+              (historyCounts.delivered ?? 0) +
+              (historyCounts.failed ?? 0) +
+              (historyCounts.cancelled ?? 0)
+            }
           />
           <TabButton
             active={activeTab === "tracking"}
@@ -1289,7 +1380,170 @@ export default function DispatchPage() {
       )}
 
       {/* ======================================================== */}
-      {/* TAB 5: PARCEL TRACKING                                   */}
+      {/* TAB 5: ORDER HISTORY                                     */}
+      {/* ======================================================== */}
+      {activeTab === "history" && (
+        <section aria-labelledby="heading-order-history" className="space-y-4">
+          <SectionHeading
+            id="heading-order-history"
+            eyebrow="Completed & past orders"
+            title="Order History"
+            description="Review delivered, failed, and cancelled parcels handled by your hub, and inspect full status and courier timelines."
+          />
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Delivered parcels</p>
+                <p className="mt-1 text-2xl font-bold text-primary">{historyCounts.delivered ?? "—"}</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Failed parcels</p>
+                <p className="mt-1 text-2xl font-bold text-foreground">{historyCounts.failed ?? "—"}</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Cancelled parcels</p>
+                <p className="mt-1 text-2xl font-bold text-foreground">{historyCounts.cancelled ?? "—"}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+            <CardContent className="space-y-4 p-4 sm:p-5">
+              {/* Filters */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <label className="relative block sm:col-span-2 lg:col-span-1">
+                  <span className="sr-only">Search parcel IDs or tracking numbers</span>
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={historySearch}
+                    onChange={(event) => {
+                      setHistorySearch(event.target.value);
+                      setHistoryPageNumber(0);
+                      setHistoryLoading(true);
+                    }}
+                    placeholder="Search parcel ID or tracking number"
+                    className="h-10 bg-background pl-9"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <span className="shrink-0">Status</span>
+                  <select
+                    value={historyStatus}
+                    onChange={(event) => {
+                      setHistoryStatus(event.target.value as HistoryStatusFilter);
+                      setHistoryPageNumber(0);
+                      setHistoryLoading(true);
+                    }}
+                    className="h-10 w-full min-w-40 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
+                  >
+                    <option value="COMPLETED">All completed</option>
+                    <option value="DELIVERED">{STATUS_LABELS.DELIVERED}</option>
+                    <option value="FAILED">{STATUS_LABELS.FAILED}</option>
+                    <option value="CANCELLED">{STATUS_LABELS.CANCELLED}</option>
+                    <option value="ALL">All statuses</option>
+                  </select>
+                </label>
+                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <span className="shrink-0">Source</span>
+                  <select
+                    value={historySource}
+                    onChange={(event) => {
+                      setHistorySource(event.target.value as SourceFilter);
+                      setHistoryPageNumber(0);
+                      setHistoryLoading(true);
+                    }}
+                    className="h-10 w-full min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
+                  >
+                    {SOURCE_FILTERS.map((source) => (
+                      <option key={source} value={source}>
+                        {source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {historyError && <ErrorMessage message={historyError} />}
+              {historyLoading && <LoadingRows label="Loading order history" />}
+              {!historyLoading && !historyError && (historyPage?.items.length ?? 0) === 0 && (
+                <EmptyState
+                  icon={History}
+                  title="No order history found"
+                  description={
+                    historySearch.trim() || historyStatus !== "COMPLETED" || historySource !== "ALL"
+                      ? "Try another search, status, or source filter."
+                      : "Completed, failed, and cancelled parcels handled by your hub will appear here."
+                  }
+                />
+              )}
+
+              {!historyLoading && !historyError && (historyPage?.items.length ?? 0) > 0 && historyPage && (
+                <>
+                  <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+                    <table className="w-full min-w-[900px] text-left text-sm">
+                      <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Parcel / tracking</th>
+                          <th className="px-4 py-3 font-semibold">Source</th>
+                          <th className="px-4 py-3 font-semibold">Route</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Assigned courier</th>
+                          <th className="px-4 py-3 font-semibold">Updated</th>
+                          <th className="px-4 py-3 font-semibold">History</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {historyPage.items.map((parcel) => (
+                          <HistoryTableRow
+                            key={parcel.id}
+                            parcel={parcel}
+                            courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                            onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="space-y-3 md:hidden">
+                    {historyPage.items.map((parcel) => (
+                      <HistoryMobileCard
+                        key={parcel.id}
+                        parcel={parcel}
+                        courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                        onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
+                      />
+                    ))}
+                  </div>
+
+                  <Pagination
+                    page={historyPage.page}
+                    totalPages={historyPage.totalPages}
+                    totalItems={historyPage.totalItems}
+                    pageSize={PARCEL_PAGE_SIZE}
+                    loading={historyLoading}
+                    onPrevious={() => {
+                      setHistoryPageNumber((current) => Math.max(0, current - 1));
+                      setHistoryLoading(true);
+                    }}
+                    onNext={() => {
+                      setHistoryPageNumber((current) => current + 1);
+                      setHistoryLoading(true);
+                    }}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB 6: PARCEL TRACKING                                   */}
       {/* ======================================================== */}
       {activeTab === "tracking" && (
         <section aria-labelledby="heading-tracking" className="space-y-4">
@@ -1675,6 +1929,76 @@ function ActiveDeliveryCard({
         <span>{formatDateTime(parcel.updatedAt)}</span>
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onDetails}>View details</Button>
+    </article>
+  );
+}
+
+function HistoryTableRow({
+  parcel,
+  courierName,
+  onDetails,
+}: {
+  parcel: DispatchParcelItem;
+  courierName?: string;
+  onDetails: () => void;
+}) {
+  return (
+    <tr className="hover:bg-muted/40">
+      <td className="px-4 py-3">
+        <span className="block font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</span>
+        <span className="mt-0.5 block text-[10px] text-muted-foreground">
+          {parcel.merchantOrderReference ? `Ref: ${parcel.merchantOrderReference}` : `ID ${parcel.id.slice(0, 8)}…`}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-foreground">{parcelSourceLabel(parcel.source)}</td>
+      <td className="px-4 py-3 text-muted-foreground">{parcelLocation(parcel)}</td>
+      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
+      <td className="px-4 py-3">
+        <Button type="button" variant="ghost" size="sm" onClick={onDetails} aria-label={`View ${parcel.trackingNumber} history`}>
+          View history
+        </Button>
+      </td>
+    </tr>
+  );
+}
+
+function HistoryMobileCard({
+  parcel,
+  courierName,
+  onDetails,
+}: {
+  parcel: DispatchParcelItem;
+  courierName?: string;
+  onDetails: () => void;
+}) {
+  return (
+    <article className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {parcel.merchantOrderReference ? `Ref: ${parcel.merchantOrderReference}` : `ID ${parcel.id.slice(0, 8)}…`} · {parcelSourceLabel(parcel.source)}
+          </p>
+        </div>
+        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+      </div>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span className="truncate">{parcelLocation(parcel)}</span>
+      </p>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="truncate">
+          Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
+        </span>
+        <span>{formatDateTime(parcel.updatedAt)}</span>
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={onDetails} className="w-full">
+        View history
+      </Button>
     </article>
   );
 }
