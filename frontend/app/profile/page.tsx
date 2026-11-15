@@ -12,6 +12,16 @@ import {
   type CreateAddressRequest,
 } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ADMIN_NAV,
+  COURIER_NAV,
+  CUSTOMER_NAV,
+  DISPATCHER_PROFILE_NAV,
+  MERCHANT_NAV,
+  PortalShell,
+  type PortalNavItem,
+} from "@/components/portal/portal-shell";
+import type { BackendRole } from "@/components/portal/role-guard";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -351,21 +361,60 @@ export default function ProfilePage() {
 
   const initial = (user.fullName || user.email || "U").trim().charAt(0).toUpperCase();
 
+  let portalName = "Account Profile";
+  let portalRole: BackendRole | undefined;
+  let workspaceBadge = "Account Settings";
+  let navItems: PortalNavItem[] = [];
+
+  if (hasRole("ADMIN")) {
+    portalName = "Admin Portal";
+    portalRole = "ADMIN";
+    workspaceBadge = "Admin Workspace · System Administration";
+    navItems = ADMIN_NAV;
+  } else if (hasRole("DISPATCHER")) {
+    portalName = "Dispatcher Portal";
+    portalRole = "DISPATCHER";
+    workspaceBadge = "Dispatch Workspace · Fleet Operations";
+    navItems = DISPATCHER_PROFILE_NAV;
+  } else if (hasRole("MERCHANT")) {
+    portalName = "Merchant Portal";
+    portalRole = "MERCHANT";
+    workspaceBadge = "Merchant Workspace · WS4 & WS5";
+    navItems = MERCHANT_NAV;
+  } else if (hasRole("COURIER")) {
+    portalName = "Courier Portal";
+    portalRole = "COURIER";
+    workspaceBadge = "Courier Workspace · WS6";
+    navItems = COURIER_NAV;
+  } else if (hasRole("CUSTOMER")) {
+    portalName = "Customer Portal";
+    portalRole = "CUSTOMER";
+    workspaceBadge = "Customer Workspace · WS2";
+    navItems = CUSTOMER_NAV;
+  }
+
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8 space-y-8">
-      {/* Top Breadcrumb / Return Navigation */}
-      <div className="flex items-center justify-between">
-        <Link
-          href={dashboardHref}
-          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-4" />
-          Back to Dashboard
-        </Link>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent text-primary border border-primary/20 uppercase tracking-wider">
-          {profileBadgeLabel}
-        </span>
-      </div>
+    <PortalShell
+      portalName={portalName}
+      role={portalRole}
+      allowedRoles={["ADMIN", "DISPATCHER", "MERCHANT", "COURIER", "CUSTOMER"]}
+      workspaceBadge={workspaceBadge}
+      navItems={navItems}
+    >
+      <div className="space-y-6">
+        {/* Top Breadcrumb / Return Navigation */}
+        <div className="flex items-center justify-between">
+          <Link
+            href={dashboardHref}
+            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-4" />
+            Back to Dashboard
+          </Link>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent text-primary border border-primary/20 uppercase tracking-wider">
+            {profileBadgeLabel}
+          </span>
+        </div>
 
       {/* Incomplete profile warning banner for customers */}
       {isCustomer && user.profileCompleted === false && (
@@ -1005,6 +1054,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </PortalShell>
   );
 }

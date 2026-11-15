@@ -24,6 +24,32 @@ export const ADMIN_NAV: PortalNavItem[] = [
 
 export const DISPATCHER_NAV: PortalNavItem[] = [];
 
+export const DISPATCHER_PROFILE_NAV: PortalNavItem[] = [
+  { href: "/dispatch", label: "Overview", exact: true },
+  { href: "/profile", label: "My Profile", exact: true },
+];
+
+export const MERCHANT_NAV: PortalNavItem[] = [
+  { href: "/merchant", label: "Dashboard", exact: true },
+  { href: "/merchant/orders", label: "Orders", exact: true },
+  { href: "/merchant/api-keys", label: "API Keys", exact: true },
+  { href: "/merchant/webhooks", label: "Webhooks", exact: true },
+  { href: "/merchant/status", label: "Application Status", exact: true },
+  { href: "/profile", label: "My Profile", exact: true },
+];
+
+export const COURIER_NAV: PortalNavItem[] = [
+  { href: "/courier", label: "Today's run" },
+  { href: "/profile", label: "My Profile" },
+];
+
+export const CUSTOMER_NAV: PortalNavItem[] = [
+  { href: "/customer", label: "Overview", exact: true },
+  { href: "/customer/new", label: "Book Delivery", exact: true },
+  { href: "/customer/history", label: "Delivery History", exact: true },
+  { href: "/profile", label: "My Profile" },
+];
+
 export interface PortalShellProps {
   portalName: string;
   role?: BackendRole;
