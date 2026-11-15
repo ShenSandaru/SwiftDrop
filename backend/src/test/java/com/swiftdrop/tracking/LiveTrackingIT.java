@@ -95,9 +95,7 @@ class LiveTrackingIT {
         jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Courier', TRUE, now())",
                 courierId, "courier-" + courierId + "@example.com");
         // Assignments name a real dispatcher (ADR 0008; foreign key to users)
-        dispatcherId = UUID.randomUUID();
-        jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Dispatcher', TRUE, now())",
-                dispatcherId, "dispatcher-" + dispatcherId + "@example.com");
+        dispatcherId = TestHubs.adminUser(jdbc);
     }
 
     @Test

@@ -6,8 +6,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * The hubs a parcel passes through (ADR 0009 §1): its origin branch, the central hub when the
- * parcel travels between two branches that are both not central, and its destination branch.
+ * The hubs a parcel passes through (ADR 0009 §1, ADR 0011 §2): its origin branch, the central hub
+ * when the parcel travels between two branches that are both not central and not directly linked,
+ * and its destination branch.
  *
  * @param via the central hub, or {@code null} when the parcel does not pass through it
  */
@@ -27,14 +28,15 @@ public record HubRoute(UUID origin, UUID via, UUID destination) {
     /**
      * The route between two branches.
      *
-     * @param central the central hub, needed only when neither branch is central and they differ
+     * @param central        the central hub, needed only when the route passes through it
+     * @param directlyLinked whether the two branches exchange parcels directly (ADR 0011 §1)
      * @throws IllegalStateException if the route needs a central hub and none is given
      */
-    public static HubRoute between(Hub origin, Hub destination, Hub central) {
+    public static HubRoute between(Hub origin, Hub destination, Hub central, boolean directlyLinked) {
         Objects.requireNonNull(origin, "origin");
         Objects.requireNonNull(destination, "destination");
         boolean sameHub = origin.getId().equals(destination.getId());
-        if (sameHub || origin.isCentral() || destination.isCentral()) {
+        if (sameHub || origin.isCentral() || destination.isCentral() || directlyLinked) {
             return new HubRoute(origin.getId(), null, destination.getId());
         }
         if (central == null) {

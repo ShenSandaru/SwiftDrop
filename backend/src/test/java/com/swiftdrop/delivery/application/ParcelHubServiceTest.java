@@ -29,6 +29,7 @@ import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.domain.ActorRole;
+import com.swiftdrop.delivery.domain.Hub;
 import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.Parcel;
@@ -51,6 +52,7 @@ class ParcelHubServiceTest {
     private final HubRepository hubs = mock(HubRepository.class);
     private final ParcelAssignmentRepository assignments = mock(ParcelAssignmentRepository.class);
     private final ParcelStatusHistoryRepository history = mock(ParcelStatusHistoryRepository.class);
+    private final HubAuthority authority = mock(HubAuthority.class);
     private ParcelHubService service;
     private Parcel parcel;
 
@@ -62,7 +64,7 @@ class ParcelHubServiceTest {
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(),
                 mock(ApplicationEventPublisher.class));
         service = new ParcelHubService(parcels, hubs, assignments, recorder, DeliveryPolicy.defaults(),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), authority);
 
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
                 UUID.randomUUID(), null);
@@ -124,5 +126,44 @@ class ParcelHubServiceTest {
         assertThatThrownBy(() -> service.markFailed(parcel.getId(), FailureReason.DAMAGED, null,
                 Staff.dispatcher(DISPATCHER_ID))).isInstanceOf(ParcelConflictException.class);
         verify(history, never()).save(any());
+    }
+
+    // ---- Hub scope (ADR 0012 §3) ----
+
+    @Test
+    void everyDispatcherStepIsRefusedOutsideTheCallersHubsAndChangesNothing() {
+        Staff staff = Staff.dispatcher(DISPATCHER_ID);
+        when(parcels.findByIdForUpdate(parcel.getId())).thenReturn(Optional.of(parcel));
+        org.mockito.Mockito.doThrow(new com.swiftdrop.delivery.api.ParcelForbiddenException("another hub"))
+                .when(authority).requireCanAct(parcel, staff);
+        UUID hubId = UUID.randomUUID();
+        when(hubs.findById(hubId)).thenReturn(Optional.of(
+                new Hub("BAD", "Badulla branch", "Badulla", UUID.randomUUID(), false, NOW)));
+        ParcelStatus before = parcel.getStatus();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.scanAtHub(parcel.getId(), hubId, staff))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.sendToNextHub(parcel.getId(), staff))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.startReturn(parcel.getId(), staff))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.markFailed(parcel.getId(),
+                        com.swiftdrop.delivery.api.FailureReason.DAMAGED, null, staff))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancel(parcel.getId(), staff))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+
+        org.assertj.core.api.Assertions.assertThat(parcel.getStatus()).isEqualTo(before);
+        org.mockito.Mockito.verifyNoInteractions(history);
+    }
+
+    @Test
+    void theCustomerWhoBookedTheParcelCancelsWithoutAHub() {
+        when(parcels.findByIdForUpdate(parcel.getId())).thenReturn(Optional.of(parcel));
+        ReflectionTestUtils.setField(parcel, "customerId", CUSTOMER_ID);
+
+        service.cancelForCustomer(parcel.getId(), CUSTOMER_ID);
+
+        org.mockito.Mockito.verifyNoInteractions(authority);
     }
 }

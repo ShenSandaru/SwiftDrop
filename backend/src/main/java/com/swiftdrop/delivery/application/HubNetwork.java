@@ -1,6 +1,7 @@
 package com.swiftdrop.delivery.application;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -9,21 +10,24 @@ import org.springframework.stereotype.Service;
 
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubLinkRepository;
 import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.HubRoute;
 
 /**
- * Routes parcels through the hub network (ADR 0009 §1): every pickup and drop-off zone must be
- * served by an active branch hub, and a parcel between two branches that are not central passes
- * through the central hub.
+ * Routes parcels through the hub network (ADR 0009 §1, ADR 0011 §2): every pickup and drop-off zone
+ * must be served by an active branch hub, and a parcel between two branches that are not central
+ * passes through the central hub unless the branches are directly linked.
  */
 @Service
 public class HubNetwork {
 
     private final HubRepository hubs;
+    private final HubLinkRepository links;
 
-    public HubNetwork(HubRepository hubs) {
+    public HubNetwork(HubRepository hubs, HubLinkRepository links) {
         this.hubs = hubs;
+        this.links = links;
     }
 
     /**
@@ -41,10 +45,16 @@ public class HubNetwork {
         Hub destination = branchOf(dropoffZoneId, "drop-off");
         Hub central = hubs.findFirstByCentralTrueAndActiveTrue().orElse(null);
         try {
-            return HubRoute.between(origin, destination, central);
+            return HubRoute.between(origin, destination, central,
+                    links.areLinked(origin.getId(), destination.getId()));
         } catch (IllegalStateException e) {
             throw new ParcelConflictException("No central hub is configured");
         }
+    }
+
+    /** The active branch hub of a zone, if it has one (ADR 0012 §3: who handles a parcel before pickup). */
+    public Optional<UUID> branchHubId(UUID zoneId) {
+        return zoneId == null ? Optional.empty() : hubs.findByZoneIdAndActiveTrue(zoneId).map(Hub::getId);
     }
 
     /** Checks at booking that both zones are served (ADR 0009 §1). */

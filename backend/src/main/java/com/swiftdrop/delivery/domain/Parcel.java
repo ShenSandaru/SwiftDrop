@@ -499,6 +499,48 @@ public class Parcel {
         return actions;
     }
 
+    // ---- Which hub handles the parcel (ADR 0012 §3) ----------------------------------------------
+
+    /**
+     * The one hub responsible for the parcel now, or {@code null} when none is: a finished parcel, or
+     * one picked up without a route (ADR 0006).
+     *
+     * @param pickupBranchHubId the branch of the pickup zone, who handles the parcel until pickup
+     */
+    public UUID responsibleHubId(UUID pickupBranchHubId) {
+        return switch (status) {
+            case CREATED -> pickupBranchHubId;
+            case PICKED_UP -> originHubId;
+            case AT_HUB -> currentHubId;
+            case IN_TRANSIT -> nextHubId;
+            case OUT_FOR_DELIVERY, DELIVERY_ATTEMPT_FAILED, RETURNING -> destinationHubId;
+            case DELIVERED, RETURNED, CANCELLED, FAILED -> null;
+        };
+    }
+
+    /**
+     * What the hubs of a staff member allow them to do with this parcel: act when one of them is
+     * responsible; read when one of them is on the parcel's route (so the sending hub can follow a
+     * parcel it dispatched), or the pickup branch of a parcel that never left it. Parcels picked up
+     * without a route are visible only to staff who work everywhere.
+     *
+     * @param pickupBranchHubId the branch of the pickup zone, or {@code null} if it has no hub
+     */
+    public HubAccess accessFor(HubScope scope, UUID pickupBranchHubId) {
+        if (scope.everywhere()) {
+            return HubAccess.ACT;
+        }
+        if (scope.includes(responsibleHubId(pickupBranchHubId))) {
+            return HubAccess.ACT;
+        }
+        boolean neverLeftThePickupBranch = status == ParcelStatus.CREATED || status == ParcelStatus.CANCELLED;
+        if (neverLeftThePickupBranch ? scope.includes(pickupBranchHubId)
+                : originHubId != null && getRoute().hubs().stream().anyMatch(scope::includes)) {
+            return HubAccess.READ;
+        }
+        return HubAccess.NONE;
+    }
+
     // ---- Rules ----------------------------------------------------------------------------------
 
     /** Picked up without a route: follows the ADR 0006 rules. */

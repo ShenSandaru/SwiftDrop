@@ -82,6 +82,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         DeliveryProofRepository.class, OutboxEventRepository.class, ParcelAssignmentRepository.class,
         MerchantStatusHistoryRepository.class, MerchantWebhookEndpointRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantEventStateRepository.class,
         com.swiftdrop.merchant.domain.MerchantProcessedEventRepository.class,
         com.swiftdrop.merchant.domain.MerchantPendingEventRepository.class,
