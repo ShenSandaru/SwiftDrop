@@ -357,11 +357,10 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   home hubs (`hub_staff`, several per person). Exactly one hub is responsible for an unfinished
   parcel at a time: the pickup branch until pickup, then the hub it is at or travelling to, and the
   destination hub for delivery, attempts and returns. A dispatcher sees the parcels of their hubs and
-  may only follow, not change, those that passed through them. Admins and head office dispatchers
-  work everywhere; a dispatcher with no hub sees nothing. The migration marks existing dispatchers
-  as head office, so deployment changes nothing until an admin narrows them. A courier with hubs can
-  only be given parcels of those hubs, and one with no hub only by staff who work everywhere. This
-  replaces the sentence of ADR 0009 §6 that lets any dispatcher scan at any hub.
+  may only follow, not change, those that passed through them. Only admins work everywhere; a
+  dispatcher with no hub sees nothing, so existing dispatchers need a hub from an admin after
+  deployment. A courier with hubs can only be given parcels of those hubs, and one with no hub only
+  by an admin. This replaces the sentence of ADR 0009 §6 that lets any dispatcher scan at any hub.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
@@ -385,7 +384,7 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
     the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
     task (`PICKUP`, `DELIVERY`, `RETURN`).
   - Hub staff (ADR 0012), `ADMIN` only: `GET /api/v1/hubs/staff`, `PUT`/`DELETE`
-    `/api/v1/hubs/{hubId}/staff/{userId}` and `/api/v1/hubs/head-office-staff/{userId}`. Dispatchers
+    `/api/v1/hubs/{hubId}/staff/{userId}`. Dispatchers
     read their own scope with `GET /api/v1/dispatch/scope`. The dispatch lists, hub steps and
     courier assignment are limited to the caller's hubs (`403` outside them), and parcels a
     dispatcher only follows carry `readOnly` and no actions.

@@ -39,8 +39,8 @@ import com.swiftdrop.pricing.api.ParcelSize;
 
 /**
  * Hub-scoped staff against real PostgreSQL (ADR 0012): one parcel travels Galle, Colombo, Kandy while
- * dispatchers and couriers of each hub, a head office dispatcher and a dispatcher without a hub try
- * to see it, act on it and assign couriers.
+ * dispatchers and couriers of each hub, an admin and a dispatcher without a hub try to see it, act
+ * on it and assign couriers.
  */
 @SpringBootTest(properties = {
         "swiftdrop.security.jwt.secret=test-only-jwt-secret-not-used-outside-tests-0123456789",

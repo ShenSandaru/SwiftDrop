@@ -17,9 +17,8 @@ other branch, can act on them by mistake, and sees personal data they have no re
 
 - `delivery` owns a **hub staff** table: a user ID, a hub ID, who created the row and when. A user
   may belong to several hubs (relief staff, a courier covering two towns).
-- A row without a hub marks the user as **head office**: a dispatcher who works country-wide.
 - User IDs are read through `identity.api`; there is no cross-module foreign key (ADR 0003). Only
-  `DISPATCHER` and `COURIER` accounts can be given a hub, and only a `DISPATCHER` can be head office.
+  `DISPATCHER` and `COURIER` accounts can be given a hub.
 - Admins (`ADMIN`) manage the rows. Deleting a hub removes its rows.
 
 ### 2. Scope of a staff member
@@ -27,13 +26,17 @@ other branch, can act on them by mistake, and sees personal data they have no re
 | Caller | Scope |
 |---|---|
 | `ADMIN` | Everything |
-| Head office dispatcher | Everything |
 | Dispatcher with hubs | Parcels of those hubs (§3) |
 | Dispatcher with no row | **Nothing** |
 
 A dispatcher without a hub sees and does nothing, so a forgotten assignment is visible at once
-instead of silently granting country-wide access. The migration marks every existing `DISPATCHER`
-as head office, so nothing changes on the day this is deployed; an admin then narrows them.
+instead of silently granting country-wide access. Only admins work everywhere. A country-wide
+"head office" dispatcher was considered and left out (see "Alternatives considered").
+
+Deployment: every existing dispatcher sees an empty portal until an admin gives them a hub. A first
+migration marked existing dispatchers as head office and a second one removed those rows again; a
+second migration rather than an edit, because a database that ran the first must not see its
+checksum change.
 
 ### 3. Which parcels a hub handles
 
@@ -50,7 +53,7 @@ Exactly one hub is **responsible** for an unfinished parcel, and may act on it:
 
 Every hub on the parcel's stored route may **read** it at any time, so the sending hub can follow
 a parcel it dispatched and both ends can see how it finished. Parcels picked up without a route
-(ADR 0006) are visible to head office and admins only.
+(ADR 0006) are visible to admins only.
 
 - Dispatch lists show the parcels the caller may act on or read. For a parcel they may only read,
   no actions are offered.
@@ -62,7 +65,7 @@ a parcel it dispatched and both ends can see how it finished. Parcels picked up 
 
 - A courier with hubs can be given a task only for a parcel whose responsible hub is one of them:
   the pickup branch for a pickup, the destination hub for a delivery or return.
-- A courier with no hub can be assigned only by an admin or head office.
+- A courier with no hub can be assigned only by an admin.
 - A hub dispatcher's courier list and workload counts show only couriers who share a hub with them.
 - What a courier sees does not change: only their own tasks, as before.
 
@@ -70,16 +73,12 @@ a parcel it dispatched and both ends can see how it finished. Parcels picked up 
 
 All admin endpoints are `ADMIN` only: they decide who sees which parcels.
 
-- `GET /api/v1/hubs/staff`: every enabled dispatcher and courier by name, with `headOffice` and
-  their `hubIds`. Someone who is neither head office nor at a hub shows an empty list, so the admin
-  page can list who still needs a hub. Emails are not returned.
+- `GET /api/v1/hubs/staff`: every enabled dispatcher and courier by name, with their `hubIds`.
+  Someone at no hub shows an empty list, so the admin page can list who still needs a hub. Emails
+  are not returned.
 - `PUT /api/v1/hubs/{hubId}/staff/{userId}` and `DELETE` of the same path: add to or remove from a
   hub. Adding is idempotent, and `404` for an unknown hub or user, `409` for an inactive hub or a
   user who is not a dispatcher or courier.
-- `PUT /api/v1/hubs/head-office-staff/{userId}` and `DELETE` of the same path: head office, for
-  dispatchers only. Idempotent.
-- A person is head office or works for hubs, never both: adding a hub to a head office dispatcher
-  makes them a hub dispatcher, and making someone head office replaces their hubs.
 - `delivery.api` gains the caller on the dispatch list queries, and a small directory that tells
   `dispatch` who shares a hub with the caller.
 
@@ -95,7 +94,11 @@ hub.
   does not depend on, one hub per user would be the natural limit, and hubs already live in
   `delivery`.
 - **Unassigned dispatchers keep country-wide access.** Rejected: access would be granted by
-  omission. The explicit head office row gives the same result on purpose.
+  omission.
+- **A "head office" scope for dispatchers.** Tried and removed. It is all or nothing, so a regional
+  manager would see every district, it can act and not only watch, and grants and removals leave no
+  history. Admins cover the country-wide desk. A read-only supervisor or regional scopes can come
+  with a later ADR if a customer needs them.
 - **A separate `HUB_STAFF` role** (ADR 0009, deferred). Still deferred: the scope answers "where",
   and the existing roles answer "what".
 - **Hiding other hubs' parcels as `404`.** Rejected for staff: a dispatcher who follows a link to
@@ -107,6 +110,4 @@ hub.
 - Admins must assign new dispatchers and couriers to hubs; an unassigned dispatcher sees an empty
   portal until they do.
 - `dispatch` passes the caller to `delivery` for lists and assignments.
-- The delivery migration reads `user_roles` once to mark existing dispatchers as head office. It
-  adds no foreign key and no later dependency on `identity` tables.
 - Scans are still made one parcel at a time; batches and manifests are left to a later ADR.
