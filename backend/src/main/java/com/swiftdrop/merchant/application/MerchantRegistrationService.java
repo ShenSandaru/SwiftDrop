@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.identity.api.UserDirectory;
+import com.swiftdrop.merchant.api.MerchantApplicationSubmitted;
 import com.swiftdrop.merchant.domain.Merchant;
 import com.swiftdrop.merchant.domain.MerchantRepository;
 import com.swiftdrop.merchant.domain.MerchantStatusHistory;
@@ -94,6 +95,7 @@ public class MerchantRegistrationService {
         historyRepository.save(history);
 
         eventPublisher.publishEvent(new MerchantApplicationSubmitted(
+                UUID.randomUUID(),
                 merchant.getId(),
                 userId,
                 merchant.getBusinessName(),

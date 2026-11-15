@@ -35,10 +35,10 @@ public class NotificationRecord {
     @Column(name = "recipient_user_id", nullable = false, updatable = false)
     private UUID recipientUserId;
 
-    @Column(name = "parcel_id", nullable = false, updatable = false)
+    @Column(name = "parcel_id", updatable = false)
     private UUID parcelId;
 
-    @Column(name = "tracking_number", nullable = false, length = MAX_TRACKING_NUMBER_LENGTH, updatable = false)
+    @Column(name = "tracking_number", length = MAX_TRACKING_NUMBER_LENGTH, updatable = false)
     private String trackingNumber;
 
     @Column(nullable = false, length = MAX_TITLE_LENGTH, updatable = false)
@@ -67,11 +67,50 @@ public class NotificationRecord {
     @Column(name = "failure_reason", length = MAX_FAILURE_REASON_LENGTH)
     private String failureReason;
 
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     protected NotificationRecord() {
         // for JPA
+    }
+
+    /**
+     * Factory method for parcel-related notification records.
+     * Enforces non-null parcelId and trackingNumber.
+     */
+    public static NotificationRecord forParcel(
+            UUID eventId,
+            UUID recipientUserId,
+            UUID parcelId,
+            String trackingNumber,
+            String title,
+            String message,
+            NotificationChannel channel,
+            NotificationDeliveryStatus deliveryStatus,
+            Instant createdAt) {
+        Objects.requireNonNull(parcelId, "parcelId must not be null for parcel notification");
+        Objects.requireNonNull(trackingNumber, "trackingNumber must not be null for parcel notification");
+        return new NotificationRecord(eventId, recipientUserId, parcelId, trackingNumber, title, message, channel, deliveryStatus, createdAt);
+    }
+
+    /**
+     * Factory method for non-parcel account notifications (e.g. merchant lifecycle events).
+     */
+    public static NotificationRecord forAccount(
+            UUID eventId,
+            UUID recipientUserId,
+            String title,
+            String message,
+            NotificationChannel channel,
+            NotificationDeliveryStatus deliveryStatus,
+            Instant createdAt) {
+        return new NotificationRecord(eventId, recipientUserId, null, null, title, message, channel, deliveryStatus, createdAt);
     }
 
     public NotificationRecord(
@@ -86,8 +125,8 @@ public class NotificationRecord {
             Instant createdAt) {
         this.eventId = Objects.requireNonNull(eventId, "eventId");
         this.recipientUserId = Objects.requireNonNull(recipientUserId, "recipientUserId");
-        this.parcelId = Objects.requireNonNull(parcelId, "parcelId");
-        this.trackingNumber = Objects.requireNonNull(trackingNumber, "trackingNumber");
+        this.parcelId = parcelId;
+        this.trackingNumber = trackingNumber;
         this.title = Objects.requireNonNull(title, "title");
         this.message = Objects.requireNonNull(message, "message");
         this.channel = Objects.requireNonNull(channel, "channel");
@@ -105,6 +144,7 @@ public class NotificationRecord {
         this.deliveryStatus = NotificationDeliveryStatus.SENT;
         this.sentAt = Objects.requireNonNull(sentAt, "sentAt");
         this.failureReason = null;
+        this.nextRetryAt = null;
     }
 
     public void markAsFailed(String failureReason) {
@@ -114,6 +154,20 @@ public class NotificationRecord {
         } else {
             this.failureReason = failureReason;
         }
+    }
+
+    public void scheduleRetry(int retryCount, Instant nextRetryAt, String failureReason) {
+        markAsFailed(failureReason);
+        this.retryCount = retryCount;
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
     }
 
     public UUID getId() {

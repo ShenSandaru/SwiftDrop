@@ -32,3 +32,8 @@ export function createHub(input: HubInput): Promise<Hub> {
 export function updateHub(id: string, input: HubInput): Promise<Hub> {
   return api.put<Hub>(`/api/v1/hubs/${id}`, input);
 }
+
+/** Deletes a hub from the delivery network. */
+export function deleteHub(id: string): Promise<void> {
+  return api.delete<void>(`/api/v1/hubs/${encodeURIComponent(id)}`);
+}

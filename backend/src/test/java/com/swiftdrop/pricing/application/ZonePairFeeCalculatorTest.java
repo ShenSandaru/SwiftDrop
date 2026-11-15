@@ -111,12 +111,12 @@ class ZonePairFeeCalculatorTest {
     }
 
     @Test
-    void routeWithoutActiveRuleIsNotPriced() {
+    void routeWithoutActiveRuleUsesGlobalFallback() {
         when(rules.findByOriginZoneIdAndDestinationZoneIdAndActiveTrue(COLOMBO, KANDY)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> calculator.calculateFee(COLOMBO, KANDY, ParcelSize.SMALL, 1000))
-                .isInstanceOf(RouteNotPricedException.class)
-                .hasMessage("No pricing for this route");
+        FeeQuote quote = calculator.calculateFee(COLOMBO, KANDY, ParcelSize.SMALL, 1000);
+        assertThat(quote.totalFee()).isPositive();
+        assertThat(quote.currency()).isEqualTo("LKR");
     }
 
     @Test
@@ -137,11 +137,12 @@ class ZonePairFeeCalculatorTest {
     }
 
     @Test
-    void routesAreDirectional() {
+    void routesWithoutReverseRuleUseGlobalFallback() {
         when(rules.findByOriginZoneIdAndDestinationZoneIdAndActiveTrue(KANDY, COLOMBO)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> calculator.calculateFee(KANDY, COLOMBO, ParcelSize.SMALL, 1000))
-                .isInstanceOf(RouteNotPricedException.class);
+        FeeQuote quote = calculator.calculateFee(KANDY, COLOMBO, ParcelSize.SMALL, 1000);
+        assertThat(quote.totalFee()).isPositive();
+        assertThat(quote.currency()).isEqualTo("LKR");
     }
 
     private void givenZone(UUID id, String code, String name, boolean active) {

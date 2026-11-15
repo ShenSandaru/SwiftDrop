@@ -93,6 +93,9 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.identity.bootstrap.admin-password="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
@@ -205,7 +208,7 @@ class GoogleLoginApiTest {
                         .content("{\"code\": \"%s\"}".formatted(code)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(exchangeBody, "$.accessToken");
 

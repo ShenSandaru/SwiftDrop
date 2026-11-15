@@ -33,7 +33,7 @@ class ModuleBoundaryTest {
             "delivery", Set.of("identity", "pricing"),
             "dispatch", Set.of("identity", "delivery"),
             "merchant", Set.of("identity", "delivery"),
-            "notification", Set.of("identity", "delivery"),
+            "notification", Set.of("identity", "delivery", "merchant"),
             "tracking", Set.of("delivery"),
             "assistant", Set.of("delivery", "pricing"));
 

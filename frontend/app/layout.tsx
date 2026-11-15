@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Open_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { NotificationProvider } from "@/lib/notification-context";
 import { NavHeader } from "@/components/nav-header";
 
 const openSans = Open_Sans({
@@ -27,8 +28,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <AuthProvider>
-          <NavHeader />
-          <div className="flex-1 flex flex-col">{children}</div>
+          <NotificationProvider>
+            <NavHeader />
+            <div className="flex-1 flex flex-col">{children}</div>
+          </NotificationProvider>
         </AuthProvider>
       </body>
     </html>

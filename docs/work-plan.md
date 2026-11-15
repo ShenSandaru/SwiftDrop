@@ -1,5 +1,7 @@
 # SwiftDrop work plan and issue backlog
 
+> **Historical Notice:** This is the original baseline work plan preserved for historical reference. For the current implementation state, see [docs/project-status.md](project-status.md).
+
 > **Status: Proposed — for team review. No GitHub issues, milestones or labels exist yet.**
 > Contracts referenced here (`§n`, `D-nn`) are in [implementation-contract.md](implementation-contract.md).
 > Issues that depend on an unapproved decision are marked **Blocked (D-nn)**. No deadlines are set

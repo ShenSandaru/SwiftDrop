@@ -53,6 +53,9 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
+        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
@@ -134,7 +137,7 @@ class GoogleExchangeApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
 
         String token = JsonPath.read(responseBody, "$.accessToken");

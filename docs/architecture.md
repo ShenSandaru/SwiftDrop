@@ -29,11 +29,13 @@ Application Development group project for a courier company operating island-wid
   courier status updates; dispatcher assignment, management and reports; asynchronous status
   events with a notification consumer; containerized deployment
   ([project requirements](project-requirements.md)).
-- **Implemented:** project scaffolding, local PostgreSQL and RabbitMQ containers, email/password
-  and Google authentication in `identity` (section 9), and the **delivery and live tracking**
-  features: customer booking, history and receipts, the parcel lifecycle with
-  history and outbox events, courier operations with proof of delivery, public and live tracking,
-  and the customer, courier and tracking pages (sections 4 to 8).
+- **Implemented:** project scaffolding, local PostgreSQL and RabbitMQ containers, authentication and
+  profiles in `identity`, zone/pricing management in `pricing`, parcel booking, hub network,
+  delivery proofs and outbox relay in `delivery`, courier assignment and handoff in `dispatch`,
+  public and live SSE tracking in `tracking`, merchant registration/approval, API keys, orders and
+  SSRF-safe webhooks in `merchant`, asynchronous parcel and merchant status notifications in
+  `notification`, AI delivery assistant and MCP server in `assistant`, and the corresponding
+  Next.js portals (`/customer`, `/merchant`, `/courier`, `/dispatch`, `/admin`, `/track`, `/notifications`, `/profile`).
 - **Decided:** one system with one backend and one database
   ([ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)).
 - **Open:** production hosting, a real email or SMS provider (notifications use a mock SMS channel
@@ -87,17 +89,20 @@ The frontend and backend share no code. They communicate only over HTTP.
   zone, or a route without an active rule, answers 409 "No pricing for this route".
   `POST /api/v1/price-quotes` (fee estimate with breakdown) and `GET /api/v1/zones` (active zones)
   are open to any logged-in user; anonymous access, as the contract proposes, needs a rule in
-  `SecurityConfiguration`. Managing zones and rules (ADM-3) is not implemented yet.
-- **Implemented:** `delivery` (`api`, `domain`, `application`, `web`) and `tracking`
-  (`application`, `web`). `delivery.api` offers `ParcelCreation`, `ParcelAssignment`,
-  `ParcelQueries`, `ParcelEvents` and the `ParcelStatusChanged` event for the other modules
-  (sections 7 and 8).
-- **Implemented:** `merchant.infrastructure.webhook`, the SSRF-safe webhook HTTP client (SD-409,
-  section 7). It also provides the module's `WebhookUrlValidator` for endpoint registration.
+  `SecurityConfiguration`. Admin zone and pricing rule management (`ADM-3`) is implemented in
+  `pricing` and `/admin/pricing`.
+- **Implemented:** `delivery` (`api`, `domain`, `application`, `web`), `dispatch` (`application`,
+  `web`), `tracking` (`application`, `web`), `notification` (`application`, `domain`,
+  `infrastructure`, `web`), and `assistant` (`application`, `infrastructure`, `web`).
+  `delivery.api` offers `ParcelCreation`, `ParcelAssignment`, `ParcelQueries`, `ParcelEvents`, and
+  the `ParcelStatusChanged` event for the other modules (sections 7 and 8).
+- **Implemented:** `merchant` (`api`, `domain`, `application`, `infrastructure.webhook`,
+  `infrastructure.messaging`, `web`), including registration, admin approval, API keys, order API,
+  and the SSRF-safe webhook HTTP client (SD-409, section 7).
 - **Decided:** the module layout, dependencies and package rules below
-  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). `identity`, `pricing`,
-  `delivery`, `tracking` and `merchant` have code so far; the decision is not an authorization to implement
-  another module: that needs an approved task.
+  ([ADR 0003](adr/0003-backend-modules-and-boundaries.md), Accepted). All 10 backend modules
+  (`identity`, `pricing`, `delivery`, `dispatch`, `tracking`, `merchant`, `notification`,
+  `assistant`, `config`, `shared`) are implemented and enforced by `ModuleBoundaryTest`.
 
 ### Modules (Decided, ADR 0003)
 

@@ -85,6 +85,7 @@ class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/tokens", "/api/v1/auth/google/exchanges", "/api/v1/merchants").permitAll()
                         // Public tracking by tracking number (CUS-6); delivery returns no personal data there
                         .requestMatchers(HttpMethod.GET, "/api/v1/tracked-parcels/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/avatar").permitAll()
                         // AI assistant (ADR 0010): its tools return only public data, like tracking
                         .requestMatchers(HttpMethod.POST, "/api/v1/assistant/messages").permitAll()
                         // MCP endpoint (ADR 0010 §5): the same public, read-only tools; GET and DELETE answer 405

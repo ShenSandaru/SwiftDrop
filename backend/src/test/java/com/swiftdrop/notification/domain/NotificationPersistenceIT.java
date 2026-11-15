@@ -161,6 +161,58 @@ class NotificationPersistenceIT {
     }
 
     @Test
+    @DisplayName("Non-parcel notification persists with null parcelId and trackingNumber, and insertIfAbsent provides ON CONFLICT DO NOTHING")
+    void persistNonParcelNotificationAndInsertIfAbsent() {
+        UUID eventId = UUID.randomUUID();
+
+        // 1. Insert non-parcel account notification via insertIfAbsent
+        int inserted = recordRepository.insertIfAbsent(
+                UUID.randomUUID(),
+                eventId,
+                userId,
+                null,
+                null,
+                "Merchant Account Approved",
+                "Your merchant application has been approved.",
+                NotificationChannel.IN_APP.name(),
+                NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                NOW);
+
+        assertThat(inserted).isEqualTo(1);
+        entityManager.clear();
+
+        // 2. Query persisted record
+        Optional<NotificationRecord> loadedOpt = recordRepository.findByEventIdAndChannelAndRecipientUserId(
+                eventId, NotificationChannel.IN_APP, userId);
+        assertThat(loadedOpt).isPresent();
+        NotificationRecord loaded = loadedOpt.get();
+        assertThat(loaded.getParcelId()).isNull();
+        assertThat(loaded.getTrackingNumber()).isNull();
+        assertThat(loaded.getTitle()).isEqualTo("Merchant Account Approved");
+        assertThat(loaded.getMessage()).contains("approved");
+        assertThat(loaded.getChannel()).isEqualTo(NotificationChannel.IN_APP);
+
+        // 3. Second insert with same (event_id, channel, recipient_user_id) triggers ON CONFLICT DO NOTHING
+        int duplicateInsert = recordRepository.insertIfAbsent(
+                UUID.randomUUID(),
+                eventId,
+                userId,
+                null,
+                null,
+                "Duplicate Title",
+                "Duplicate Message",
+                NotificationChannel.IN_APP.name(),
+                NotificationDeliveryStatus.NOT_APPLICABLE.name(),
+                NOW.plusSeconds(1));
+
+        assertThat(duplicateInsert).isZero();
+
+        // Count should still be 1
+        long count = recordRepository.countByRecipientUserIdAndChannelAndIsReadFalse(userId, NotificationChannel.IN_APP);
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("NotificationConsumerState tracks watermark per parcel")
     void persistAndAdvanceConsumerState() {
         UUID parcelId = UUID.randomUUID();

@@ -21,6 +21,12 @@ public interface ZoneRepository extends JpaRepository<Zone, UUID> {
 
     boolean existsByName(String name);
 
+    boolean existsByCodeIgnoreCase(String code);
+
+    boolean existsByNameIgnoreCase(String name);
+
     List<Zone> findByActiveTrue();
+
+    List<Zone> findAllByOrderByNameAsc();
 }
 

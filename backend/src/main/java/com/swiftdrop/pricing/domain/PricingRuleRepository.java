@@ -5,6 +5,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -19,8 +22,16 @@ public interface PricingRuleRepository extends JpaRepository<PricingRule, UUID> 
 
     boolean existsByOriginZoneIdAndDestinationZoneId(UUID originZoneId, UUID destinationZoneId);
 
+    boolean existsByOriginZoneIdOrDestinationZoneId(UUID originZoneId, UUID destinationZoneId);
+
+    @Modifying
+    @Query("DELETE FROM PricingRule p WHERE p.originZoneId = :originZoneId OR p.destinationZoneId = :destinationZoneId")
+    void deleteByOriginZoneIdOrDestinationZoneId(@Param("originZoneId") UUID originZoneId, @Param("destinationZoneId") UUID destinationZoneId);
+
     List<PricingRule> findByOriginZoneId(UUID originZoneId);
 
     List<PricingRule> findByActiveTrue();
+
+    List<PricingRule> findAllByOrderByCreatedAtDesc();
 }
 

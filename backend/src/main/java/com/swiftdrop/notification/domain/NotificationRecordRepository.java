@@ -76,6 +76,57 @@ public interface NotificationRecordRepository extends JpaRepository<Notification
      */
     long countByRecipientUserIdAndChannelAndIsReadFalse(UUID recipientUserId, NotificationChannel channel);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+            "UPDATE NotificationRecord r SET r.deliveryStatus = :status WHERE r.id = :id")
+    int updateDeliveryStatus(
+            @org.springframework.data.repository.query.Param("id") UUID id,
+            @org.springframework.data.repository.query.Param("status") NotificationDeliveryStatus status);
+
+    @org.springframework.data.jpa.repository.Query(value = """
+            SELECT * FROM notification_records
+            WHERE delivery_status = 'FAILED'
+              AND channel IN ('EMAIL', 'SMS')
+              AND retry_count < :maxAttempts
+              AND (next_retry_at IS NULL OR next_retry_at <= :now)
+            ORDER BY next_retry_at ASC NULLS FIRST
+            LIMIT :limit
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    java.util.List<NotificationRecord> findRetryEligibleRecords(
+            @org.springframework.data.repository.query.Param("now") java.time.Instant now,
+            @org.springframework.data.repository.query.Param("maxAttempts") int maxAttempts,
+            @org.springframework.data.repository.query.Param("limit") int limit);
+
+    /**
+     * Atomically inserts an in-app notification record if one does not already exist for the event and recipient.
+     * Uses PostgreSQL's ON CONFLICT DO NOTHING against constraint uq_notification_records_event_channel_user.
+     * Returns 1 if inserted, 0 if a conflicting record already existed.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value = """
+            INSERT INTO notification_records (
+                id, event_id, recipient_user_id, parcel_id, tracking_number,
+                title, message, channel, is_read, read_at,
+                delivery_status, sent_at, failure_reason, created_at
+            ) VALUES (
+                :id, :eventId, :recipientUserId, :parcelId, :trackingNumber,
+                :title, :message, :channel, false, null,
+                :deliveryStatus, null, null, :createdAt
+            ) ON CONFLICT (event_id, channel, recipient_user_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertIfAbsent(
+            @org.springframework.data.repository.query.Param("id") UUID id,
+            @org.springframework.data.repository.query.Param("eventId") UUID eventId,
+            @org.springframework.data.repository.query.Param("recipientUserId") UUID recipientUserId,
+            @org.springframework.data.repository.query.Param("parcelId") UUID parcelId,
+            @org.springframework.data.repository.query.Param("trackingNumber") String trackingNumber,
+            @org.springframework.data.repository.query.Param("title") String title,
+            @org.springframework.data.repository.query.Param("message") String message,
+            @org.springframework.data.repository.query.Param("channel") String channel,
+            @org.springframework.data.repository.query.Param("deliveryStatus") String deliveryStatus,
+            @org.springframework.data.repository.query.Param("createdAt") java.time.Instant createdAt);
+
     /**
      * Queries notifications related to a specific parcel for audit and support.
      * Backed by index {@code ix_notification_records_parcel_id}.

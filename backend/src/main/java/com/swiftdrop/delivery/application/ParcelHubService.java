@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,21 +42,33 @@ public class ParcelHubService implements ParcelHubOperations {
     private final ParcelEventRecorder recorder;
     private final DeliveryPolicy policy;
     private final Clock clock;
+    private final ApplicationEventPublisher publisher;
+
+    public ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
+            ParcelEventRecorder recorder, DeliveryPolicy policy) {
+        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), null);
+    }
 
     @Autowired
     public ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
-            ParcelEventRecorder recorder, DeliveryPolicy policy) {
-        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC());
+            ParcelEventRecorder recorder, DeliveryPolicy policy, ApplicationEventPublisher publisher) {
+        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), publisher);
     }
 
     ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
             ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock) {
+        this(parcels, hubs, assignments, recorder, policy, clock, null);
+    }
+
+    ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
+            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, ApplicationEventPublisher publisher) {
         this.parcels = parcels;
         this.hubs = hubs;
         this.assignments = assignments;
         this.recorder = recorder;
         this.policy = policy;
         this.clock = clock;
+        this.publisher = publisher;
     }
 
     @Override
@@ -135,7 +148,20 @@ public class ParcelHubService implements ParcelHubOperations {
 
     private void cancelActiveTask(Parcel parcel, Instant now) {
         assignments.findFirstByParcelIdAndStatus(parcel.getId(), ParcelAssignmentStatus.ACTIVE)
-                .ifPresent(task -> task.cancel(now));
+                .ifPresent(task -> {
+                    UUID courierId = task.getCourierId();
+                    com.swiftdrop.delivery.api.ParcelAssignmentType assignmentType = task.getType();
+                    task.cancel(now);
+                    if (publisher != null) {
+                        publisher.publishEvent(new com.swiftdrop.delivery.api.ParcelCourierAssignmentCancelled(
+                                UUID.randomUUID(),
+                                parcel.getId(),
+                                parcel.getTrackingNumber(),
+                                courierId,
+                                assignmentType,
+                                now));
+                    }
+                });
     }
 
     private Parcel lock(UUID parcelId) {

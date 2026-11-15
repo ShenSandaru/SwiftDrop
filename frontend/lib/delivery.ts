@@ -263,6 +263,11 @@ export function listZones(): Promise<Zone[]> {
   return api.get<Zone[]>("/api/v1/zones");
 }
 
+/** Active delivery zones that have an active hub assigned (ready for booking). */
+export function listAvailableZones(): Promise<Zone[]> {
+  return api.get<Zone[]>("/api/v1/delivery-zones");
+}
+
 export function getQuote(
   pickupZoneId: string,
   dropoffZoneId: string,

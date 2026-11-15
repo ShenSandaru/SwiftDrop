@@ -66,7 +66,8 @@ class NotificationReconciliationServiceTest {
                 templateResolver,
                 eventParser,
                 parcelEvents,
-                userDirectory);
+                userDirectory,
+                org.mockito.Mockito.mock(com.swiftdrop.merchant.api.MerchantLookup.class));
 
         NotificationReconciliationProperties properties = new NotificationReconciliationProperties(
                 true,
@@ -276,6 +277,16 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public List<UserSummary> findEnabledAdmins() {
+            return List.of();
+        }
+
+        @Override
+        public List<UserSummary> findEnabledDispatchers() {
+            return List.of();
+        }
+
+        @Override
         public UUID createMerchantUser(String fullName, String email, String rawPassword) {
             return UUID.randomUUID();
         }
@@ -436,6 +447,32 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public int updateDeliveryStatus(UUID id, NotificationDeliveryStatus status) {
+            for (NotificationRecord r : records) {
+                if (r.getId().equals(id)) {
+                    if (status == NotificationDeliveryStatus.SENT) {
+                        r.markAsSent(java.time.Instant.now());
+                    } else if (status == NotificationDeliveryStatus.FAILED) {
+                        r.markAsFailed("Delivery failed");
+                    }
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        @Override
+        public List<NotificationRecord> findRetryEligibleRecords(java.time.Instant now, int maxAttempts, int limit) {
+            return records.stream()
+                    .filter(r -> r.getDeliveryStatus() == NotificationDeliveryStatus.FAILED)
+                    .filter(r -> r.getChannel() == NotificationChannel.EMAIL || r.getChannel() == NotificationChannel.SMS)
+                    .filter(r -> r.getRetryCount() < maxAttempts)
+                    .filter(r -> r.getNextRetryAt() == null || !r.getNextRetryAt().isAfter(now))
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
         public Optional<NotificationRecord> findByIdAndRecipientUserIdAndChannel(UUID id, UUID recipientUserId, NotificationChannel channel) {
             return records.stream().filter(r -> r.getId().equals(id)
                     && r.getRecipientUserId().equals(recipientUserId)
@@ -481,6 +518,15 @@ class NotificationReconciliationServiceTest {
         @Override
         public org.springframework.data.domain.Page<NotificationRecord> findByParcelId(UUID parcelId, org.springframework.data.domain.Pageable pageable) {
             return null;
+        }
+
+        @Override
+        public int insertIfAbsent(UUID id, UUID eventId, UUID recipientUserId, UUID parcelId, String trackingNumber, String title, String message, String channel, String deliveryStatus, java.time.Instant createdAt) {
+            if (existsByEventIdAndChannelAndRecipientUserId(eventId, NotificationChannel.valueOf(channel), recipientUserId)) {
+                return 0;
+            }
+            records.add(new NotificationRecord(eventId, recipientUserId, parcelId, trackingNumber, title, message, NotificationChannel.valueOf(channel), NotificationDeliveryStatus.valueOf(deliveryStatus), createdAt));
+            return 1;
         }
 
         // Unused JPA methods

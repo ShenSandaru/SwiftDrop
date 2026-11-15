@@ -73,6 +73,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
 @AutoConfigureMockMvc
 @Import(AuthenticationApiTest.RoleFixtureController.class)
 @MockitoBean(types = {
+        com.swiftdrop.pricing.domain.DistrictRepository.class,
+        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
@@ -116,6 +118,8 @@ class AuthenticationApiTest {
     private ZoneRepository zones;
     @MockitoBean
     private PricingRuleRepository pricingRules;
+    @MockitoBean
+    private com.swiftdrop.identity.domain.UserAddressRepository addresses;
 
     @BeforeEach
     void setUp() {
@@ -192,7 +196,7 @@ class AuthenticationApiTest {
         String body = login("ALICE@example.com", "correct horse")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.accessToken");
 

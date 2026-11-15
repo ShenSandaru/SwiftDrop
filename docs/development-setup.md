@@ -154,7 +154,7 @@ configuration. The backend refuses to start unless `SWIFTDROP_JWT_SECRET` and
 least 32 bytes (see `.env.example`). If you created webhook endpoints before the key became required,
 set it to the old built-in value `swiftdrop-local-dev-webhook-secret-key-32bytes!` to keep their
 secrets readable, or rotate their secrets after choosing a new key.
-`.\mvnw.cmd clean verify` does not need the containers.
+`.\mvnw.cmd test` runs all unit tests without Docker; `.\mvnw.cmd verify -Pintegration` runs unit and integration tests (`*IT.java`) against PostgreSQL and RabbitMQ Testcontainers and requires Docker Desktop running.
 
 Google sign-in is optional and disabled while `SWIFTDROP_GOOGLE_CLIENT_ID` is empty. To try it,
 create a Google OAuth client of type "Web application" with the authorized redirect URI

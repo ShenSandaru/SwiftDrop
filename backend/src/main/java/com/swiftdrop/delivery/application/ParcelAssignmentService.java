@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelCourierAssigned;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.domain.Parcel;
@@ -39,18 +41,26 @@ class ParcelAssignmentService implements ParcelAssignment {
     private final ParcelAssignmentRepository assignments;
     private final DeliveryPolicy policy;
     private final Clock clock;
+    private final ApplicationEventPublisher publisher;
 
     @Autowired
-    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy) {
-        this(parcels, assignments, policy, Clock.systemUTC());
+    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
+            ApplicationEventPublisher publisher) {
+        this(parcels, assignments, policy, Clock.systemUTC(), publisher);
     }
 
     ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
             Clock clock) {
+        this(parcels, assignments, policy, clock, null);
+    }
+
+    ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
+            Clock clock, ApplicationEventPublisher publisher) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.policy = policy;
         this.clock = clock;
+        this.publisher = publisher;
     }
 
     @Override
@@ -78,6 +88,8 @@ class ParcelAssignmentService implements ParcelAssignment {
         ParcelAssignmentRecord current = assignments
                 .findFirstByParcelIdAndStatus(parcelId, ParcelAssignmentStatus.ACTIVE)
                 .orElse(null);
+
+        UUID previousCourierId = current != null ? current.getCourierId() : null;
 
         if (current != null) {
             if (current.getType() != type) {
@@ -107,6 +119,19 @@ class ParcelAssignmentService implements ParcelAssignment {
         // IDs only: no personal data in logs
         log.info("Parcel {} {} task assigned to courier {} by dispatcher {}", parcelId, type, courierUserId,
                 dispatcherUserId);
+
+        if (publisher != null) {
+            publisher.publishEvent(new ParcelCourierAssigned(
+                    UUID.randomUUID(),
+                    parcelId,
+                    parcel.getTrackingNumber(),
+                    courierUserId,
+                    dispatcherUserId,
+                    type,
+                    now,
+                    previousCourierId));
+        }
+
         return assignment.toSummary();
     }
 }

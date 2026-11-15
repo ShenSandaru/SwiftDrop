@@ -105,4 +105,28 @@ class HubAdministrationTest {
         assertThatThrownBy(() -> administration.create(new HubDetails("Kandy", "Kandy", KANDY_ZONE, false), "KDY"))
                 .isInstanceOf(ParcelConflictException.class);
     }
+
+    @Test
+    void deletesAnExistingHub() {
+        UUID id = UUID.randomUUID();
+        Hub hub = new Hub("KDY", "Kandy branch", "Kandy", KANDY_ZONE, false, NOW);
+        when(hubs.findById(id)).thenReturn(Optional.of(hub));
+
+        administration.delete(id);
+
+        verify(hubs).delete(hub);
+        verify(hubs).flush();
+    }
+
+    @Test
+    void conflictWhenHubReferencedByParcels() {
+        UUID id = UUID.randomUUID();
+        Hub hub = new Hub("KDY", "Kandy branch", "Kandy", KANDY_ZONE, false, NOW);
+        when(hubs.findById(id)).thenReturn(Optional.of(hub));
+        org.mockito.Mockito.doThrow(new DataIntegrityViolationException("fk_parcels_origin_hub")).when(hubs).flush();
+
+        assertThatThrownBy(() -> administration.delete(id))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessageContaining("referenced by existing parcels");
+    }
 }
