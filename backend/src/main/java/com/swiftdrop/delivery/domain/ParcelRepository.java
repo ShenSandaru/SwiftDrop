@@ -113,6 +113,52 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
             Pageable pageable);
 
     @Query("""
+            SELECT p FROM Parcel p
+            WHERE p.status IN (com.swiftdrop.delivery.api.ParcelStatus.DELIVERED,
+                               com.swiftdrop.delivery.api.ParcelStatus.FAILED,
+                               com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (:hubId IS NULL
+                   OR p.currentHubId = :hubId
+                   OR p.originHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
+            """)
+    Page<Parcel> findCompletedForDispatch(@Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId,
+            Pageable pageable);
+
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE p.status IN (com.swiftdrop.delivery.api.ParcelStatus.DELIVERED,
+                               com.swiftdrop.delivery.api.ParcelStatus.FAILED,
+                               com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (:hubId IS NULL
+                   OR p.currentHubId = :hubId
+                   OR p.originHubId = :hubId
+                   OR p.destinationHubId = :hubId
+                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
+              AND (LOWER(p.trackingNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                   OR (:parcelId IS NOT NULL AND p.id = :parcelId))
+            """)
+    Page<Parcel> findCompletedForDispatchBySearch(@Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            @Param("search") String search,
+            @Param("parcelId") UUID parcelId,
+            @Param("hubId") UUID hubId,
+            @Param("hubZoneId") UUID hubZoneId,
+            Pageable pageable);
+
+    @Query("""
             SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Parcel p
             WHERE p.id = :parcelId
               AND ((p.status = com.swiftdrop.delivery.api.ParcelStatus.CREATED

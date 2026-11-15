@@ -52,8 +52,15 @@ public class DispatchService {
     public PageResult<DispatchParcelSummary> parcels(
             ParcelStatus status, ParcelSource source, Boolean assigned, String search,
             UUID requestedHubId, Staff caller, PageRequest page) {
+        return parcels(status, source, assigned, search, requestedHubId, null, caller, page);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<DispatchParcelSummary> parcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search,
+            UUID requestedHubId, Boolean terminal, Staff caller, PageRequest page) {
         UUID effectiveHubId = resolveEffectiveHubId(caller, requestedHubId);
-        return parcels.findDispatchParcels(status, source, assigned, search, effectiveHubId, page);
+        return parcels.findDispatchParcels(status, source, assigned, search, effectiveHubId, terminal, page);
     }
 
     @Transactional(readOnly = true)

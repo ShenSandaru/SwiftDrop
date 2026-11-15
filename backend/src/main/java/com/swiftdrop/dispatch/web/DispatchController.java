@@ -51,10 +51,12 @@ class DispatchController {
             @RequestParam(required = false) Boolean assigned,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID hubId,
+            @RequestParam(required = false) Boolean terminal,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(status, source, assigned, search, hubId, staff(jwt), request), request);
+        return toResponse(dispatch.parcels(status, source, assigned, search, hubId, terminal, staff(jwt), request),
+                request);
     }
 
     @GetMapping("/active-assignments")

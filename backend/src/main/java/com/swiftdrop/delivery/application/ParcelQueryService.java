@@ -88,15 +88,30 @@ class ParcelQueryService implements ParcelQueries {
     @Override
     public PageResult<DispatchParcelSummary> findDispatchParcels(
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId, PageRequest page) {
+        return findDispatchParcels(status, source, assigned, search, hubId, null, page);
+    }
+
+    @Override
+    public PageResult<DispatchParcelSummary> findDispatchParcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId,
+            Boolean terminal, PageRequest page) {
         Objects.requireNonNull(page, "page");
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
         UUID parcelId = parseParcelId(normalizedSearch);
         UUID hubZoneId = hubId == null ? null : hubs.findById(hubId).map(Hub::getZoneId).orElse(null);
         Pageable pageable = pageable(page, NEWEST_FIRST);
-        Page<Parcel> found = normalizedSearch == null
-                ? parcels.findForDispatch(status, source, assigned, hubId, hubZoneId, pageable)
-                : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, hubId, hubZoneId,
-                        pageable);
+        Page<Parcel> found;
+        if (Boolean.TRUE.equals(terminal) && status == null) {
+            found = normalizedSearch == null
+                    ? parcels.findCompletedForDispatch(source, assigned, hubId, hubZoneId, pageable)
+                    : parcels.findCompletedForDispatchBySearch(source, assigned, normalizedSearch, parcelId, hubId,
+                            hubZoneId, pageable);
+        } else {
+            found = normalizedSearch == null
+                    ? parcels.findForDispatch(status, source, assigned, hubId, hubZoneId, pageable)
+                    : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId, hubId,
+                            hubZoneId, pageable);
+        }
         List<Hub> allHubs = found.isEmpty() ? List.of() : hubs.findAll();
         Map<UUID, String> hubCodes = allHubs.stream().collect(Collectors.toMap(Hub::getId, Hub::getCode));
         Map<UUID, UUID> activeHubIdsByZone = allHubs.stream()

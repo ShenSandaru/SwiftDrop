@@ -29,6 +29,16 @@ public interface ParcelQueries {
     PageResult<DispatchParcelSummary> findDispatchParcels(
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId, PageRequest page);
 
+    /**
+     * Dispatcher parcel list with optional hub scope and optional terminal-only filter
+     * ({@code DELIVERED}, {@code FAILED}, {@code CANCELLED} when {@code terminal == true} and {@code status == null}).
+     */
+    default PageResult<DispatchParcelSummary> findDispatchParcels(
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, UUID hubId,
+            Boolean terminal, PageRequest page) {
+        return findDispatchParcels(status, source, assigned, search, hubId, page);
+    }
+
     /** Active assignment rows of one task type, oldest first. */
     default PageResult<ParcelAssignmentSummary> findActiveAssignments(ParcelAssignmentType type, PageRequest page) {
         return findActiveAssignments(type, null, page);
