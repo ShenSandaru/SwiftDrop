@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Hourglass } from "lucide-react";
 import { StatusBadge } from "@/components/delivery/status-badge";
+import { ReadOnlyBadge } from "@/components/dispatch/read-only-badge";
 import { formatApiError, type PageResponse } from "@/lib/api";
 import { listStaleDispatchParcels, type DispatchParcelItem } from "@/lib/dispatch";
 
@@ -99,6 +100,7 @@ export function StaleParcelsCard({ refreshKey, onDetails }: {
                   {parcel.nextHubCode ? ` · heading to ${parcel.nextHubCode}` : ""}
                 </p>
               </div>
+              <ReadOnlyBadge readOnly={parcel.readOnly} />
               <StatusBadge status={parcel.status} />
               <span className="hidden shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-300 sm:inline">
                 {waited(parcel.updatedAt, at)} without activity

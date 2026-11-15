@@ -40,7 +40,19 @@ export interface DispatchParcelItem {
   expectedHubCode: string | null;
   deliveryAttempts: number;
   lastFailureReason: FailureReason | null;
+  /** One of the caller's hubs is on the route but not responsible now (ADR 0012): follow only, no actions. */
+  readOnly: boolean;
   actions: DispatchAction[];
+}
+
+/** Where the signed-in dispatcher or admin works (ADR 0012). */
+export interface DispatchScope {
+  everywhere: boolean;
+  hubs: { id: string; code: string; name: string }[];
+}
+
+export function getDispatchScope(): Promise<DispatchScope> {
+  return api.get<DispatchScope>("/api/v1/dispatch/scope");
 }
 
 export interface DispatchAssignment {
