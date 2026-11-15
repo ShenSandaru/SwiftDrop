@@ -14,8 +14,8 @@ import com.swiftdrop.delivery.domain.HubStaffRepository;
 import com.swiftdrop.identity.api.UserDirectory;
 
 /**
- * Works out which hubs a staff member works for (ADR 0012 §2): admins and head office dispatchers
- * work everywhere, everyone else for the hubs an admin gave them, and without any they see nothing.
+ * Works out which hubs a staff member works for (ADR 0012 §2): admins work everywhere, everyone else
+ * for the hubs an admin gave them, and without any they see nothing.
  */
 @Component
 class StaffScopes {
@@ -39,9 +39,6 @@ class StaffScopes {
     }
 
     static HubScope scopeFrom(List<HubStaff> rows) {
-        if (rows.stream().anyMatch(HubStaff::isHeadOffice)) {
-            return HubScope.EVERYWHERE;
-        }
         Set<UUID> hubs = rows.stream().map(HubStaff::getHubId).collect(Collectors.toSet());
         return HubScope.of(hubs);
     }

@@ -80,7 +80,7 @@ class HubScopeIT {
     private UUID galleDispatcher;
     private UUID colomboDispatcher;
     private UUID kandyDispatcher;
-    private UUID headOffice;
+    private UUID realAdmin;
     private UUID noHubDispatcher;
     private UUID galleCourier;
     private UUID kandyCourier;
@@ -107,7 +107,7 @@ class HubScopeIT {
         galleDispatcher = insertUser("DISPATCHER");
         colomboDispatcher = insertUser("DISPATCHER");
         kandyDispatcher = insertUser("DISPATCHER");
-        headOffice = insertUser("DISPATCHER");
+        realAdmin = TestHubs.adminUser(jdbc);
         noHubDispatcher = insertUser("DISPATCHER");
         galleCourier = insertUser("COURIER");
         kandyCourier = insertUser("COURIER");
@@ -116,7 +116,6 @@ class HubScopeIT {
         staffAdministration.addToHub(galle, galleDispatcher, admin);
         staffAdministration.addToHub(colombo, colomboDispatcher, admin);
         staffAdministration.addToHub(kandy, kandyDispatcher, admin);
-        staffAdministration.makeHeadOffice(headOffice, admin);
         staffAdministration.addToHub(galle, galleCourier, admin);
         staffAdministration.addToHub(kandy, kandyCourier, admin);
     }
@@ -130,7 +129,7 @@ class HubScopeIT {
         assertThat(visibleTo(colomboDispatcher, parcel)).isNull();
         assertThat(visibleTo(kandyDispatcher, parcel)).isNull();
         assertThat(visibleTo(noHubDispatcher, parcel)).as("no hub sees nothing").isNull();
-        assertThat(visibleTo(headOffice, parcel)).isNotNull();
+        assertThat(visibleTo(realAdmin, parcel)).as("an admin sees every parcel").isNotNull();
 
         // Only the pickup branch may assign, and only a courier of that branch
         assertThatThrownBy(() -> assignment.assignCourier(parcel, galleCourier, kandyDispatcher))
@@ -192,7 +191,7 @@ class HubScopeIT {
         assertThat(staleIds(galleDispatcher, cutoff)).contains(parcel);
         assertThat(staleIds(kandyDispatcher, cutoff)).doesNotContain(parcel);
         assertThat(staleIds(noHubDispatcher, cutoff)).isEmpty();
-        assertThat(staleIds(headOffice, cutoff)).contains(parcel);
+        assertThat(staleIds(realAdmin, cutoff)).contains(parcel);
     }
 
     @Test
@@ -206,26 +205,19 @@ class HubScopeIT {
         staffAdministration.addToHub(kandy, galleDispatcher, admin);
         assertThat(visibleTo(galleDispatcher, parcel)).as("before pickup only the pickup branch sees it").isNull();
 
-        staffAdministration.makeHeadOffice(galleDispatcher, admin);
-        assertThat(visibleTo(galleDispatcher, parcel).readOnly()).isFalse();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM hub_staff WHERE user_id = ? AND hub_id IS NOT NULL",
-                Integer.class, galleDispatcher)).as("head office replaces the hubs").isZero();
-
-        // And back: a hub dispatcher is no longer head office
         staffAdministration.addToHub(galle, galleDispatcher, admin);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM hub_staff WHERE user_id = ? AND hub_id IS NULL",
-                Integer.class, galleDispatcher)).isZero();
+        assertThat(visibleTo(galleDispatcher, parcel).readOnly()).as("back at the pickup branch").isFalse();
     }
 
     @Test
-    void aCourierWithNoHubCanOnlyBeAssignedByStaffWhoWorkEverywhere() {
+    void aCourierWithNoHubCanOnlyBeAssignedByAnAdmin() {
         UUID freeCourier = insertUser("COURIER");
         UUID parcel = bookGalleToKandy();
 
         assertThatThrownBy(() -> assignment.assignCourier(parcel, freeCourier, galleDispatcher))
                 .isInstanceOf(ParcelConflictException.class)
                 .hasMessage("The courier is not assigned to a hub");
-        assignment.assignCourier(parcel, freeCourier, headOffice);
+        assignment.assignCourier(parcel, freeCourier, realAdmin);
 
         assertThat(jdbc.queryForObject("SELECT assigned_courier_id FROM parcels WHERE id = ?", UUID.class, parcel))
                 .isEqualTo(freeCourier);

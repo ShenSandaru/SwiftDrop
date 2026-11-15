@@ -25,9 +25,8 @@ import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
 /**
- * Admins give dispatchers and couriers their home hubs and make dispatchers head office (ADR 0012
- * §1, §2). A person is either head office or works for hubs, never both: the later choice replaces
- * the earlier one, so the state an admin sees is the state that applies.
+ * Admins give dispatchers and couriers their home hubs (ADR 0012 §1, §2). Someone with no hub sees
+ * nothing, so the list shows who still needs one.
  */
 @Service
 public class HubStaffAdministration {
@@ -53,13 +52,12 @@ public class HubStaffAdministration {
     }
 
     /** One dispatcher or courier and where they work. */
-    public record StaffMember(UUID userId, String fullName, Set<String> roles, boolean headOffice,
-            List<UUID> hubIds) {
+    public record StaffMember(UUID userId, String fullName, Set<String> roles, List<UUID> hubIds) {
     }
 
     /**
-     * Every enabled dispatcher and courier with their hubs, by name. Someone who is neither head
-     * office nor at a hub shows an empty list: a dispatcher in that state sees nothing (ADR 0012 §2).
+     * Every enabled dispatcher and courier with their hubs, by name. Someone at no hub shows an empty
+     * list: a dispatcher in that state sees nothing (ADR 0012 §2).
      */
     @Transactional(readOnly = true)
     public List<StaffMember> list() {
@@ -71,16 +69,14 @@ public class HubStaffAdministration {
                 .map(user -> {
                     List<HubStaff> own = rows.getOrDefault(user.id(), List.of());
                     return new StaffMember(user.id(), user.fullName(), staffRoles(user),
-                            own.stream().anyMatch(HubStaff::isHeadOffice),
-                            own.stream().map(HubStaff::getHubId).filter(Objects::nonNull).sorted().toList());
+                            own.stream().map(HubStaff::getHubId).sorted().toList());
                 })
                 .sorted(java.util.Comparator.comparing(StaffMember::fullName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 
     /**
-     * Gives the person a home hub. A head office dispatcher becomes a hub dispatcher. Asking again
-     * for the same hub changes nothing.
+     * Gives the person a home hub. Asking again for the same hub changes nothing.
      *
      * @throws ParcelNotFoundException if the hub or the user does not exist
      * @throws ParcelConflictException if the user is not a dispatcher or courier, or the hub is inactive
@@ -96,7 +92,6 @@ public class HubStaffAdministration {
         if (staff.findByUserIdAndHubId(userId, hubId).isPresent()) {
             return;
         }
-        staff.findByUserIdAndHubIdIsNull(userId).ifPresent(staff::delete);
         save(HubStaff.atHub(userId, hubId, adminId, now()));
     }
 
@@ -105,34 +100,6 @@ public class HubStaffAdministration {
     public void removeFromHub(UUID hubId, UUID userId) {
         staff.delete(staff.findByUserIdAndHubId(Objects.requireNonNull(userId, "userId"),
                 Objects.requireNonNull(hubId, "hubId")).orElseThrow(ParcelNotFoundException::new));
-    }
-
-    /**
-     * Makes a dispatcher work country-wide, replacing their hubs. Asking again changes nothing.
-     *
-     * @throws ParcelNotFoundException if the user does not exist
-     * @throws ParcelConflictException if the user is not a dispatcher
-     */
-    @Transactional
-    public void makeHeadOffice(UUID userId, UUID adminId) {
-        Objects.requireNonNull(adminId, "adminId");
-        UserSummary user = requireStaff(userId);
-        if (!user.hasRole(DISPATCHER)) {
-            throw new ParcelConflictException("Only a dispatcher can work for the head office");
-        }
-        if (staff.findByUserIdAndHubIdIsNull(userId).isPresent()) {
-            return;
-        }
-        staff.deleteAll(staff.findByUserId(userId));
-        staff.flush();
-        save(HubStaff.headOffice(userId, adminId, now()));
-    }
-
-    /** The dispatcher then works for no hub until an admin gives them one. @throws ParcelNotFoundException if not head office */
-    @Transactional
-    public void removeFromHeadOffice(UUID userId) {
-        staff.delete(staff.findByUserIdAndHubIdIsNull(Objects.requireNonNull(userId, "userId"))
-                .orElseThrow(ParcelNotFoundException::new));
     }
 
     private UserSummary requireStaff(UUID userId) {

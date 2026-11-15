@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-/** Home hubs and head office rows of ADR 0012 §1. */
+/** Home hubs of ADR 0012 §1. */
 class HubStaffTest {
 
     private static final Instant NOW = Instant.parse("2026-11-14T08:00:00Z");
@@ -22,18 +22,10 @@ class HubStaffTest {
 
         assertThat(row.getUserId()).isEqualTo(USER);
         assertThat(row.getHubId()).isEqualTo(hub);
-        assertThat(row.isHeadOffice()).isFalse();
         assertThat(row.getCreatedBy()).isEqualTo(ADMIN);
         assertThat(row.getCreatedAt()).isEqualTo(NOW);
     }
 
-    @Test
-    void aHeadOfficeRowHasNoHub() {
-        HubStaff row = HubStaff.headOffice(USER, ADMIN, NOW);
-
-        assertThat(row.getHubId()).isNull();
-        assertThat(row.isHeadOffice()).isTrue();
-    }
 
     @Test
     void aHubRowNeedsAHub() {

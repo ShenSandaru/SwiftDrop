@@ -100,9 +100,7 @@ class HubLifecycleIT {
                 + "ON CONFLICT (code) DO NOTHING", GALLE_ZONE);
         customerId = insertUser("CUSTOMER");
         courierId = insertUser("COURIER");
-        UUID dispatcherId = insertUser("DISPATCHER");
-        TestHubs.headOffice(jdbc, dispatcherId);
-        dispatcher = Staff.dispatcher(dispatcherId);
+        dispatcher = Staff.dispatcher(TestHubs.adminUser(jdbc));
     }
 
     @Test
@@ -135,7 +133,7 @@ class HubLifecycleIT {
     void linkedBranchesTravelDirectlyAndKeepTheirRouteWhenTheLinkIsRemoved() {
         UUID galle = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'GAL'", UUID.class);
         UUID kandy = jdbc.queryForObject("SELECT id FROM hubs WHERE code = 'KDY'", UUID.class);
-        UUID admin = insertUser("ADMIN");
+        UUID admin = TestHubs.adminUser(jdbc);
         UUID parcel = bookGalleToKandy();
 
         hubAdministration.link(galle, kandy, admin);

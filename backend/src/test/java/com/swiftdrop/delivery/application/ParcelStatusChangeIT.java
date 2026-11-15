@@ -106,8 +106,7 @@ class ParcelStatusChangeIT {
             return parcel.getId();
         });
         // A real pickup assignment with its history record, as dispatch creates it (ADR 0008)
-        UUID dispatcherId = insertUser("dispatcher");
-        TestHubs.headOffice(jdbc, dispatcherId);
+        UUID dispatcherId = TestHubs.adminUser(jdbc);
         assignment.assignCourier(parcelId, courierId, dispatcherId);
         committedEvents.clear();
     }

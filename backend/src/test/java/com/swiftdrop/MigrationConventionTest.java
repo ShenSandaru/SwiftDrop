@@ -235,6 +235,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611171100",
                                 "delivery create hub staff",
-                                "delivery/V202611171100__delivery_create_hub_staff.sql"));
+                                "delivery/V202611171100__delivery_create_hub_staff.sql"),
+                        tuple(
+                                "202611171200",
+                                "delivery remove head office",
+                                "delivery/V202611171200__delivery_remove_head_office.sql"));
     }
 }

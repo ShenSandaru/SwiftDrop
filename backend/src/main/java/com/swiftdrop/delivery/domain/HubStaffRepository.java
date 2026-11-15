@@ -10,15 +10,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Home hubs of dispatchers and couriers (ADR 0012 §1). */
 public interface HubStaffRepository extends JpaRepository<HubStaff, UUID> {
 
-    /** Every row of a user: their hubs and, if present, the head office row. */
+    /** Every hub a user works for. */
     List<HubStaff> findByUserId(UUID userId);
 
-    /** The staff of the given hubs; never head office rows. */
+    /** The staff of the given hubs. */
     List<HubStaff> findByHubIdIn(Collection<UUID> hubIds);
 
     Optional<HubStaff> findByUserIdAndHubId(UUID userId, UUID hubId);
-
-    Optional<HubStaff> findByUserIdAndHubIdIsNull(UUID userId);
 
     List<HubStaff> findAllByOrderByCreatedAtAsc();
 }

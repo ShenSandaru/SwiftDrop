@@ -43,13 +43,6 @@ class StaffScopesTest {
         assertThat(scopes.scopeOf(ADMIN_USER)).isEqualTo(HubScope.EVERYWHERE);
     }
 
-    @Test
-    void aHeadOfficeRowMeansEverywhere() {
-        givenRole(USER, "DISPATCHER");
-        when(staff.findByUserId(USER)).thenReturn(List.of(HubStaff.headOffice(USER, ADMIN_USER, NOW)));
-
-        assertThat(scopes.scopeOf(USER)).isEqualTo(HubScope.EVERYWHERE);
-    }
 
     @Test
     void theHubsOfAPersonAddUp() {

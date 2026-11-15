@@ -10,8 +10,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * A staff member's home hub (ADR 0012 §1): the dispatcher or courier works for that hub. Without a
- * hub the row marks a head office dispatcher, who works country-wide.
+ * A staff member's home hub (ADR 0012 §1): the dispatcher or courier works for that hub. A person
+ * may have several rows.
  */
 @Entity
 @Table(name = "hub_staff")
@@ -23,10 +23,10 @@ public class HubStaff {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Column(name = "hub_id", updatable = false)
+    @Column(name = "hub_id", nullable = false, updatable = false)
     private UUID hubId;
 
-    @Column(name = "created_by", updatable = false)
+    @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -39,23 +39,14 @@ public class HubStaff {
     private HubStaff(UUID userId, UUID hubId, UUID createdBy, Instant now) {
         this.id = UUID.randomUUID();
         this.userId = Objects.requireNonNull(userId, "userId");
-        this.hubId = hubId;
+        this.hubId = Objects.requireNonNull(hubId, "hubId");
         this.createdBy = Objects.requireNonNull(createdBy, "createdBy");
         this.createdAt = Objects.requireNonNull(now, "now");
     }
 
     /** The user works for this hub. */
     public static HubStaff atHub(UUID userId, UUID hubId, UUID createdBy, Instant now) {
-        return new HubStaff(userId, Objects.requireNonNull(hubId, "hubId"), createdBy, now);
-    }
-
-    /** The user works country-wide. */
-    public static HubStaff headOffice(UUID userId, UUID createdBy, Instant now) {
-        return new HubStaff(userId, null, createdBy, now);
-    }
-
-    public boolean isHeadOffice() {
-        return hubId == null;
+        return new HubStaff(userId, hubId, createdBy, now);
     }
 
     public UUID getId() {
@@ -66,12 +57,12 @@ public class HubStaff {
         return userId;
     }
 
-    /** The hub, or {@code null} for head office. */
+    /** The hub the user works for. */
     public UUID getHubId() {
         return hubId;
     }
 
-    /** The admin who created the row, or {@code null} for rows created by the migration. */
+    /** The admin who created the row. */
     public UUID getCreatedBy() {
         return createdBy;
     }
@@ -82,6 +73,6 @@ public class HubStaff {
 
     @Override
     public String toString() {
-        return "HubStaff[user=" + userId + ", hub=" + (hubId == null ? "head office" : hubId) + "]";
+        return "HubStaff[user=" + userId + ", hub=" + hubId + "]";
     }
 }

@@ -282,26 +282,21 @@ class HubApiTest {
         UUID userId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
         when(hubStaff.list()).thenReturn(List.of(new com.swiftdrop.delivery.application.HubStaffAdministration
-                .StaffMember(userId, "Saman", java.util.Set.of("DISPATCHER"), false, List.of(hubId))));
+                .StaffMember(userId, "Saman", java.util.Set.of("DISPATCHER"), List.of(hubId))));
 
         mvc.perform(get("/api/v1/hubs/staff").with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].fullName").value("Saman"))
                 .andExpect(jsonPath("$[0].hubIds[0]").value(hubId.toString()))
+                .andExpect(jsonPath("$[0].headOffice").doesNotExist())
                 .andExpect(jsonPath("$[0].email").doesNotExist());
         mvc.perform(put("/api/v1/hubs/" + hubId + "/staff/" + userId).with(TestPrincipal.admin(adminId).postProcessor()))
                 .andExpect(status().isNoContent());
-        mvc.perform(put("/api/v1/hubs/head-office-staff/" + userId).with(TestPrincipal.admin(adminId).postProcessor()))
-                .andExpect(status().isNoContent());
         mvc.perform(delete("/api/v1/hubs/" + hubId + "/staff/" + userId).with(TestPrincipal.admin().postProcessor()))
-                .andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/hubs/head-office-staff/" + userId).with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isNoContent());
 
         verify(hubStaff).addToHub(hubId, userId, adminId);
-        verify(hubStaff).makeHeadOffice(userId, adminId);
         verify(hubStaff).removeFromHub(hubId, userId);
-        verify(hubStaff).removeFromHeadOffice(userId);
     }
 
     @Test
@@ -313,8 +308,6 @@ class HubApiTest {
                 TestPrincipal.customer())) {
             mvc.perform(get("/api/v1/hubs/staff").with(caller.postProcessor())).andExpect(status().isForbidden());
             mvc.perform(put("/api/v1/hubs/" + hubId + "/staff/" + userId).with(caller.postProcessor()))
-                    .andExpect(status().isForbidden());
-            mvc.perform(put("/api/v1/hubs/head-office-staff/" + userId).with(caller.postProcessor()))
                     .andExpect(status().isForbidden());
             mvc.perform(delete("/api/v1/hubs/" + hubId + "/staff/" + userId).with(caller.postProcessor()))
                     .andExpect(status().isForbidden());
@@ -329,14 +322,8 @@ class HubApiTest {
         UUID userId = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new com.swiftdrop.delivery.api.ParcelNotFoundException())
                 .when(hubStaff).addToHub(org.mockito.ArgumentMatchers.eq(hubId), org.mockito.ArgumentMatchers.eq(userId), any());
-        org.mockito.Mockito.doThrow(new com.swiftdrop.delivery.api.ParcelConflictException("Only a dispatcher can work for the head office"))
-                .when(hubStaff).makeHeadOffice(org.mockito.ArgumentMatchers.eq(userId), any());
-
         mvc.perform(put("/api/v1/hubs/" + hubId + "/staff/" + userId).with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isNotFound());
-        mvc.perform(put("/api/v1/hubs/head-office-staff/" + userId).with(TestPrincipal.admin().postProcessor()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Only a dispatcher can work for the head office"));
         mvc.perform(put("/api/v1/hubs/not-a-uuid/staff/" + userId).with(TestPrincipal.admin().postProcessor()))
                 .andExpect(status().isBadRequest());
     }

@@ -4,8 +4,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * The hubs a staff member works for (ADR 0012 §2): everywhere (an admin or a head office
- * dispatcher), or the given hubs. No hubs means no access.
+ * The hubs a staff member works for (ADR 0012 §2): everywhere (an admin), or the given hubs. No hubs
+ * means no access.
  */
 public record HubScope(boolean everywhere, Set<UUID> hubIds) {
 

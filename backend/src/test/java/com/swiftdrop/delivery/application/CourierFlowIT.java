@@ -103,8 +103,7 @@ class CourierFlowIT {
         courierA = login(courierAId);
         courierB = login(insertUser("courier-b", "COURIER"));
         // Assignments name a real dispatcher (ADR 0008; foreign key to users)
-        dispatcherId = insertUser("dispatcher", "DISPATCHER");
-        TestHubs.headOffice(jdbc, dispatcherId);
+        dispatcherId = TestHubs.adminUser(jdbc);
     }
 
     @Test

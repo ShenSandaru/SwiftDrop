@@ -71,8 +71,7 @@ class DispatchAssignmentConcurrencyIT {
     @BeforeEach
     void setUp() {
         customerId = insertUser("customer", "CUSTOMER");
-        dispatcherId = insertUser("dispatcher", "DISPATCHER");
-        TestHubs.headOffice(jdbc, dispatcherId);
+        dispatcherId = TestHubs.adminUser(jdbc);
     }
 
     @Test

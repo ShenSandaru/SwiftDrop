@@ -8,7 +8,7 @@ import java.util.UUID;
  * Where a staff member works (ADR 0012 §2), for the dispatcher portal to say why a list is short or
  * empty.
  *
- * @param everywhere an admin or a head office dispatcher
+ * @param everywhere an admin
  * @param hubs       the hubs they work for; empty when {@code everywhere} or when they have none
  */
 public record StaffScopeView(boolean everywhere, List<HubRef> hubs) {

@@ -106,7 +106,7 @@ public class DispatchService {
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    /** The couriers the caller may assign: all of them for admins and head office, else those of their hubs. */
+    /** The couriers the caller may assign: all of them for admins, else those of their hubs. */
     @Transactional(readOnly = true)
     public List<UserSummary> activeCouriers(Staff staff) {
         List<UserSummary> couriers = users.findEnabledCouriers();

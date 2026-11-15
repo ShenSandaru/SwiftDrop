@@ -82,18 +82,6 @@ class HubStaffAdministrationTest {
         verify(staff, never()).saveAndFlush(any());
     }
 
-    @Test
-    void aHubDispatcherReplacesTheHeadOfficeRow() {
-        Hub badulla = hub("BAD");
-        UserSummary dispatcher = user("Saman", "DISPATCHER");
-        HubStaff headOffice = HubStaff.headOffice(dispatcher.id(), ADMIN, NOW);
-        when(staff.findByUserIdAndHubIdIsNull(dispatcher.id())).thenReturn(Optional.of(headOffice));
-
-        administration.addToHub(badulla.getId(), dispatcher.id(), ADMIN);
-
-        verify(staff).delete(headOffice);
-        verify(staff).saveAndFlush(any());
-    }
 
     @Test
     void onlyDispatchersAndCouriersWorkForAHub() {
@@ -155,71 +143,27 @@ class HubStaffAdministrationTest {
                 .isInstanceOf(ParcelNotFoundException.class);
     }
 
-    @Test
-    void aDispatcherBecomesHeadOfficeAndLosesTheirHubs() {
-        UserSummary dispatcher = user("Saman", "DISPATCHER");
-        List<HubStaff> hubRows = List.of(HubStaff.atHub(dispatcher.id(), UUID.randomUUID(), ADMIN, NOW));
-        when(staff.findByUserId(dispatcher.id())).thenReturn(hubRows);
 
-        administration.makeHeadOffice(dispatcher.id(), ADMIN);
 
-        verify(staff).deleteAll(hubRows);
-        ArgumentCaptor<HubStaff> saved = ArgumentCaptor.forClass(HubStaff.class);
-        verify(staff).saveAndFlush(saved.capture());
-        assertThat(saved.getValue().isHeadOffice()).isTrue();
-    }
+
 
     @Test
-    void headOfficeIsForDispatchersOnly() {
-        UserSummary courier = user("Ajith", "COURIER");
-
-        assertThatThrownBy(() -> administration.makeHeadOffice(courier.id(), ADMIN))
-                .isInstanceOf(ParcelConflictException.class)
-                .hasMessage("Only a dispatcher can work for the head office");
-    }
-
-    @Test
-    void makingSomeoneHeadOfficeTwiceChangesNothing() {
-        UserSummary dispatcher = user("Saman", "DISPATCHER");
-        when(staff.findByUserIdAndHubIdIsNull(dispatcher.id()))
-                .thenReturn(Optional.of(HubStaff.headOffice(dispatcher.id(), ADMIN, NOW)));
-
-        administration.makeHeadOffice(dispatcher.id(), ADMIN);
-
-        verify(staff, never()).saveAndFlush(any());
-    }
-
-    @Test
-    void removesHeadOffice() {
-        UUID userId = UUID.randomUUID();
-        HubStaff row = HubStaff.headOffice(userId, ADMIN, NOW);
-        when(staff.findByUserIdAndHubIdIsNull(userId)).thenReturn(Optional.of(row));
-
-        administration.removeFromHeadOffice(userId);
-
-        verify(staff).delete(row);
-        assertThatThrownBy(() -> administration.removeFromHeadOffice(UUID.randomUUID()))
-                .isInstanceOf(ParcelNotFoundException.class);
-    }
-
-    @Test
-    void listsEveryDispatcherAndCourierWithTheirPlaceByName() {
+    void listsEveryDispatcherAndCourierWithTheirHubsByName() {
         UserSummary saman = user("saman", "DISPATCHER");
         UserSummary ajith = user("Ajith", "COURIER");
         UserSummary nobody = user("Kamal", "DISPATCHER");
         UUID badulla = UUID.randomUUID();
+        UUID kandy = UUID.randomUUID();
         when(users.findEnabledDispatchers()).thenReturn(List.of(saman, nobody));
         when(users.findEnabledCouriers()).thenReturn(List.of(ajith));
         when(staff.findAll()).thenReturn(List.of(
-                HubStaff.headOffice(saman.id(), ADMIN, NOW), HubStaff.atHub(ajith.id(), badulla, ADMIN, NOW)));
+                HubStaff.atHub(saman.id(), kandy, ADMIN, NOW), HubStaff.atHub(ajith.id(), badulla, ADMIN, NOW)));
 
         List<StaffMember> members = administration.list();
 
         assertThat(members).extracting(StaffMember::fullName).containsExactly("Ajith", "Kamal", "saman");
         assertThat(members.get(0).hubIds()).containsExactly(badulla);
-        assertThat(members.get(0).headOffice()).isFalse();
-        assertThat(members.get(1).hubIds()).isEmpty();
-        assertThat(members.get(1).headOffice()).isFalse();
-        assertThat(members.get(2).headOffice()).isTrue();
+        assertThat(members.get(1).hubIds()).as("nobody has no hub, so sees nothing").isEmpty();
+        assertThat(members.get(2).hubIds()).containsExactly(kandy);
     }
 }

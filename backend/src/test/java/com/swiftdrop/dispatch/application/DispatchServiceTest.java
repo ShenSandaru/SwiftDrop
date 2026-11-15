@@ -2,6 +2,7 @@ package com.swiftdrop.dispatch.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -182,14 +183,13 @@ class DispatchServiceTest {
     }
 
     @Test
-    void adminsAndHeadOfficeSeeEveryCourier() {
+    void adminsSeeEveryCourier() {
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
         when(users.findEnabledCouriers()).thenReturn(List.of(courier(first), courier(second)));
-        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(true);
 
         assertThat(service.activeCouriers(Staff.admin(UUID.randomUUID()))).hasSize(2);
-        assertThat(service.activeCouriers(Staff.dispatcher(DISPATCHER_ID))).hasSize(2);
+        verify(hubStaff, never()).colleaguesOf(any());
     }
 
     @Test
@@ -201,8 +201,7 @@ class DispatchServiceTest {
 
         assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine);
 
-        when(hubStaff.worksEverywhere(DISPATCHER_ID)).thenReturn(true);
-        assertThat(service.courierWorkloads(Staff.dispatcher(DISPATCHER_ID))).containsOnlyKeys(mine, someoneElses);
+        assertThat(service.courierWorkloads(Staff.admin(DISPATCHER_ID))).containsOnlyKeys(mine, someoneElses);
     }
 
     @Test

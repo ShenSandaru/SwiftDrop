@@ -92,8 +92,7 @@ class DeliveryQueriesIT {
         // Booking needs served zones (ADR 0009 §1)
         TestHubs.install(jdbc);
         merchantId = UUID.randomUUID();
-        dispatcherId = insertUser("dispatcher");
-        TestHubs.headOffice(jdbc, dispatcherId);
+        dispatcherId = TestHubs.adminUser(jdbc);
         when(feeCalculator.calculateFee(any(), any(), any(), anyInt())).thenReturn(new FeeQuote(
                 new BigDecimal("650.00"), "LKR", new BigDecimal("400.00"), new BigDecimal("100.00"),
                 new BigDecimal("150.00"), UUID.randomUUID()));

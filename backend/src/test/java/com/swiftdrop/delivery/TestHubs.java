@@ -54,17 +54,37 @@ public final class TestHubs {
         }
     }
 
-    /** Makes the user a head office dispatcher, who works on every hub (ADR 0012 §2). */
-    public static void headOffice(JdbcTemplate jdbc, UUID userId) {
+    /**
+     * The one admin account (created if there is none yet). Admins work everywhere (ADR 0012 §2), so tests
+     * that need a dispatcher who can act on any parcel, including parcels of zones without a hub, use it.
+     */
+    public static UUID adminUser(JdbcTemplate jdbc) {
+        java.util.List<UUID> existing = jdbc.queryForList(
+                "SELECT user_id FROM user_roles WHERE role_name = 'ADMIN'", UUID.class);
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO users (id, email, full_name, enabled, created_at) VALUES (?, ?, 'Test admin', TRUE, now())",
+                id, "admin-" + id + "@example.com");
+        jdbc.update("INSERT INTO user_roles (user_id, role_name) VALUES (?, 'ADMIN')", id);
+        return id;
+    }
+
+    /**
+     * Makes the user work for every hub that exists now (ADR 0012 §1), so a test dispatcher can act on any
+     * parcel. Call it after the hubs are created.
+     */
+    public static void worksAtAllHubs(JdbcTemplate jdbc, UUID userId) {
         jdbc.update("INSERT INTO hub_staff (id, user_id, hub_id, created_by, created_at) "
-                + "VALUES (gen_random_uuid(), ?, NULL, NULL, now()) ON CONFLICT DO NOTHING", userId);
+                + "SELECT gen_random_uuid(), ?, id, ?, now() FROM hubs ON CONFLICT DO NOTHING", userId, UUID.randomUUID());
     }
 
     /** Makes the user work for one hub, by code (ADR 0012 §1). */
     public static void worksAt(JdbcTemplate jdbc, UUID userId, String hubCode) {
         jdbc.update("INSERT INTO hub_staff (id, user_id, hub_id, created_by, created_at) "
-                + "SELECT gen_random_uuid(), ?, id, NULL, now() FROM hubs WHERE code = ? ON CONFLICT DO NOTHING",
-                userId, hubCode);
+                + "SELECT gen_random_uuid(), ?, id, ?, now() FROM hubs WHERE code = ? ON CONFLICT DO NOTHING",
+                userId, UUID.randomUUID(), hubCode);
     }
 
     private static void insert(JdbcTemplate jdbc, String code, String name, String city, UUID zoneId, boolean central) {

@@ -37,7 +37,7 @@ class HubStaffController {
         return staff.list().stream().map(StaffMemberResponse::from).toList();
     }
 
-    /** Idempotent. A head office dispatcher becomes a hub dispatcher. */
+    /** Idempotent. */
     @PutMapping("/{hubId}/staff/{userId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void addToHub(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID hubId, @PathVariable UUID userId) {
@@ -48,18 +48,5 @@ class HubStaffController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void removeFromHub(@PathVariable UUID hubId, @PathVariable UUID userId) {
         staff.removeFromHub(hubId, userId);
-    }
-
-    /** Idempotent. Replaces the dispatcher's hubs. */
-    @PutMapping("/head-office-staff/{userId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void makeHeadOffice(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId) {
-        staff.makeHeadOffice(userId, Callers.userId(jwt));
-    }
-
-    @DeleteMapping("/head-office-staff/{userId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void removeFromHeadOffice(@PathVariable UUID userId) {
-        staff.removeFromHeadOffice(userId);
     }
 }

@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public interface HubStaffDirectory {
 
-    /** Whether the user works for every hub: an admin or a head office dispatcher. */
+    /** Whether the user works for every hub: an admin. */
     boolean worksEverywhere(UUID userId);
 
     /** Where the user works, by hub name; for the dispatcher portal. */
