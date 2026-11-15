@@ -596,6 +596,55 @@ function DispatchPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* Main Operational Tabs Bar */}
+      <nav
+        aria-label="Dispatch navigation tabs"
+        className="flex items-center gap-0.5 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <TabButton
+          active={activeTab === "overview"}
+          onClick={() => setActiveTab("overview")}
+          label="Overview"
+        />
+        <TabButton
+          active={activeTab === "pickup"}
+          onClick={() => setActiveTab("pickup")}
+          label="Pickup Operations"
+          badge={metrics.pendingPickup ?? 0}
+        />
+        <TabButton
+          active={activeTab === "warehouse"}
+          onClick={() => setActiveTab("warehouse")}
+          label="Hub Sorting"
+          badge={warehouseCount}
+        />
+        <TabButton
+          active={activeTab === "delivery"}
+          onClick={() => setActiveTab("delivery")}
+          label="Delivery Operations"
+          badge={metrics.activeDeliveries ?? 0}
+        />
+        <TabButton
+          active={activeTab === "history"}
+          onClick={() => setActiveTab("history")}
+          label="Order History"
+          badge={metrics.total ?? 0}
+        />
+        <TabButton
+          active={activeTab === "tracking"}
+          onClick={() => setActiveTab("tracking")}
+          label="Live Tracking"
+        />
+        {!isAdmin && (
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
+          >
+            My Profile
+          </Link>
+        )}
+      </nav>
+
       {/* Top Operations Header & Quick Status */}
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="space-y-1">
@@ -658,55 +707,6 @@ function DispatchPageContent() {
           </p>
         </div>
       )}
-
-      {/* Main Operational Tabs Bar */}
-      <nav
-        aria-label="Dispatch navigation tabs"
-        className="flex items-center gap-0.5 border-b border-border overflow-x-auto pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <TabButton
-          active={activeTab === "overview"}
-          onClick={() => setActiveTab("overview")}
-          label="Overview"
-        />
-        <TabButton
-          active={activeTab === "pickup"}
-          onClick={() => setActiveTab("pickup")}
-          label="Pickup Operations"
-          badge={metrics.pendingPickup ?? 0}
-        />
-        <TabButton
-          active={activeTab === "warehouse"}
-          onClick={() => setActiveTab("warehouse")}
-          label="Hub Sorting"
-          badge={warehouseCount}
-        />
-        <TabButton
-          active={activeTab === "delivery"}
-          onClick={() => setActiveTab("delivery")}
-          label="Delivery Operations"
-          badge={metrics.activeDeliveries ?? 0}
-        />
-        <TabButton
-          active={activeTab === "history"}
-          onClick={() => setActiveTab("history")}
-          label="Order History"
-          badge={metrics.total ?? 0}
-        />
-        <TabButton
-          active={activeTab === "tracking"}
-          onClick={() => setActiveTab("tracking")}
-          label="Live Tracking"
-        />
-        {!isAdmin && (
-          <Link
-            href="/profile"
-            className="inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
-          >
-            My Profile
-          </Link>
-        )}
-      </nav>
 
       {assignmentFeedback && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-accent p-4 text-sm font-medium text-primary">
