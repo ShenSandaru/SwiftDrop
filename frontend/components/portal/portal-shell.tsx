@@ -26,6 +26,11 @@ export const DISPATCHER_NAV: PortalNavItem[] = [];
 
 export const DISPATCHER_PROFILE_NAV: PortalNavItem[] = [
   { href: "/dispatch", label: "Overview", exact: true },
+  { href: "/dispatch?tab=pickup", label: "Pickup Operations", exact: true },
+  { href: "/dispatch?tab=warehouse", label: "Hub Sorting", exact: true },
+  { href: "/dispatch?tab=delivery", label: "Delivery Operations", exact: true },
+  { href: "/dispatch?tab=history", label: "Order History", exact: true },
+  { href: "/dispatch?tab=tracking", label: "Live Tracking", exact: true },
   { href: "/profile", label: "My Profile", exact: true },
 ];
 

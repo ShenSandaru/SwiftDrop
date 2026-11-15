@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -87,9 +87,34 @@ const EMPTY_METRICS: DashboardMetrics = {
   delivered: null,
 };
 
+function parseDispatchTab(value: string | null): DispatchMainTab {
+  if (
+    value === "overview" ||
+    value === "pickup" ||
+    value === "warehouse" ||
+    value === "delivery" ||
+    value === "history" ||
+    value === "tracking"
+  ) {
+    return value;
+  }
+  return "overview";
+}
+
 export default function DispatchPage() {
+  return (
+    <Suspense fallback={<div className="py-12 text-center text-sm text-muted-foreground">Loading dispatch workspace...</div>}>
+      <DispatchPageContent />
+    </Suspense>
+  );
+}
+
+function DispatchPageContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<DispatchMainTab>("overview");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<DispatchMainTab>(() =>
+    parseDispatchTab(searchParams.get("tab")),
+  );
   const [refreshKey, setRefreshKey] = useState(0);
 
   const today = useMemo(
