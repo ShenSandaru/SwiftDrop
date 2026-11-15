@@ -102,7 +102,7 @@ class DatabaseMigrationIT {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, description, type, script, success FROM flyway_schema_history ORDER BY installed_rank ASC");
 
-        assertThat(rows).hasSize(34);
+        assertThat(rows).hasSize(35);
 
         assertThat(rows.get(0))
                 .containsEntry("version", "202610251600")
@@ -196,18 +196,21 @@ class DatabaseMigrationIT {
                 .containsEntry("script", "merchant/V202611141100__merchant_create_event_consumer_tables.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(29))
-                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
+                .containsEntry("script", "notification/V202611141200__notification_add_retry_columns.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(30))
-                .containsEntry("script", "merchant/V202611161000__merchant_create_webhook_redeliveries.sql")
+                .containsEntry("script", "merchant/V202611151000__merchant_create_webhook_attempts.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(31))
-                .containsEntry("script", "delivery/V202611171000__delivery_create_hub_links.sql")
+                .containsEntry("script", "merchant/V202611161000__merchant_create_webhook_redeliveries.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(32))
-                .containsEntry("script", "delivery/V202611171100__delivery_create_hub_staff.sql")
+                .containsEntry("script", "delivery/V202611171000__delivery_create_hub_links.sql")
                 .containsEntry("success", true);
         assertThat(rows.get(33))
+                .containsEntry("script", "delivery/V202611171100__delivery_create_hub_staff.sql")
+                .containsEntry("success", true);
+        assertThat(rows.get(34))
                 .containsEntry("script", "delivery/V202611171200__delivery_remove_head_office.sql")
                 .containsEntry("success", true);
 
