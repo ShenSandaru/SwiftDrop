@@ -8,7 +8,10 @@ import { Bell, CheckCheck, Loader2, Package, UserCheck, AlertCircle } from "luci
 import { cn } from "cn";
 import { useNotifications } from "@/lib/notification-context";
 import { useAuth } from "@/lib/auth-context";
-import type { NotificationResponse } from "@/lib/notifications";
+import {
+  resolveNotificationDestination,
+  type NotificationResponse,
+} from "@/lib/notifications";
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -95,29 +98,14 @@ export function NotificationBell() {
 
   const handleNotificationClick = (item: NotificationResponse) => {
     if (!item.isRead) {
-      // Fire-and-forget mark-as-read so network latency never delays user navigation
+      // Fire-and-forget mark-as-read so network latency or failure never blocks navigation
       void markAsRead(item.id);
     }
     setOpen(false);
 
-    // If parcel exists, navigate to role-appropriate parcel details
-    if (item.parcelId) {
-      if (hasRole("CUSTOMER")) {
-        router.push(`/customer/parcels/${item.parcelId}`);
-      } else if (hasRole("COURIER")) {
-        router.push(`/courier/parcels/${item.parcelId}`);
-      } else if (hasRole("ADMIN") || hasRole("DISPATCHER")) {
-        router.push("/dispatch");
-      } else if (item.trackingNumber) {
-        router.push(`/track?number=${encodeURIComponent(item.trackingNumber)}`);
-      }
-    } else {
-      // Non-parcel account notification (e.g. merchant approval / profile update)
-      if (hasRole("MERCHANT")) {
-        router.push("/merchant/status");
-      } else if (hasRole("CUSTOMER")) {
-        router.push("/customer/profile");
-      }
+    const destination = resolveNotificationDestination(item, hasRole);
+    if (destination) {
+      router.push(destination);
     }
   };
 
@@ -229,7 +217,7 @@ export function NotificationBell() {
                   type="button"
                   onClick={() => handleNotificationClick(item)}
                   className={cn(
-                    "flex w-full items-start gap-3 p-3.5 text-left transition-colors hover:bg-muted/60",
+                    "flex w-full cursor-pointer items-start gap-3 p-3.5 text-left transition-colors hover:bg-muted/60",
                     !item.isRead ? "bg-accent/40" : "bg-transparent opacity-85",
                   )}
                 >
