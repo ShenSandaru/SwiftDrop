@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 const MAX_ENDPOINTS = 5;
+const ALL_WEBHOOK_EVENTS: readonly ParcelStatus[] = PARCEL_STATUSES;
 
 export default function MerchantWebhooksPage() {
   const { token } = useAuth();
@@ -46,14 +47,6 @@ export default function MerchantWebhooksPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createUrl, setCreateUrl] = useState("");
   const [createDesc, setCreateDesc] = useState("");
-  const [createEvents, setCreateEvents] = useState<ParcelStatus[]>([
-    "CREATED",
-    "PICKED_UP",
-    "IN_TRANSIT",
-    "OUT_FOR_DELIVERY",
-    "DELIVERED",
-    "FAILED",
-  ]);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -61,7 +54,6 @@ export default function MerchantWebhooksPage() {
   const [editingEndpoint, setEditingEndpoint] = useState<WebhookEndpoint | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editDesc, setEditDesc] = useState("");
-  const [editEvents, setEditEvents] = useState<ParcelStatus[]>([]);
   const [editEnabled, setEditEnabled] = useState(true);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -124,14 +116,6 @@ export default function MerchantWebhooksPage() {
   function openCreateDialog() {
     setCreateUrl("");
     setCreateDesc("");
-    setCreateEvents([
-      "CREATED",
-      "PICKED_UP",
-      "IN_TRANSIT",
-      "OUT_FOR_DELIVERY",
-      "DELIVERED",
-      "FAILED",
-    ]);
     setCreateError(null);
     setIsCreateOpen(true);
   }
@@ -142,13 +126,8 @@ export default function MerchantWebhooksPage() {
     if (!token || isSubmittingCreate) return;
 
     const trimmedUrl = createUrl.trim();
-    if (!trimmedUrl.startsWith("https://")) {
-      setCreateError("Webhook target URL must use the HTTPS protocol (e.g. https://api.yourdomain.com/webhooks).");
-      return;
-    }
-
-    if (createEvents.length === 0) {
-      setCreateError("Please select at least one delivery lifecycle event to subscribe to.");
+    if (!trimmedUrl.startsWith("https://") && !trimmedUrl.startsWith("http://")) {
+      setCreateError("Webhook target URL must start with https:// (or http:// for local development).");
       return;
     }
 
@@ -160,7 +139,7 @@ export default function MerchantWebhooksPage() {
         {
           url: trimmedUrl,
           description: createDesc.trim() || undefined,
-          events: createEvents,
+          events: [...ALL_WEBHOOK_EVENTS],
         },
         token
       );
@@ -186,7 +165,6 @@ export default function MerchantWebhooksPage() {
     setEditingEndpoint(endpoint);
     setEditUrl(endpoint.url);
     setEditDesc(endpoint.description || "");
-    setEditEvents([...endpoint.events]);
     setEditEnabled(endpoint.enabled);
     setEditError(null);
   }
@@ -197,13 +175,8 @@ export default function MerchantWebhooksPage() {
     if (!editingEndpoint || !token || isSubmittingEdit) return;
 
     const trimmedUrl = editUrl.trim();
-    if (!trimmedUrl.startsWith("https://")) {
-      setEditError("Webhook target URL must use the HTTPS protocol.");
-      return;
-    }
-
-    if (editEvents.length === 0) {
-      setEditError("Please select at least one delivery lifecycle event.");
+    if (!trimmedUrl.startsWith("https://") && !trimmedUrl.startsWith("http://")) {
+      setEditError("Webhook target URL must start with https:// (or http:// for local development).");
       return;
     }
 
@@ -216,7 +189,7 @@ export default function MerchantWebhooksPage() {
         {
           url: trimmedUrl,
           description: editDesc.trim() || undefined,
-          events: editEvents,
+          events: [...ALL_WEBHOOK_EVENTS],
           enabled: editEnabled,
         },
         token
@@ -280,18 +253,6 @@ export default function MerchantWebhooksPage() {
       setRotatingEndpoint(null);
     } finally {
       setIsSubmittingRotate(false);
-    }
-  }
-
-  function toggleEventSelection(
-    event: ParcelStatus,
-    currentList: ParcelStatus[],
-    setter: (list: ParcelStatus[]) => void
-  ) {
-    if (currentList.includes(event)) {
-      setter(currentList.filter((e) => e !== event));
-    } else {
-      setter([...currentList, event]);
     }
   }
 
@@ -429,17 +390,13 @@ export default function MerchantWebhooksPage() {
                     <span>Created: {new Date(endpoint.createdAt).toLocaleDateString()}</span>
                   </div>
 
-                  {/* Subscribed Events Pills */}
-                  <div className="flex items-center gap-1 flex-wrap pt-1">
+                  {/* Subscribed Events Indicator */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
                     <span className="text-[11px] font-medium text-muted-foreground mr-1">Events:</span>
-                    {endpoint.events.map((ev) => (
-                      <span
-                        key={ev}
-                        className="px-2 py-0.5 rounded bg-muted/80 text-foreground font-semibold text-[10px]"
-                      >
-                        {ev}
-                      </span>
-                    ))}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <Check className="size-3 stroke-[2.5]" />
+                      All Delivery Lifecycle Events Active ({endpoint.events.length})
+                    </span>
                   </div>
                 </div>
 
@@ -539,29 +496,28 @@ export default function MerchantWebhooksPage() {
                 />
               </div>
 
-              {/* Subscribed Events Checklist */}
+              {/* Subscribed Events - Automatic Full Lifecycle */}
               <div className="space-y-2">
-                <Label>Subscribed Delivery Lifecycle Events *</Label>
-                <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border border-border/80 bg-muted/20 text-xs">
-                  {PARCEL_STATUSES.map((status) => {
-                    const isChecked = createEvents.includes(status);
-                    return (
-                      <label
-                        key={status}
-                        className="flex items-center gap-2 cursor-pointer hover:text-foreground select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() =>
-                            toggleEventSelection(status, createEvents, setCreateEvents)
-                          }
-                          className="size-3.5 rounded border-input text-primary focus:ring-primary"
-                        />
-                        <span className="font-mono text-[11px]">{status}</span>
-                      </label>
-                    );
-                  })}
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Subscribed Delivery Lifecycle Events</Label>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                    <CheckCircle2 className="size-3" />
+                    All Events Subscribed
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Your store automatically receives real-time webhook updates for every package milestone. All events are enabled by default.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-3 rounded-lg border border-border/80 bg-muted/20 text-xs">
+                  {ALL_WEBHOOK_EVENTS.map((status) => (
+                    <div
+                      key={status}
+                      className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-background/70 border border-border/60 text-[11px] font-mono text-foreground select-none"
+                    >
+                      <Check className="size-3.5 text-emerald-500 shrink-0 stroke-[2.5]" />
+                      <span>{status}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -640,29 +596,28 @@ export default function MerchantWebhooksPage() {
                 </Label>
               </div>
 
-              {/* Subscribed Events */}
+              {/* Subscribed Events - Automatic Full Lifecycle */}
               <div className="space-y-2">
-                <Label>Subscribed Delivery Lifecycle Events *</Label>
-                <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border border-border/80 bg-muted/20 text-xs">
-                  {PARCEL_STATUSES.map((status) => {
-                    const isChecked = editEvents.includes(status);
-                    return (
-                      <label
-                        key={status}
-                        className="flex items-center gap-2 cursor-pointer hover:text-foreground select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() =>
-                            toggleEventSelection(status, editEvents, setEditEvents)
-                          }
-                          className="size-3.5 rounded border-input text-primary focus:ring-primary"
-                        />
-                        <span className="font-mono text-[11px]">{status}</span>
-                      </label>
-                    );
-                  })}
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Subscribed Delivery Lifecycle Events</Label>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                    <CheckCircle2 className="size-3" />
+                    All Events Subscribed
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  All 11 delivery status updates are active and automatically routed to this endpoint.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-3 rounded-lg border border-border/80 bg-muted/20 text-xs">
+                  {ALL_WEBHOOK_EVENTS.map((status) => (
+                    <div
+                      key={status}
+                      className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-background/70 border border-border/60 text-[11px] font-mono text-foreground select-none"
+                    >
+                      <Check className="size-3.5 text-emerald-500 shrink-0 stroke-[2.5]" />
+                      <span>{status}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
