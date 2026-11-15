@@ -43,6 +43,7 @@ class ParcelAssignmentServiceTest {
     private ParcelRepository parcels;
     private ParcelAssignmentRepository assignments;
     private ApplicationEventPublisher eventPublisher;
+    private final HubAuthority authority = mock(HubAuthority.class);
     private ParcelAssignmentService service;
     private Parcel parcel;
 
@@ -51,7 +52,7 @@ class ParcelAssignmentServiceTest {
         parcels = mock(ParcelRepository.class);
         assignments = mock(ParcelAssignmentRepository.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher);
+        service = new ParcelAssignmentService(parcels, assignments, DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher, authority);
         when(assignments.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         when(parcels.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
         ParcelAddress address = new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo",
@@ -225,5 +226,41 @@ class ParcelAssignmentServiceTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, COURIER_ID, null))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    // ---- Hub scope (ADR 0012 §4) ----
+
+    @Test
+    void checksTheDispatchersHubAndTheCouriersHubBeforeAssigning() {
+        com.swiftdrop.delivery.domain.HubScope scope = com.swiftdrop.delivery.domain.HubScope.EVERYWHERE;
+        when(authority.requireCanAct(parcel, DISPATCHER_ID)).thenReturn(scope);
+
+        service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID);
+
+        org.mockito.Mockito.verify(authority).requireCanAct(parcel, DISPATCHER_ID);
+        org.mockito.Mockito.verify(authority).requireCourierMayHandle(parcel, COURIER_ID, scope);
+    }
+
+    @Test
+    void aDispatcherOfAnotherHubAssignsNothing() {
+        when(authority.requireCanAct(parcel, DISPATCHER_ID))
+                .thenThrow(new com.swiftdrop.delivery.api.ParcelForbiddenException("another hub"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelForbiddenException.class);
+
+        org.mockito.Mockito.verifyNoInteractions(assignments);
+        org.mockito.Mockito.verify(parcels, org.mockito.Mockito.never()).saveAndFlush(any());
+    }
+
+    @Test
+    void aCourierOfAnotherHubIsNotAssigned() {
+        org.mockito.Mockito.doThrow(new com.swiftdrop.delivery.api.ParcelConflictException("wrong hub"))
+                .when(authority).requireCourierMayHandle(any(), any(), any());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.assignCourier(PARCEL_ID, COURIER_ID, DISPATCHER_ID))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class);
+
+        org.mockito.Mockito.verify(parcels, org.mockito.Mockito.never()).saveAndFlush(any());
     }
 }

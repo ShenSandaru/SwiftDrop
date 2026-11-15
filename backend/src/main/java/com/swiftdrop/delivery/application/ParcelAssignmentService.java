@@ -42,25 +42,27 @@ class ParcelAssignmentService implements ParcelAssignment {
     private final DeliveryPolicy policy;
     private final Clock clock;
     private final ApplicationEventPublisher publisher;
+    private final HubAuthority authority;
 
     @Autowired
     ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
-            ApplicationEventPublisher publisher) {
-        this(parcels, assignments, policy, Clock.systemUTC(), publisher);
+            ApplicationEventPublisher publisher, HubAuthority authority) {
+        this(parcels, assignments, policy, Clock.systemUTC(), publisher, authority);
     }
 
     ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
-            Clock clock) {
-        this(parcels, assignments, policy, clock, null);
+            Clock clock, HubAuthority authority) {
+        this(parcels, assignments, policy, clock, null, authority);
     }
 
     ParcelAssignmentService(ParcelRepository parcels, ParcelAssignmentRepository assignments, DeliveryPolicy policy,
-            Clock clock, ApplicationEventPublisher publisher) {
+            Clock clock, ApplicationEventPublisher publisher, HubAuthority authority) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.policy = policy;
         this.clock = clock;
         this.publisher = publisher;
+        this.authority = authority;
     }
 
     @Override
@@ -79,6 +81,9 @@ class ParcelAssignmentService implements ParcelAssignment {
         Objects.requireNonNull(type, "type");
         Parcel parcel = parcels.findById(parcelId).orElseThrow(ParcelNotFoundException::new);
         Instant now = clock.instant();
+
+        // The dispatcher's hub must be responsible for the parcel, and the courier must work for it (ADR 0012 §4)
+        authority.requireCourierMayHandle(parcel, courierUserId, authority.requireCanAct(parcel, dispatcherUserId));
 
         // The parcel decides whether this kind of task is possible now (ADR 0009 §5)
         if (type == ParcelAssignmentType.PICKUP && parcel.getStatus() != ParcelStatus.CREATED) {

@@ -43,6 +43,19 @@ const DATE = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "
 const SHORT_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Colombo" });
 const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" });
 
+const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Colombo" });
+const ISO_DAY = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Colombo" });
+
+/** A calendar day from the backend (YYYY-MM-DD, Sri Lanka time) as "Mon, 16 Nov". */
+export function formatDay(day: string): string {
+  return DAY.format(new Date(`${day}T12:00:00+05:30`));
+}
+
+/** The given moment's calendar day in Sri Lanka as YYYY-MM-DD, comparable with backend days. */
+export function sriLankaDay(moment: Date): string {
+  return ISO_DAY.format(moment);
+}
+
 export function formatDateTime(iso: string | null | undefined): string {
   return iso ? DATE_TIME.format(new Date(iso)) : "—";
 }

@@ -1,6 +1,7 @@
 package com.swiftdrop.delivery.domain;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,4 +41,13 @@ public interface ParcelAssignmentRepository extends JpaRepository<ParcelAssignme
 
     Page<ParcelAssignmentRecord> findByTypeAndStatus(
             ParcelAssignmentType type, ParcelAssignmentStatus status, Pageable pageable);
+
+    /** The tasks of parcels a staff member's hubs may see; the scope rule is {@link ParcelRepository#IN_SCOPE}. */
+    @Query("""
+            SELECT a FROM ParcelAssignmentRecord a, Parcel p
+            WHERE p.id = a.parcelId AND a.type = :type AND a.status = :status
+              AND """ + ParcelRepository.IN_SCOPE)
+    Page<ParcelAssignmentRecord> findInScope(@Param("type") ParcelAssignmentType type,
+            @Param("status") ParcelAssignmentStatus status, @Param("everywhere") boolean everywhere,
+            @Param("hubIds") Collection<UUID> hubIds, @Param("zoneIds") Collection<UUID> zoneIds, Pageable pageable);
 }
