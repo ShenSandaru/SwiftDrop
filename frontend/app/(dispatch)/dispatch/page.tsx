@@ -68,7 +68,7 @@ const FILTER_STATUSES: Array<ParcelStatus | "ALL"> = [
 const SOURCE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT"] as const;
 type SourceFilter = (typeof SOURCE_FILTERS)[number];
 
-type HistoryStatusFilter = "COMPLETED" | "DELIVERED" | "FAILED" | "CANCELLED" | "ALL";
+type HistoryStatusFilter = ParcelStatus | "ALL" | "COMPLETED";
 
 type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "history" | "tracking";
 
@@ -128,7 +128,7 @@ export default function DispatchPage() {
   const [receivingParcelId, setReceivingParcelId] = useState<string | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
 
-  const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>("COMPLETED");
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>("ALL");
   const [historySource, setHistorySource] = useState<SourceFilter>("ALL");
   const [historySearch, setHistorySearch] = useState("");
   const [historyPageNumber, setHistoryPageNumber] = useState(0);
@@ -688,11 +688,7 @@ export default function DispatchPage() {
           active={activeTab === "history"}
           onClick={() => setActiveTab("history")}
           label="Order History"
-          badge={
-            (historyCounts.delivered ?? 0) +
-            (historyCounts.failed ?? 0) +
-            (historyCounts.cancelled ?? 0)
-          }
+          badge={metrics.total ?? 0}
         />
         <TabButton
           active={activeTab === "tracking"}
@@ -1388,9 +1384,9 @@ export default function DispatchPage() {
         <section aria-labelledby="heading-order-history" className="space-y-4">
           <SectionHeading
             id="heading-order-history"
-            eyebrow="Completed & past orders"
+            eyebrow="Hub parcel ledger"
             title="Order History"
-            description="Review delivered, failed, and cancelled parcels handled by your hub, and inspect full status and courier timelines."
+            description="Review all parcels handled by your hub with their current or final status, and inspect full status and courier timelines."
           />
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -1441,13 +1437,15 @@ export default function DispatchPage() {
                       setHistoryPageNumber(0);
                       setHistoryLoading(true);
                     }}
-                    className="h-10 w-full min-w-40 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
+                    className="h-10 w-full min-w-44 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
                   >
-                    <option value="COMPLETED">All completed</option>
-                    <option value="DELIVERED">{STATUS_LABELS.DELIVERED}</option>
-                    <option value="FAILED">{STATUS_LABELS.FAILED}</option>
-                    <option value="CANCELLED">{STATUS_LABELS.CANCELLED}</option>
                     <option value="ALL">All statuses</option>
+                    <option value="COMPLETED">All completed</option>
+                    {FILTER_STATUSES.filter((status) => status !== "ALL").map((status) => (
+                      <option key={status} value={status}>
+                        {STATUS_LABELS[status]}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
@@ -1477,9 +1475,9 @@ export default function DispatchPage() {
                   icon={History}
                   title="No order history found"
                   description={
-                    historySearch.trim() || historyStatus !== "COMPLETED" || historySource !== "ALL"
+                    historySearch.trim() || historyStatus !== "ALL" || historySource !== "ALL"
                       ? "Try another search, status, or source filter."
-                      : "Completed, failed, and cancelled parcels handled by your hub will appear here."
+                      : "All parcels handled by your hub will appear here."
                   }
                 />
               )}
