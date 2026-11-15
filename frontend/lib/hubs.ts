@@ -65,7 +65,6 @@ export interface HubStaffMember {
   userId: string;
   fullName: string;
   roles: ("DISPATCHER" | "COURIER")[];
-  headOffice: boolean;
   hubIds: string[];
 }
 
@@ -73,20 +72,11 @@ export function listHubStaff(): Promise<HubStaffMember[]> {
   return api.get<HubStaffMember[]>("/api/v1/hubs/staff");
 }
 
-/** Gives the person a home hub; a head office dispatcher becomes a hub dispatcher. */
+/** Gives the person a home hub. */
 export function addStaffToHub(hubId: string, userId: string): Promise<void> {
   return api.put<void>(`/api/v1/hubs/${encodeURIComponent(hubId)}/staff/${encodeURIComponent(userId)}`);
 }
 
 export function removeStaffFromHub(hubId: string, userId: string): Promise<void> {
   return api.delete<void>(`/api/v1/hubs/${encodeURIComponent(hubId)}/staff/${encodeURIComponent(userId)}`);
-}
-
-/** Makes a dispatcher work country-wide, replacing their hubs. */
-export function makeHeadOffice(userId: string): Promise<void> {
-  return api.put<void>(`/api/v1/hubs/head-office-staff/${encodeURIComponent(userId)}`);
-}
-
-export function removeHeadOffice(userId: string): Promise<void> {
-  return api.delete<void>(`/api/v1/hubs/head-office-staff/${encodeURIComponent(userId)}`);
 }

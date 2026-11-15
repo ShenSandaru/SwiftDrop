@@ -5,7 +5,7 @@ import { AlertTriangle, Globe, Warehouse } from "lucide-react";
 import { getDispatchScope, type DispatchScope } from "@/lib/dispatch";
 
 /**
- * Says where the signed-in dispatcher works (ADR 0012): every hub, or named hubs. A dispatcher with
+ * Says where the signed-in user works (ADR 0012): every hub (an admin), or named hubs. A dispatcher with
  * no hub sees nothing, so the banner says why and who to ask, instead of leaving an empty portal
  * unexplained. The backend decides the scope; this only shows it.
  */
@@ -32,7 +32,7 @@ export function ScopeBanner() {
     return (
       <p className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground shadow-xs">
         <Globe className="size-4 text-primary" aria-hidden="true" />
-        You work across every hub, so you see all parcels.
+        You are an administrator, so you see every hub and all parcels.
       </p>
     );
   }

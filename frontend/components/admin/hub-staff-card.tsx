@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Building, Globe, Loader2, UserCog, X } from "lucide-react";
+import { AlertTriangle, Building, Loader2, UserCog, X } from "lucide-react";
 import { cn } from "cn";
-import { Button } from "@/components/ui/button";
 import { ThemedSelect } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { formatApiError } from "@/lib/api";
 import {
   addStaffToHub,
   listHubStaff,
-  makeHeadOffice,
-  removeHeadOffice,
   removeStaffFromHub,
   type Hub,
   type HubStaffMember,
@@ -20,20 +16,18 @@ import {
 
 type Filter = "all" | "needs-hub";
 
-const needsAHub = (member: HubStaffMember) => !member.headOffice && member.hubIds.length === 0;
+const needsAHub = (member: HubStaffMember) => member.hubIds.length === 0;
 
 /**
  * Home hubs of dispatchers and couriers (ADR 0012). A dispatcher sees and handles only the parcels
- * of their hubs, a head office dispatcher sees every hub, and one with no hub sees nothing, so the
- * people who still need a hub are listed first. The backend enforces all of it; this card only
- * edits the assignments.
+ * of their hubs, and one with no hub sees nothing, so the people who still need a hub are easy to
+ * find. The backend enforces all of it; this card only edits the assignments.
  */
 export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
   const [staff, setStaff] = useState<HubStaffMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [busyUser, setBusyUser] = useState<string | null>(null);
-  const [headOfficeFor, setHeadOfficeFor] = useState<HubStaffMember | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -81,8 +75,8 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
             <UserCog className="size-4 text-primary" aria-hidden="true" /> Staff and hubs
           </h3>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            A dispatcher sees and handles only the parcels of their hubs. Head office dispatchers see every hub.
-            A dispatcher with no hub sees nothing.
+            A dispatcher sees and handles only the parcels of their hubs. A dispatcher with no hub sees nothing.
+            Only admins see every hub.
           </p>
         </div>
         <div role="group" aria-label="Filter staff" className="inline-flex rounded-lg border border-border bg-background p-0.5 text-xs font-semibold">
@@ -112,7 +106,7 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
             {waitingDispatchers.length} {waitingDispatchers.length === 1 ? "dispatcher has" : "dispatchers have"} no hub
           </AlertTitle>
           <AlertDescription>
-            They see an empty portal until you give them a hub or make them head office.
+            They see an empty portal until you give them a hub.
           </AlertDescription>
         </Alert>
       )}
@@ -134,7 +128,6 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
         ) : (
           <ul className="divide-y divide-border rounded-xl border border-border">
             {visible.map((member) => {
-              const isDispatcher = member.roles.includes("DISPATCHER");
               const taken = new Set(member.hubIds);
               const options = activeHubs
                 .filter((hub) => !taken.has(hub.id))
@@ -150,11 +143,6 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                    {member.headOffice && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
-                        <Globe className="size-3" aria-hidden="true" /> Head office
-                      </span>
-                    )}
                     {member.hubIds.map((id) => (
                       <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-primary">
                         <Building className="size-3" aria-hidden="true" /> {hubName.get(id) ?? "Unknown hub"}
@@ -178,33 +166,16 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
 
                   <div className="flex items-center gap-2 lg:justify-end">
                     {busy && <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Saving" />}
-                    {!member.headOffice && (
-                      <div className="w-44">
-                        <ThemedSelect
-                          size="sm"
-                          value=""
-                          disabled={busy || options.length === 0}
-                          onChange={(hubId) => change(member, () => addStaffToHub(hubId, member.userId))}
-                          options={options}
-                          placeholder="Add to a hub..."
-                        />
-                      </div>
-                    )}
-                    {isDispatcher && (
-                      <Button
-                        type="button"
+                    <div className="w-44">
+                      <ThemedSelect
                         size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          member.headOffice
-                            ? change(member, () => removeHeadOffice(member.userId))
-                            : setHeadOfficeFor(member)
-                        }
-                      >
-                        {member.headOffice ? "Remove head office" : "Make head office"}
-                      </Button>
-                    )}
+                        value=""
+                        disabled={busy || options.length === 0}
+                        onChange={(hubId) => change(member, () => addStaffToHub(hubId, member.userId))}
+                        options={options}
+                        placeholder="Add to a hub..."
+                      />
+                    </div>
                   </div>
                 </li>
               );
@@ -212,27 +183,6 @@ export function HubStaffCard({ hubs }: { hubs: Hub[] }) {
           </ul>
         )}
       </div>
-
-      <ConfirmationDialog
-        open={headOfficeFor !== null}
-        onOpenChange={(open) => {
-          if (!open) setHeadOfficeFor(null);
-        }}
-        title="Make head office?"
-        description={
-          headOfficeFor
-            ? `${headOfficeFor.fullName} will see and handle parcels at every hub in the country. Their current hubs are replaced.`
-            : ""
-        }
-        confirmLabel="Make head office"
-        variant="warning"
-        loading={busyUser !== null}
-        onConfirm={async () => {
-          const member = headOfficeFor;
-          setHeadOfficeFor(null);
-          if (member) await change(member, () => makeHeadOffice(member.userId));
-        }}
-      />
     </section>
   );
 }
