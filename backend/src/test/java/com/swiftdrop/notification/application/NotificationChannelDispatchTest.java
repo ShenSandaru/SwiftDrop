@@ -178,5 +178,88 @@ class NotificationChannelDispatchTest {
         verify(smsSender).send("+94771234567", "Booked msg");
         verify(recordRepository).updateDeliveryStatus(any(), eq(NotificationDeliveryStatus.SENT));
     }
+
+    @Test
+    @DisplayName("Customer receives IN_APP notification and external channels are marked SENT when parcel is PICKED_UP")
+    void customerReceivesInAppOnPickedUp() {
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(consumerStateRepository.findById(parcelId)).thenReturn(Optional.of(new NotificationConsumerState(parcelId, 1, now)));
+        when(userDirectory.findUser(customerId)).thenReturn(Optional.of(
+                new UserSummary(customerId, "Alice", "alice@example.com", "+94771234567", Set.of("CUSTOMER"), true, true)));
+
+        ParcelStatusChanged event = ParcelStatusChanged.of(
+                UUID.randomUUID(), now,
+                new ParcelStatusChangedData(parcelId, trackingNumber, ParcelStatus.CREATED, ParcelStatus.PICKED_UP, 2,
+                        ParcelSource.CUSTOMER, customerId, null, null, null));
+
+        when(templateResolver.resolve(event)).thenReturn(Optional.of(
+                new NotificationContent("Parcel Picked Up", "Your parcel " + trackingNumber + " has been collected by our courier.")));
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        processor.process(event, "{\"sequence\":2}");
+
+        verify(recordRepository).insertIfAbsent(any(), eq(event.eventId()), eq(customerId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel Picked Up"), eq("Your parcel " + trackingNumber + " has been collected by our courier."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+        verify(emailSender).send("alice@example.com", "Parcel Picked Up",
+                "Your parcel " + trackingNumber + " has been collected by our courier.");
+        verify(smsSender).send("+94771234567",
+                "Your parcel " + trackingNumber + " has been collected by our courier.");
+        verify(recordRepository, org.mockito.Mockito.times(2)).updateDeliveryStatus(any(), eq(NotificationDeliveryStatus.SENT));
+    }
+
+    @Test
+    @DisplayName("Customer receives IN_APP, EMAIL, and SMS notifications for AT_HUB and IN_TRANSIT")
+    void customerReceivesNotificationsForAtHubAndInTransit() {
+        NotificationTemplateResolver realResolver = new NotificationTemplateResolver();
+        NotificationEventProcessor realTemplateProcessor = new NotificationEventProcessor(
+                consumerStateRepository,
+                pendingEventRepository,
+                recordRepository,
+                realResolver,
+                eventParser,
+                parcelEvents,
+                userDirectory,
+                merchantLookup,
+                emailSender,
+                smsSender);
+
+        when(consumerStateRepository.save(any(NotificationConsumerState.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(userDirectory.findUser(customerId)).thenReturn(Optional.of(
+                new UserSummary(customerId, "Alice", "alice@example.com", "+94771234567", Set.of("CUSTOMER"), true, true)));
+        when(recordRepository.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        ParcelStatusChanged atHubEvent = ParcelStatusChanged.of(
+                UUID.randomUUID(), now,
+                new ParcelStatusChangedData(parcelId, trackingNumber, ParcelStatus.PICKED_UP, ParcelStatus.AT_HUB, 2,
+                        ParcelSource.CUSTOMER, customerId, null, null, null, "POL-01", null));
+        when(consumerStateRepository.findById(parcelId))
+                .thenReturn(Optional.of(new NotificationConsumerState(parcelId, 1, now)));
+
+        realTemplateProcessor.process(atHubEvent, "{\"sequence\":2}");
+
+        verify(recordRepository).insertIfAbsent(any(), eq(atHubEvent.eventId()), eq(customerId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel Arrived at Hub"),
+                eq("Your parcel " + trackingNumber + " has arrived at hub POL-01."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+
+        ParcelStatusChanged inTransitEvent = ParcelStatusChanged.of(
+                UUID.randomUUID(), now,
+                new ParcelStatusChangedData(parcelId, trackingNumber, ParcelStatus.AT_HUB, ParcelStatus.IN_TRANSIT, 3,
+                        ParcelSource.CUSTOMER, customerId, null, null, null, "POL-01", null));
+        when(consumerStateRepository.findById(parcelId))
+                .thenReturn(Optional.of(new NotificationConsumerState(parcelId, 2, now)));
+
+        realTemplateProcessor.process(inTransitEvent, "{\"sequence\":3}");
+
+        verify(recordRepository).insertIfAbsent(any(), eq(inTransitEvent.eventId()), eq(customerId), eq(parcelId), eq(trackingNumber),
+                eq("Parcel In Transit"),
+                eq("Your parcel " + trackingNumber + " is on its way to the next hub."),
+                eq(NotificationChannel.IN_APP.name()), eq(NotificationDeliveryStatus.NOT_APPLICABLE.name()), eq(now));
+    }
 }
 

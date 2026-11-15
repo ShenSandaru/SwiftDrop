@@ -10,7 +10,6 @@ import { NotificationBell } from "@/components/notification-bell";
 import { getUserAvatarUrl } from "@/lib/api";
 
 const HOVER_OPEN_MS = 150;
-const HOVER_CLOSE_MS = 250;
 
 interface NavLink {
   href: string;
@@ -35,7 +34,7 @@ function PinMark({ className }: { className?: string }) {
 export function NavHeader() {
   const { user, isAuthenticated, isLoading, logout, hasRole } = useAuth();
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   // Opened with the menu button (or a tap): stays open until closed, not just while hovered
   const [pinned, setPinned] = useState(false);
   const navRef = useRef<HTMLElement>(null);
@@ -69,6 +68,13 @@ export function NavHeader() {
 
   useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleScroll = () => close();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [open]);
+
   // Measure the full width of the links (scrollWidth counts them even while collapsed)
   const linkCount = links.length;
   useEffect(() => {
@@ -83,7 +89,7 @@ export function NavHeader() {
         }
         // Logo + expanded links + 40px menu button + 28px pill padding and gaps
         const needed = logo.offsetWidth + inner.scrollWidth + 68;
-        setSideways(needed + 24 <= window.innerWidth);
+        setSideways(window.innerWidth >= 768 || needed + 24 <= window.innerWidth);
       });
     };
     measure();
@@ -130,9 +136,6 @@ export function NavHeader() {
   };
   const onMouseLeave = () => {
     window.clearTimeout(hoverTimer.current);
-    if (!pinned) {
-      hoverTimer.current = window.setTimeout(() => setOpen(false), HOVER_CLOSE_MS);
-    }
   };
   const onBlur = (event: FocusEvent) => {
     if (!pinned && !navRef.current?.contains(event.relatedTarget as Node)) {
@@ -218,7 +221,7 @@ export function NavHeader() {
             ref={linksRef}
             className={cn(
               "flex items-center gap-1 overflow-hidden transition-[max-width,opacity] duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)]",
-              open && sideways ? "max-w-[64rem] opacity-100" : "max-w-0 opacity-0",
+              open && sideways ? "max-w-[min(92vw,72rem)] opacity-100" : "max-w-0 opacity-0",
             )}
             aria-hidden={!(open && sideways)}
             inert={!(open && sideways)}
