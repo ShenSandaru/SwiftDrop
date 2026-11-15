@@ -873,7 +873,7 @@ export default function DispatchPage() {
               loading={metricsLoading}
             />
             <MetricCard
-              label="Warehouse & sorting"
+              label="Hub sorting"
               value={warehouseCount}
               description="Inbound intake & transfers"
               icon={Warehouse}
