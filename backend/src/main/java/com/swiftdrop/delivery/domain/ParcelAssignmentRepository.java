@@ -46,12 +46,25 @@ public interface ParcelAssignmentRepository extends JpaRepository<ParcelAssignme
             JOIN Parcel p ON p.id = a.parcelId
             WHERE a.type = :type
               AND a.status = :status
-              AND (p.originHubId = :hubId
-                   OR p.viaHubId = :hubId
-                   OR p.destinationHubId = :hubId
-                   OR p.currentHubId = :hubId
-                   OR p.nextHubId = :hubId
-                   OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))
+              AND ((p.status = com.swiftdrop.delivery.api.ParcelStatus.CREATED
+                    AND ((p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId)
+                         OR p.originHubId = :hubId))
+                   OR (p.status = com.swiftdrop.delivery.api.ParcelStatus.PICKED_UP
+                       AND (p.originHubId = :hubId OR p.nextHubId = :hubId))
+                   OR (p.status IN (com.swiftdrop.delivery.api.ParcelStatus.AT_HUB,
+                                    com.swiftdrop.delivery.api.ParcelStatus.OUT_FOR_DELIVERY,
+                                    com.swiftdrop.delivery.api.ParcelStatus.DELIVERY_ATTEMPT_FAILED)
+                       AND p.currentHubId = :hubId)
+                   OR (p.status IN (com.swiftdrop.delivery.api.ParcelStatus.IN_TRANSIT,
+                                    com.swiftdrop.delivery.api.ParcelStatus.RETURNING)
+                       AND (p.currentHubId = :hubId OR p.nextHubId = :hubId))
+                   OR (p.status IN (com.swiftdrop.delivery.api.ParcelStatus.DELIVERED,
+                                    com.swiftdrop.delivery.api.ParcelStatus.FAILED,
+                                    com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+                       AND (p.currentHubId = :hubId
+                            OR p.originHubId = :hubId
+                            OR p.destinationHubId = :hubId
+                            OR (p.originHubId IS NULL AND :hubZoneId IS NOT NULL AND p.pickup.zoneId = :hubZoneId))))
             """)
     Page<ParcelAssignmentRecord> findByTypeAndStatusAndHub(
             @Param("type") ParcelAssignmentType type,

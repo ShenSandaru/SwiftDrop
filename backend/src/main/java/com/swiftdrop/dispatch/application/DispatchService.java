@@ -107,6 +107,15 @@ public class DispatchService {
         return parcels.findAssignmentHistory(parcelId).orElseThrow(ParcelNotFoundException::new);
     }
 
+    @Transactional(readOnly = true)
+    public ParcelAssignmentHistory assignmentHistory(UUID parcelId, Staff caller) {
+        Objects.requireNonNull(parcelId, "parcelId");
+        ParcelAssignmentHistory history = parcels.findAssignmentHistory(parcelId)
+                .orElseThrow(ParcelNotFoundException::new);
+        requireParcelInCallerHub(parcelId, caller);
+        return history;
+    }
+
     @Transactional
     public ParcelAssignmentSummary assign(UUID parcelId, UUID courierId, UUID dispatcherId,
             ParcelAssignmentType type) {

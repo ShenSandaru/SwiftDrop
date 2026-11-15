@@ -216,4 +216,25 @@ class DispatchServiceTest {
         service.activeCouriers(requestedHub, admin);
         verify(users).findEnabledCouriersByHub(requestedHub);
     }
+
+    @Test
+    void hubAssignedDispatcherCannotReadAssignmentHistoryForOtherHubs() {
+        UUID dispatcherHub = UUID.randomUUID();
+        UserSummary dispatcher = new UserSummary(DISPATCHER_ID, "Colombo Disp", "disp@example.com",
+                null, Set.of("DISPATCHER"), true, true, dispatcherHub);
+        when(users.findUser(DISPATCHER_ID)).thenReturn(Optional.of(dispatcher));
+
+        com.swiftdrop.delivery.api.ParcelAssignmentHistory history =
+                new com.swiftdrop.delivery.api.ParcelAssignmentHistory(PARCEL_ID, List.of());
+        when(parcels.findAssignmentHistory(PARCEL_ID)).thenReturn(Optional.of(history));
+        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(false);
+
+        Staff caller = Staff.dispatcher(DISPATCHER_ID);
+        assertThatThrownBy(() -> service.assignmentHistory(PARCEL_ID, caller))
+                .isInstanceOf(com.swiftdrop.delivery.api.ParcelConflictException.class)
+                .hasMessageContaining("does not belong to your hub");
+
+        when(parcels.isParcelInHub(PARCEL_ID, dispatcherHub)).thenReturn(true);
+        assertThat(service.assignmentHistory(PARCEL_ID, caller)).isEqualTo(history);
+    }
 }

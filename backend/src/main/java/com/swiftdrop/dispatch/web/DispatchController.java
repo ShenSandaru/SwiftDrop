@@ -83,8 +83,8 @@ class DispatchController {
     }
 
     @GetMapping("/parcels/{id}/assignment-history")
-    ParcelAssignmentHistory assignmentHistory(@PathVariable UUID id) {
-        return dispatch.assignmentHistory(id);
+    ParcelAssignmentHistory assignmentHistory(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return dispatch.assignmentHistory(id, staff(jwt));
     }
 
     @PostMapping("/parcel-assignments")
