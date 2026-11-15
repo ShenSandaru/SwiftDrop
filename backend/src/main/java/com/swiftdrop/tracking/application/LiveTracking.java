@@ -2,6 +2,7 @@ package com.swiftdrop.tracking.application;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +39,8 @@ public class LiveTracking {
     static final Duration HEARTBEAT = Duration.ofSeconds(25);
     static final int MAX_STREAMS_PER_PARCEL = 20;
     static final int MAX_STREAMS = 1_000;
+    /** Keeps one client from taking every slot; above the per-parcel limit so that one still applies. */
+    static final int MAX_STREAMS_PER_CLIENT = 30;
 
     private static final Logger log = LoggerFactory.getLogger(LiveTracking.class);
 
@@ -45,6 +48,9 @@ public class LiveTracking {
     private final Supplier<SseEmitter> emitters;
     private final ScheduledExecutorService heartbeat;
     private final Map<String, Set<SseEmitter>> streams = new ConcurrentHashMap<>();
+    /** The client of each open stream and the open streams per client; guarded by {@code streams}. */
+    private final Map<SseEmitter, String> clients = new HashMap<>();
+    private final Map<String, Integer> streamsPerClient = new HashMap<>();
     private int openStreams;
 
     @Autowired
@@ -69,16 +75,17 @@ public class LiveTracking {
      * Opens a stream. Registers it before reading the snapshot, so a change committed in between is
      * still pushed; clients ignore updates whose sequence their snapshot already contains.
      *
+     * @param client identifies who opens the stream (the remote address), for the per-client limit
      * @throws UnknownTrackingNumberException if no parcel has this number
      * @throws TooManyStreamsException if a stream limit is reached
      */
-    public SseEmitter subscribe(String trackingNumber) {
+    public SseEmitter subscribe(String trackingNumber, String client) {
         // Cheap existence check first, so unknown numbers never take a stream slot
         String key = queries.findPublicTrackingView(trackingNumber)
                 .map(PublicTrackingView::trackingNumber)
                 .orElseThrow(UnknownTrackingNumberException::new);
         SseEmitter emitter = emitters.get();
-        register(key, emitter);
+        register(key, client, emitter);
         emitter.onCompletion(() -> unregister(key, emitter));
         emitter.onTimeout(() -> unregister(key, emitter));
         emitter.onError(error -> unregister(key, emitter));
@@ -130,16 +137,19 @@ public class LiveTracking {
         }
     }
 
-    private void register(String key, SseEmitter emitter) {
+    private void register(String key, String client, SseEmitter emitter) {
         synchronized (streams) {
             Set<SseEmitter> forParcel = streams.computeIfAbsent(key, ignored -> ConcurrentHashMap.newKeySet());
-            if (openStreams >= MAX_STREAMS || forParcel.size() >= MAX_STREAMS_PER_PARCEL) {
+            if (openStreams >= MAX_STREAMS || forParcel.size() >= MAX_STREAMS_PER_PARCEL
+                    || streamsPerClient.getOrDefault(client, 0) >= MAX_STREAMS_PER_CLIENT) {
                 if (forParcel.isEmpty()) {
                     streams.remove(key);
                 }
                 throw new TooManyStreamsException();
             }
             forParcel.add(emitter);
+            clients.put(emitter, client);
+            streamsPerClient.merge(client, 1, Integer::sum);
             openStreams++;
         }
     }
@@ -149,6 +159,8 @@ public class LiveTracking {
             Set<SseEmitter> forParcel = streams.get(key);
             if (forParcel != null && forParcel.remove(emitter)) {
                 openStreams--;
+                // Drops the client's entry when its last stream closes
+                streamsPerClient.computeIfPresent(clients.remove(emitter), (c, open) -> open > 1 ? open - 1 : null);
                 if (forParcel.isEmpty()) {
                     streams.remove(key);
                 }

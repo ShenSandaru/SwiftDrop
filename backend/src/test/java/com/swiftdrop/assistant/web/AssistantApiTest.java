@@ -27,7 +27,6 @@ import com.swiftdrop.assistant.application.AssistantCard;
 import com.swiftdrop.assistant.application.AssistantService;
 import com.swiftdrop.assistant.application.ChatRole;
 import com.swiftdrop.assistant.application.ChatTurn;
-import com.swiftdrop.assistant.application.ClientRateLimiter;
 import com.swiftdrop.delivery.domain.DeliveryProofRepository;
 import com.swiftdrop.delivery.domain.OutboxEventRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
@@ -37,6 +36,7 @@ import com.swiftdrop.identity.domain.GoogleLoginCodeRepository;
 import com.swiftdrop.identity.domain.UserRepository;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.ZoneRepository;
+import com.swiftdrop.shared.web.ClientRateLimiter;
 import com.swiftdrop.test.security.TestPrincipal;
 
 /** The assistant endpoint through HTTP; the assistant service is mocked. */
@@ -54,6 +54,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,

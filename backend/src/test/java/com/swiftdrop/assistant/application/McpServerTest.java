@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.swiftdrop.shared.web.ClientRateLimiter;
+
 class McpServerTest {
 
     private static final String MODERN = McpServer.MODERN_VERSION;

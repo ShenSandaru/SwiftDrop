@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.swiftdrop.delivery.api.ParcelConflictException;
 import com.swiftdrop.delivery.domain.Hub;
+import com.swiftdrop.delivery.domain.HubLinkRepository;
 import com.swiftdrop.delivery.domain.HubRepository;
 
 class HubNetworkTest {
@@ -25,7 +26,8 @@ class HubNetworkTest {
     private static final UUID JAFFNA_ZONE = UUID.randomUUID();
 
     private final HubRepository hubs = mock(HubRepository.class);
-    private final HubNetwork network = new HubNetwork(hubs);
+    private final HubLinkRepository links = mock(HubLinkRepository.class);
+    private final HubNetwork network = new HubNetwork(hubs, links);
     private final Hub colombo = new Hub("CMB", "Colombo hub", "Colombo", COLOMBO_ZONE, true, NOW);
     private final Hub kandy = new Hub("KDY", "Kandy branch", "Kandy", KANDY_ZONE, false, NOW);
     private final Hub jaffna = new Hub("JAF", "Jaffna branch", "Jaffna", JAFFNA_ZONE, false, NOW);
@@ -42,6 +44,23 @@ class HubNetworkTest {
     void branchesAreConnectedThroughTheCentralHub() {
         assertThat(network.routeFor(KANDY_ZONE, JAFFNA_ZONE).hubs())
                 .containsExactly(kandy.getId(), colombo.getId(), jaffna.getId());
+    }
+
+    @Test
+    void linkedBranchesAreConnectedDirectly() {
+        when(links.areLinked(kandy.getId(), jaffna.getId())).thenReturn(true);
+
+        assertThat(network.routeFor(KANDY_ZONE, JAFFNA_ZONE).hubs())
+                .containsExactly(kandy.getId(), jaffna.getId());
+    }
+
+    @Test
+    void linkedBranchesAreConnectedWithoutACentralHub() {
+        when(hubs.findFirstByCentralTrueAndActiveTrue()).thenReturn(Optional.empty());
+        when(links.areLinked(kandy.getId(), jaffna.getId())).thenReturn(true);
+
+        assertThat(network.routeFor(KANDY_ZONE, JAFFNA_ZONE).hubs())
+                .containsExactly(kandy.getId(), jaffna.getId());
     }
 
     @Test

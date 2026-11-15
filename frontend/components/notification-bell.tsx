@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, Loader2, Package, UserCheck, AlertCircle } from "lucide-react";
@@ -38,14 +39,38 @@ export function NotificationBell() {
   } = useNotifications();
 
   const [open, setOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      void refresh();
+    }
+  }, [open, refresh]);
 
   // Close dropdown on outside click or Escape
   useEffect(() => {
     if (!open) return;
 
+    const updatePosition = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownPos({
+          top: rect.bottom + 8,
+          right: Math.max(12, window.innerWidth - rect.right),
+        });
+      }
+    };
+    updatePosition();
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setOpen(false);
       }
     };
@@ -56,9 +81,13 @@ export function NotificationBell() {
       }
     };
 
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -131,10 +160,12 @@ export function NotificationBell() {
       </button>
 
       {/* Dropdown Menu */}
-      {open && (
+      {open && dropdownPos && typeof document !== "undefined" && createPortal(
         <div
+          ref={dropdownRef}
+          style={{ top: dropdownPos.top, right: dropdownPos.right }}
           className={cn(
-            "fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full sm:mt-2 z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
+            "fixed z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
             "motion-safe:animate-in motion-safe:fade-in-50 motion-safe:zoom-in-95",
           )}
           role="region"
@@ -255,7 +286,8 @@ export function NotificationBell() {
               {footerLink.label}
             </Link>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

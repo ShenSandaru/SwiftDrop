@@ -7,6 +7,8 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,8 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.swiftdrop.delivery.application.HubAdministration;
 
 /**
- * The hub network (ADR 0009 §1). Dispatchers read it to scan parcels at hubs; only the admin
- * changes it. Hubs hold no personal data.
+ * The hub network (ADR 0009 §1) and the direct links between branches (ADR 0011 §3). Dispatchers
+ * read it to scan parcels at hubs; only the admin changes it. Hubs hold no personal data.
  */
 @RestController
 @RequestMapping("/api/v1/hubs")
@@ -58,5 +60,27 @@ class HubController {
     @PreAuthorize("hasRole('ADMIN')")
     void delete(@PathVariable UUID id) {
         hubs.delete(id);
+    }
+
+    @GetMapping("/links")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    List<HubLinkResponse> links() {
+        return hubs.links().stream().map(HubLinkResponse::from).toList();
+    }
+
+    /** Links two branches; parcels picked up afterwards travel between them directly. */
+    @PostMapping("/links")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
+    HubLinkResponse link(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody HubLinkRequest request) {
+        return HubLinkResponse.from(hubs.link(request.hubId(), request.otherHubId(), Callers.userId(jwt)));
+    }
+
+    /** The two hubs may be given in either order. */
+    @DeleteMapping("/links/{hubId}/{otherHubId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    void unlink(@PathVariable UUID hubId, @PathVariable UUID otherHubId) {
+        hubs.unlink(hubId, otherHubId);
     }
 }

@@ -51,6 +51,8 @@ import com.swiftdrop.test.security.TestPrincipal;
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -75,6 +77,8 @@ class DispatchHubApiTest {
     // The concrete service: it is both delivery's ParcelHubOperations and the customer cancel endpoint's
     @MockitoBean
     private ParcelHubService hubOperations;
+    @MockitoBean
+    private com.swiftdrop.delivery.api.HubStaffDirectory hubStaff;
     @MockitoBean
     private UserRepository users;
     @MockitoBean
@@ -157,5 +161,55 @@ class DispatchHubApiTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"no reason\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(hubOperations);
+    }
+
+    @Test
+    void dispatchersAndTheAdminSeeStaleParcels() throws Exception {
+        org.mockito.Mockito.when(parcels.findStale(any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+        String path = "/api/v1/dispatch/stale-parcels";
+
+        for (TestPrincipal caller : java.util.List.of(TestPrincipal.dispatcher(), TestPrincipal.admin())) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                            .with(caller.postProcessor()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty())
+                    .andExpect(jsonPath("$.totalItems").value(0));
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                        .with(TestPrincipal.courier().postProcessor()))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aParcelOfAnotherHubIsRefusedWith403() throws Exception {
+        UUID dispatcherId = UUID.randomUUID();
+        doThrow(new com.swiftdrop.delivery.api.ParcelForbiddenException("This parcel is handled by another hub"))
+                .when(hubOperations).sendToNextHub(PARCEL, Staff.dispatcher(dispatcherId));
+
+        mvc.perform(post(BASE + "/transit").with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("This parcel is handled by another hub"));
+    }
+
+    @Test
+    void dispatchersAndAdminsSeeTheirOwnScope() throws Exception {
+        UUID dispatcherId = UUID.randomUUID();
+        UUID hubId = UUID.randomUUID();
+        org.mockito.Mockito.when(hubStaff.scopeOf(dispatcherId)).thenReturn(new com.swiftdrop.delivery.api.StaffScopeView(
+                false, java.util.List.of(new com.swiftdrop.delivery.api.StaffScopeView.HubRef(hubId, "BAD", "Badulla branch"))));
+        var get = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/dispatch/scope");
+
+        mvc.perform(get.with(TestPrincipal.dispatcher(dispatcherId).postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.everywhere").value(false))
+                .andExpect(jsonPath("$.hubs[0].code").value("BAD"));
+        mvc.perform(get.with(TestPrincipal.admin().postProcessor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.everywhere").value(true))
+                .andExpect(jsonPath("$.hubs").isEmpty());
+        mvc.perform(get.with(TestPrincipal.courier().postProcessor())).andExpect(status().isForbidden());
     }
 }

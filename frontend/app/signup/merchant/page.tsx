@@ -187,7 +187,7 @@ export default function MerchantSignupPage() {
 
           <div className="pt-2">
             <Link
-              href="/login"
+              href="/login?redirect=/merchant"
               className={cn(buttonVariants({ size: "default" }), "w-full font-semibold")}
             >
               Sign In to Check Status &rarr;
@@ -235,7 +235,7 @@ export default function MerchantSignupPage() {
                   <p>{errorMessage}</p>
                   {isConflict && (
                     <p>
-                      <Link href="/login" className="font-semibold underline underline-offset-4 hover:text-foreground">
+                      <Link href="/login?redirect=/merchant" className="font-semibold underline underline-offset-4 hover:text-foreground">
                         Already registered? Click here to sign in &rarr;
                       </Link>
                     </p>
@@ -484,7 +484,7 @@ export default function MerchantSignupPage() {
             <CardFooter className="flex flex-col gap-2 p-6 bg-muted/10 border-t border-border/60 text-center text-xs text-muted-foreground">
               <p>
                 Already applied or have an account?{" "}
-                <Link href="/login" className="font-semibold text-primary underline-offset-4 hover:underline">
+                <Link href="/login?redirect=/merchant" className="font-semibold text-primary underline-offset-4 hover:underline">
                   Sign in
                 </Link>
               </p>

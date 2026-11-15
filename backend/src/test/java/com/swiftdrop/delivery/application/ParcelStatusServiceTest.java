@@ -76,7 +76,7 @@ class ParcelStatusServiceTest {
         ParcelEventRecorder recorder = new ParcelEventRecorder(history, outbox, new ParcelEventSerializer(), publisher);
         // No hubs: parcels are picked up without a route and follow the ADR 0006 rules
         service = new ParcelStatusService(parcels, assignments, proofs, recorder,
-                new HubNetwork(mock(HubRepository.class)), DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
+                new HubNetwork(mock(HubRepository.class), mock(com.swiftdrop.delivery.domain.HubLinkRepository.class)), DeliveryPolicy.defaults(), Clock.fixed(NOW, ZoneOffset.UTC));
 
         parcel = Parcel.forCustomer("SD7K3M9Q2XWB", CUSTOMER_ID,
                 new ParcelAddress("Nimal Perera", "+94771234567", "12 Temple Rd", null, "Colombo", UUID.randomUUID(), null),
