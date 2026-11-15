@@ -136,15 +136,15 @@ function LoginForm() {
         password,
       });
 
-      await login(response.accessToken);
-
-      try {
-        const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
-        const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
-        router.push(destination);
-      } catch {
-        router.push(redirectTarget);
+      const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
+      if (!currentUser.roles.includes(portalContext)) {
+        setErrorMessage("Invalid email or password.");
+        return;
       }
+
+      await login(response.accessToken);
+      const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
+      router.push(destination);
     } catch (err: unknown) {
       setErrorMessage(formatApiError(err));
     } finally {
