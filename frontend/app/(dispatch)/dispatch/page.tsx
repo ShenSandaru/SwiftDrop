@@ -18,7 +18,6 @@ import {
   Package,
   PackageCheck,
   PackagePlus,
-  RefreshCw,
   Search,
   Truck,
   Warehouse,
@@ -619,24 +618,6 @@ export default function DispatchPage() {
               />
             </div>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={refreshDashboard}
-            disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
-            className="w-full shrink-0 sm:w-auto"
-          >
-            <RefreshCw
-              className={`size-3.5 mr-1.5 ${
-                metricsLoading || parcelPageLoading || activeLoading || couriersLoading
-                  ? "animate-spin"
-                  : ""
-              }`}
-              aria-hidden="true"
-            />
-            Refresh data
-          </Button>
         </div>
       </div>
 
@@ -672,7 +653,7 @@ export default function DispatchPage() {
         <TabButton
           active={activeTab === "warehouse"}
           onClick={() => setActiveTab("warehouse")}
-          label="Warehouse & Sorting"
+          label="Hub Sorting"
           badge={warehouseCount}
           badgeVariant="accent"
         />
@@ -697,7 +678,7 @@ export default function DispatchPage() {
         {!isAdmin && (
           <Link
             href="/profile"
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
           >
             My Profile
           </Link>
@@ -1128,7 +1109,7 @@ export default function DispatchPage() {
           <SectionHeading
             id="heading-warehouse-ops"
             eyebrow="Hub network"
-            title="Hubs & line haul"
+            title="Hub Sorting & Transfers"
             description="Scan picked-up parcels in at their origin branch, send them along their route through the central hub, then hand them to a delivery courier at the destination branch. Failed attempts come back here for another try or the return."
           />
           <HubBoard
@@ -1487,7 +1468,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
+      className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
         active
           ? "border-primary text-foreground font-semibold"
           : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"

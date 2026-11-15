@@ -29,9 +29,9 @@ interface Lane {
 
 /** One lane per next step; a parcel sits in the lane of the step the backend offers. */
 const LANES: Lane[] = [
-  { key: "scan", title: "Scan in at hub", hint: "Picked up, arriving from a line haul, or back from a failed attempt",
+  { key: "scan", title: "Scan in at hub", hint: "Picked up, arriving from another hub, or back from a failed attempt",
     icon: ScanLine, matches: (actions) => actions.includes("SCAN_AT_HUB") },
-  { key: "send", title: "Send onwards", hint: "At a hub on the way; load on the next line haul",
+  { key: "send", title: "Send onwards", hint: "At a hub on the way; send to the next hub",
     icon: Truck, matches: (actions) => actions.includes("SEND_TO_NEXT_HUB") },
   { key: "deliver", title: "Ready for delivery", hint: "At the destination branch; assign a delivery courier",
     icon: UserPlus, matches: (actions) => actions.includes("ASSIGN_DELIVERY") },
