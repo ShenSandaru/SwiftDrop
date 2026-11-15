@@ -36,7 +36,6 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  ArrowLeft,
   Calendar,
   BadgeCheck,
   Phone,
@@ -153,16 +152,6 @@ export default function ProfilePage() {
       </div>
     );
   }
-
-  const dashboardHref = hasRole("ADMIN")
-    ? "/admin"
-    : hasRole("DISPATCHER")
-    ? "/dispatch"
-    : hasRole("COURIER")
-    ? "/courier"
-    : hasRole("CUSTOMER")
-    ? "/customer"
-    : "/";
 
   const profileBadgeLabel = hasRole("ADMIN")
     ? "Administrator Profile"
@@ -402,15 +391,7 @@ export default function ProfilePage() {
       navItems={navItems}
     >
       <div className="space-y-6">
-        {/* Top Breadcrumb / Return Navigation */}
-        <div className="flex items-center justify-between">
-          <Link
-            href={dashboardHref}
-            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-            Back to Dashboard
-          </Link>
+        <div className="flex items-center justify-end">
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent text-primary border border-primary/20 uppercase tracking-wider">
             {profileBadgeLabel}
           </span>
