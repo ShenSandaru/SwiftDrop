@@ -1,5 +1,12 @@
 import { api, type PageResponse } from "@/lib/api";
-import type { FailureReason, ParcelDetail, ParcelStatus, ParcelSize } from "@/lib/delivery";
+import type {
+  BookingRequest,
+  FailureReason,
+  ParcelCreated,
+  ParcelDetail,
+  ParcelSize,
+  ParcelStatus,
+} from "@/lib/delivery";
 
 export type DispatchAssignmentType = "PICKUP" | "DELIVERY" | "RETURN";
 export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "CANCELLED";
@@ -182,6 +189,14 @@ export function getDispatchParcelDetails(id: string): Promise<ParcelDetail> {
 }
 
 // ---- Hub network steps (ADR 0009 §3); each answers 204, or 409 when the rules do not allow it ----
+
+export interface CreateWalkInParcelRequest extends BookingRequest {
+  hubId: string;
+}
+
+export function createWalkInParcel(request: CreateWalkInParcelRequest): Promise<ParcelCreated> {
+  return api.post<ParcelCreated>("/api/v1/dispatch/parcels/walk-in", request);
+}
 
 export function receiveParcelAtHub(parcelId: string, hubId: string): Promise<void> {
   return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-intake`, { hubId });

@@ -22,6 +22,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
+import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.identity.api.UserDirectory;
@@ -36,6 +37,7 @@ class DispatchServiceTest {
     private ParcelQueries parcels;
     private ParcelAssignment assignments;
     private ParcelHubOperations hubOperations;
+    private ParcelCreation parcelCreation;
     private UserDirectory users;
     private DispatchService service;
 
@@ -44,8 +46,9 @@ class DispatchServiceTest {
         parcels = mock(ParcelQueries.class);
         assignments = mock(ParcelAssignment.class);
         hubOperations = mock(ParcelHubOperations.class);
+        parcelCreation = mock(ParcelCreation.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, hubOperations, users);
+        service = new DispatchService(parcels, assignments, hubOperations, parcelCreation, users);
     }
 
     @Test

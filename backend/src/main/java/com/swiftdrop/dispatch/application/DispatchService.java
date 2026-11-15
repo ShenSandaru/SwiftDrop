@@ -8,8 +8,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.swiftdrop.delivery.api.CreatedParcel;
+import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.NewWalkInParcel;
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignment;
@@ -17,6 +20,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentHistory;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelQueries;
@@ -32,13 +36,15 @@ public class DispatchService {
     private final ParcelQueries parcels;
     private final ParcelAssignment assignments;
     private final ParcelHubOperations hubOperations;
+    private final ParcelCreation parcelCreation;
     private final UserDirectory users;
 
     public DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users) {
+            ParcelCreation parcelCreation, UserDirectory users) {
         this.parcels = parcels;
         this.assignments = assignments;
         this.hubOperations = hubOperations;
+        this.parcelCreation = parcelCreation;
         this.users = users;
     }
 
@@ -159,6 +165,20 @@ public class DispatchService {
     }
 
     // Hub network steps (ADR 0009 §3, §6); delivery enforces the rules and records the history
+
+    public CreatedParcel createWalkInParcel(UUID hubId, DeliveryContact pickup, DeliveryContact dropoff,
+            String sizeName, int weightGrams, String description, Staff staff) {
+        UUID effectiveHubId = resolveEffectiveHubId(staff, null);
+        UUID targetHubId = hubId != null ? hubId : effectiveHubId;
+        if (targetHubId == null) {
+            throw new IllegalArgumentException("hubId is required");
+        }
+        if (effectiveHubId != null && !effectiveHubId.equals(targetHubId)) {
+            throw new ParcelConflictException("Dispatchers can only receive parcels at their assigned hub");
+        }
+        return parcelCreation.createWalkInParcel(NewWalkInParcel.withSizeName(
+                targetHubId, pickup, dropoff, sizeName, weightGrams, description, staff));
+    }
 
     public void receiveAtHub(UUID parcelId, UUID hubId, Staff staff) {
         Objects.requireNonNull(hubId, "hubId");

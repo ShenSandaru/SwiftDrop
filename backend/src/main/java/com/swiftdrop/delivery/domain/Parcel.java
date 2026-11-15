@@ -204,6 +204,14 @@ public class Parcel {
                 weightGrams, description, fee, customerId, now);
     }
 
+    /** A walk-in customer delivery booked at a hub counter by staff; no registered customer owner. */
+    public static Parcel forWalkInCustomer(String trackingNumber, UUID staffUserId, ParcelAddress pickup,
+            ParcelAddress dropoff, ParcelSize size, int weightGrams, String description, Fee fee, Instant now) {
+        Objects.requireNonNull(staffUserId, "staffUserId");
+        return new Parcel(trackingNumber, ParcelSource.CUSTOMER, null, null, null, pickup, dropoff, size,
+                weightGrams, description, fee, staffUserId, now);
+    }
+
     /** A delivery ordered through the merchant API; there is no creating user. */
     public static Parcel forMerchant(String trackingNumber, UUID merchantId, String merchantOrderReference,
             ParcelAddress pickup, ParcelAddress dropoff, ParcelSize size, int weightGrams, String description,

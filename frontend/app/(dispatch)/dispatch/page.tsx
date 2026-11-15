@@ -19,6 +19,7 @@ import {
   Package,
   PackageCheck,
   PackagePlus,
+  Plus,
   Search,
   Truck,
   Warehouse,
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect, type SelectOption } from "@/components/ui/select";
+import { BookDeliveryForm } from "@/components/delivery/book-delivery-form";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
@@ -151,6 +153,7 @@ function DispatchPageContent() {
   const [incomingLoading, setIncomingLoading] = useState(true);
   const [receivingParcelId, setReceivingParcelId] = useState<string | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [showWalkInForm, setShowWalkInForm] = useState(false);
 
   const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>("ALL");
   const [historySource, setHistorySource] = useState<SourceFilter>("ALL");
@@ -693,8 +696,35 @@ function DispatchPageContent() {
               />
             </div>
           )}
+          <Button
+            type="button"
+            size="sm"
+            variant={showWalkInForm ? "outline" : "default"}
+            onClick={() => setShowWalkInForm((open) => !open)}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            {showWalkInForm ? "Close Walk-in Form" : "Create Walk-in Parcel"}
+          </Button>
         </div>
       </div>
+
+      {showWalkInForm && (
+        <section
+          aria-label="Create walk-in parcel"
+          className="rounded-2xl border border-primary/25 bg-card p-5 shadow-xs sm:p-6"
+        >
+          <BookDeliveryForm
+            mode="walkin"
+            hubId={currentUser?.hubId ?? effectiveHubFilter ?? null}
+            hubLabel={assignedHub ? `${assignedHub.name} (${assignedHub.code})` : undefined}
+            onWalkInCreated={(parcel) => {
+              setAssignmentFeedback(`${parcel.trackingNumber} booked & received at hub (At Hub).`);
+              setRefreshKey((current) => current + 1);
+            }}
+            onCancel={() => setShowWalkInForm(false)}
+          />
+        </section>
+      )}
 
       {hubContextLoaded && currentUser && !isAdmin && !currentUser.hubId && (
         <div
@@ -1024,54 +1054,54 @@ function DispatchPageContent() {
                     className="h-10 bg-background pl-9"
                   />
                 </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Status</span>
-                  <select
-                    value={parcelStatus}
-                    onChange={(event) => changeParcelStatus(event.target.value)}
-                    className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    {FILTER_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {status === "ALL" ? "All statuses" : STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <div className="w-full min-w-40 sm:w-44">
+                    <ThemedSelect
+                      value={parcelStatus}
+                      onChange={(val) => changeParcelStatus(val)}
+                      options={FILTER_STATUSES.map((status) => ({
+                        value: status,
+                        label: status === "ALL" ? "All statuses" : STATUS_LABELS[status],
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Source</span>
-                  <select
-                    value={sourceFilter}
-                    onChange={(event) => {
-                      setSourceFilter(event.target.value as SourceFilter);
-                      setParcelPageNumber(0);
-                      setParcelPageLoading(true);
-                    }}
-                    className="h-10 w-full min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    {SOURCE_FILTERS.map((source) => (
-                      <option key={source} value={source}>
-                        {source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:col-span-2 sm:justify-start lg:col-span-1">
+                  <div className="w-full min-w-36 sm:w-36">
+                    <ThemedSelect
+                      value={sourceFilter}
+                      onChange={(val) => {
+                        setSourceFilter(val as SourceFilter);
+                        setParcelPageNumber(0);
+                        setParcelPageLoading(true);
+                      }}
+                      options={SOURCE_FILTERS.map((source) => ({
+                        value: source,
+                        label: source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant",
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:col-span-2 sm:justify-start lg:col-span-1">
                   <span className="shrink-0">Assignment</span>
-                  <select
-                    value={assignmentFilter}
-                    onChange={(event) => {
-                      setAssignmentFilter(event.target.value as typeof assignmentFilter);
-                      setParcelPageNumber(0);
-                      setParcelPageLoading(true);
-                    }}
-                    className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    <option value="ALL">All assignments</option>
-                    <option value="UNASSIGNED">Unassigned</option>
-                    <option value="ASSIGNED">Assigned</option>
-                  </select>
-                </label>
+                  <div className="w-full min-w-40 sm:w-44">
+                    <ThemedSelect
+                      value={assignmentFilter}
+                      onChange={(val) => {
+                        setAssignmentFilter(val as typeof assignmentFilter);
+                        setParcelPageNumber(0);
+                        setParcelPageLoading(true);
+                      }}
+                      options={[
+                        { value: "ALL", label: "All assignments" },
+                        { value: "UNASSIGNED", label: "Unassigned" },
+                        { value: "ASSIGNED", label: "Assigned" },
+                      ]}
+                    />
+                  </div>
+                </div>
               </div>
 
               {parcelPageError && <ErrorMessage message={parcelPageError} />}
@@ -1327,44 +1357,44 @@ function DispatchPageContent() {
                     className="h-10 bg-background pl-9"
                   />
                 </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Status</span>
-                  <select
-                    value={historyStatus}
-                    onChange={(event) => {
-                      setHistoryStatus(event.target.value as HistoryStatusFilter);
-                      setHistoryPageNumber(0);
-                      setHistoryLoading(true);
-                    }}
-                    className="h-10 w-full min-w-44 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    <option value="ALL">All statuses</option>
-                    <option value="COMPLETED">All completed</option>
-                    {FILTER_STATUSES.filter((status) => status !== "ALL").map((status) => (
-                      <option key={status} value={status}>
-                        {STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <div className="w-full min-w-44 sm:w-48">
+                    <ThemedSelect
+                      value={historyStatus}
+                      onChange={(val) => {
+                        setHistoryStatus(val as HistoryStatusFilter);
+                        setHistoryPageNumber(0);
+                        setHistoryLoading(true);
+                      }}
+                      options={[
+                        { value: "ALL", label: "All statuses" },
+                        { value: "COMPLETED", label: "All completed" },
+                        ...FILTER_STATUSES.filter((status) => status !== "ALL").map((status) => ({
+                          value: status,
+                          label: STATUS_LABELS[status],
+                        })),
+                      ]}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Source</span>
-                  <select
-                    value={historySource}
-                    onChange={(event) => {
-                      setHistorySource(event.target.value as SourceFilter);
-                      setHistoryPageNumber(0);
-                      setHistoryLoading(true);
-                    }}
-                    className="h-10 w-full min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    {SOURCE_FILTERS.map((source) => (
-                      <option key={source} value={source}>
-                        {source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div className="w-full min-w-36 sm:w-36">
+                    <ThemedSelect
+                      value={historySource}
+                      onChange={(val) => {
+                        setHistorySource(val as SourceFilter);
+                        setHistoryPageNumber(0);
+                        setHistoryLoading(true);
+                      }}
+                      options={SOURCE_FILTERS.map((source) => ({
+                        value: source,
+                        label: source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant",
+                      }))}
+                    />
+                  </div>
+                </div>
               </div>
 
               {historyError && <ErrorMessage message={historyError} />}

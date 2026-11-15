@@ -98,6 +98,21 @@ class DispatchController {
 
     // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----
 
+    /** Books a walk-in customer parcel at a hub counter and receives it immediately at {@code hubId}. */
+    @PostMapping("/parcels/walk-in")
+    @ResponseStatus(HttpStatus.CREATED)
+    WalkInParcelResponse createWalkInParcel(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateWalkInParcelRequest request) {
+        return WalkInParcelResponse.from(dispatch.createWalkInParcel(
+                request.hubId(),
+                request.pickup().toContact(),
+                request.dropoff().toContact(),
+                request.size(),
+                request.weightGrams(),
+                request.description(),
+                staff(jwt)));
+    }
+
     /** Receives a booked parcel directly at its origin hub (walk-in / counter drop-off). */
     @PostMapping("/parcels/{id}/hub-intake")
     @ResponseStatus(HttpStatus.NO_CONTENT)
