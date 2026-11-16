@@ -1,7 +1,9 @@
 package com.swiftdrop.notification.application;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +30,8 @@ import com.swiftdrop.notification.domain.NotificationDeliveryStatus;
 import com.swiftdrop.notification.domain.NotificationPendingEvent;
 import com.swiftdrop.notification.domain.NotificationPendingEventRepository;
 import com.swiftdrop.notification.domain.NotificationPendingEventStatus;
+import com.swiftdrop.notification.domain.NotificationPushToken;
+import com.swiftdrop.notification.domain.NotificationPushTokenRepository;
 import com.swiftdrop.notification.domain.NotificationRecord;
 import com.swiftdrop.notification.domain.NotificationRecordRepository;
 
@@ -53,6 +57,8 @@ public class NotificationEventProcessor {
     private final MerchantLookup merchantLookup;
     private final EmailNotificationSender emailSender;
     private final SmsNotificationSender smsSender;
+    private final PushNotificationSender pushSender;
+    private final NotificationPushTokenRepository pushTokenRepository;
 
     public NotificationEventProcessor(
             NotificationConsumerStateRepository consumerStateRepository,
@@ -64,7 +70,22 @@ public class NotificationEventProcessor {
             UserDirectory userDirectory,
             MerchantLookup merchantLookup) {
         this(consumerStateRepository, pendingEventRepository, recordRepository, templateResolver,
-                eventParser, parcelEvents, userDirectory, merchantLookup, null, null);
+                eventParser, parcelEvents, userDirectory, merchantLookup, null, null, null, null);
+    }
+
+    public NotificationEventProcessor(
+            NotificationConsumerStateRepository consumerStateRepository,
+            NotificationPendingEventRepository pendingEventRepository,
+            NotificationRecordRepository recordRepository,
+            NotificationTemplateResolver templateResolver,
+            ParcelStatusEventParser eventParser,
+            ParcelEvents parcelEvents,
+            UserDirectory userDirectory,
+            MerchantLookup merchantLookup,
+            EmailNotificationSender emailSender,
+            SmsNotificationSender smsSender) {
+        this(consumerStateRepository, pendingEventRepository, recordRepository, templateResolver,
+                eventParser, parcelEvents, userDirectory, merchantLookup, emailSender, smsSender, null, null);
     }
 
     @Autowired
@@ -78,7 +99,9 @@ public class NotificationEventProcessor {
             UserDirectory userDirectory,
             MerchantLookup merchantLookup,
             EmailNotificationSender emailSender,
-            SmsNotificationSender smsSender) {
+            SmsNotificationSender smsSender,
+            PushNotificationSender pushSender,
+            NotificationPushTokenRepository pushTokenRepository) {
         this.consumerStateRepository = consumerStateRepository;
         this.pendingEventRepository = pendingEventRepository;
         this.recordRepository = recordRepository;
@@ -89,6 +112,8 @@ public class NotificationEventProcessor {
         this.merchantLookup = Objects.requireNonNull(merchantLookup, "merchantLookup must not be null");
         this.emailSender = emailSender;
         this.smsSender = smsSender;
+        this.pushSender = pushSender;
+        this.pushTokenRepository = pushTokenRepository;
     }
 
     /**
@@ -374,6 +399,72 @@ public class NotificationEventProcessor {
                 }
             }
         }
+
+        dispatchPushChannel(event, user, content);
+    }
+
+    private void dispatchPushChannel(
+            ParcelStatusChanged event,
+            UserSummary user,
+            NotificationTemplateResolver.NotificationContent content) {
+        if (pushSender == null || pushTokenRepository == null) {
+            return;
+        }
+
+        List<NotificationPushToken> activeTokens = pushTokenRepository.findByUserIdAndIsActiveTrue(user.id());
+        if (activeTokens == null || activeTokens.isEmpty()) {
+            return;
+        }
+
+        UUID pushRecordId = UUID.randomUUID();
+        int inserted = recordRepository.insertIfAbsent(
+                pushRecordId,
+                event.eventId(),
+                user.id(),
+                event.data().parcelId(),
+                event.data().trackingNumber(),
+                content.title(),
+                content.message(),
+                NotificationChannel.PUSH.name(),
+                NotificationDeliveryStatus.PENDING.name(),
+                event.occurredAt());
+        if (inserted <= 0) {
+            return;
+        }
+
+        Map<String, String> data = new HashMap<>();
+        if (event.data().newStatus() != null) {
+            data.put("type", event.data().newStatus().name());
+        }
+        if (event.data().parcelId() != null) {
+            data.put("parcelId", event.data().parcelId().toString());
+        }
+        if (event.data().trackingNumber() != null) {
+            data.put("trackingNumber", event.data().trackingNumber());
+        }
+
+        boolean anySent = false;
+        Instant now = Instant.now();
+        for (NotificationPushToken token : activeTokens) {
+            try {
+                PushNotificationSender.PushSendResult result = pushSender.send(
+                        token.getToken(), content.title(), content.message(), data);
+                if (result == PushNotificationSender.PushSendResult.SENT) {
+                    anySent = true;
+                    pushTokenRepository.updateLastUsedAt(token.getId(), now);
+                } else if (result == PushNotificationSender.PushSendResult.INVALID_TOKEN) {
+                    token.deactivate(now);
+                    pushTokenRepository.save(token);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Failed to dispatch PUSH notification for parcel {} user {}: {}",
+                        event.data().parcelId(), user.id(), ex.getMessage());
+            }
+        }
+
+        recordRepository.updateDeliveryStatus(
+                pushRecordId,
+                anySent ? NotificationDeliveryStatus.SENT : NotificationDeliveryStatus.FAILED);
     }
 
     private NotificationConsumerState updateWatermark(
