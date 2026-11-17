@@ -16,9 +16,14 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId) {
   const messaging = firebase.messaging();
 
   messaging.onBackgroundMessage((payload) => {
-    const title = payload.notification?.title || "SwiftDrop Notification";
+    // Firebase automatically displays notifications that include a `notification` payload.
+    // Only manually show one for data-only messages to avoid duplicates.
+    if (payload.notification) {
+      return;
+    }
+    const title = payload.data?.title || "SwiftDrop Notification";
     const options = {
-      body: payload.notification?.body || "",
+      body: payload.data?.body || "",
       data: payload.data || {},
     };
     self.registration.showNotification(title, options);
@@ -27,11 +32,23 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = "/notifications";
+  const data = event.notification.data || {};
+  const params = new URLSearchParams();
+  if (data.parcelId) {
+    params.set("parcelId", data.parcelId);
+  }
+  if (data.trackingNumber) {
+    params.set("trackingNumber", data.trackingNumber);
+  }
+  const query = params.toString();
+  const targetUrl = query ? `/notifications?${query}` : "/notifications";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
+        if ("navigate" in client && "focus" in client) {
+          return client.navigate(targetUrl).then((c) => (c ? c.focus() : undefined));
+        }
         if ("focus" in client) {
           return client.focus();
         }

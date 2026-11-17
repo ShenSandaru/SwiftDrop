@@ -118,6 +118,33 @@ export default function NotificationsPage() {
     }
   };
 
+  // Redirect to role-appropriate destination when opened from a background push notification click
+  useEffect(() => {
+    if (!isAuthenticated || isAuthLoading || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const parcelId = params.get("parcelId");
+    const trackingNumber = params.get("trackingNumber");
+    if (!parcelId && !trackingNumber) return;
+
+    const destination = resolveNotificationDestination(
+      {
+        id: "",
+        parcelId,
+        trackingNumber,
+        title: "",
+        message: "",
+        channel: "PUSH",
+        isRead: false,
+        readAt: null,
+        createdAt: new Date().toISOString(),
+      },
+      hasRole,
+    );
+    if (destination) {
+      router.replace(destination);
+    }
+  }, [isAuthenticated, isAuthLoading, hasRole, router]);
+
   // Protect route: redirect unauthenticated users to /login
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
