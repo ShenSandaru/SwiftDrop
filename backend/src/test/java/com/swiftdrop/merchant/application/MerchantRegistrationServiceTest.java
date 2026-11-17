@@ -21,6 +21,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.swiftdrop.identity.api.UserDirectory;
+import com.swiftdrop.merchant.api.MerchantApplicationSubmitted;
 import com.swiftdrop.merchant.api.MerchantStatus;
 import com.swiftdrop.merchant.domain.Merchant;
 import com.swiftdrop.merchant.domain.MerchantRepository;

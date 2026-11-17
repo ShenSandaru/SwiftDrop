@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelForbiddenException;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.dispatch.application.DispatchCourierNotFoundException;
 import com.swiftdrop.dispatch.application.DispatchCourierUnavailableException;
@@ -24,6 +25,11 @@ class DispatchExceptionHandler {
     @ExceptionHandler(ParcelNotFoundException.class)
     ProblemDetail parcelNotFound(ParcelNotFoundException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(ParcelForbiddenException.class)
+    ProblemDetail parcelForbidden(ParcelForbiddenException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
     }
 
     @ExceptionHandler(DispatchCourierNotFoundException.class)

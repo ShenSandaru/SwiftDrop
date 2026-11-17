@@ -108,6 +108,7 @@ function LoginForm() {
 
   // Google button and public customer signup prompt are enabled only for customer authentication
   const isCustomerContext = portalContext === "CUSTOMER";
+  const isMerchantContext = portalContext === "MERCHANT";
   const isGoogleLoginEnabled = checkGoogleLoginEnabled() && isCustomerContext;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -135,15 +136,15 @@ function LoginForm() {
         password,
       });
 
-      await login(response.accessToken);
-
-      try {
-        const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
-        const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
-        router.push(destination);
-      } catch {
-        router.push(redirectTarget);
+      const currentUser = await api.get<UserResponse>("/api/v1/users/me", { token: response.accessToken });
+      if (!currentUser.roles.includes(portalContext)) {
+        setErrorMessage("Invalid email or password.");
+        return;
       }
+
+      await login(response.accessToken);
+      const destination = await getPostAuthRedirect(currentUser, response.accessToken, redirectTarget);
+      router.push(destination);
     } catch (err: unknown) {
       setErrorMessage(formatApiError(err));
     } finally {
@@ -260,6 +261,18 @@ function LoginForm() {
                 className="font-semibold text-primary underline-offset-4 hover:underline"
               >
                 Sign up
+              </Link>
+            </div>
+          )}
+
+          {isMerchantContext && (
+            <div className="pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
+              New business?{" "}
+              <Link
+                href="/signup/merchant"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Register your business
               </Link>
             </div>
           )}

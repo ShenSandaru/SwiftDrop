@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, Loader2, Package, UserCheck, AlertCircle } from "lucide-react";
 import { cn } from "cn";
 import { useNotifications } from "@/lib/notification-context";
 import { useAuth } from "@/lib/auth-context";
-import type { NotificationResponse } from "@/lib/notifications";
+import {
+  resolveNotificationDestination,
+  type NotificationResponse,
+} from "@/lib/notifications";
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -38,14 +42,38 @@ export function NotificationBell() {
   } = useNotifications();
 
   const [open, setOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      void refresh();
+    }
+  }, [open, refresh]);
 
   // Close dropdown on outside click or Escape
   useEffect(() => {
     if (!open) return;
 
+    const updatePosition = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownPos({
+          top: rect.bottom + 8,
+          right: Math.max(12, window.innerWidth - rect.right),
+        });
+      }
+    };
+    updatePosition();
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setOpen(false);
       }
     };
@@ -56,9 +84,13 @@ export function NotificationBell() {
       }
     };
 
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -66,29 +98,14 @@ export function NotificationBell() {
 
   const handleNotificationClick = (item: NotificationResponse) => {
     if (!item.isRead) {
-      // Fire-and-forget mark-as-read so network latency never delays user navigation
+      // Fire-and-forget mark-as-read so network latency or failure never blocks navigation
       void markAsRead(item.id);
     }
     setOpen(false);
 
-    // If parcel exists, navigate to role-appropriate parcel details
-    if (item.parcelId) {
-      if (hasRole("CUSTOMER")) {
-        router.push(`/customer/parcels/${item.parcelId}`);
-      } else if (hasRole("COURIER")) {
-        router.push(`/courier/parcels/${item.parcelId}`);
-      } else if (hasRole("ADMIN") || hasRole("DISPATCHER")) {
-        router.push("/dispatch");
-      } else if (item.trackingNumber) {
-        router.push(`/track?number=${encodeURIComponent(item.trackingNumber)}`);
-      }
-    } else {
-      // Non-parcel account notification (e.g. merchant approval / profile update)
-      if (hasRole("MERCHANT")) {
-        router.push("/merchant/status");
-      } else if (hasRole("CUSTOMER")) {
-        router.push("/customer/profile");
-      }
+    const destination = resolveNotificationDestination(item, hasRole);
+    if (destination) {
+      router.push(destination);
     }
   };
 
@@ -114,7 +131,7 @@ export function NotificationBell() {
           }
         }}
         className={cn(
-          "relative inline-flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
+          "relative inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
           "bg-background/10 text-background hover:bg-background/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           open && "bg-background/25 text-background",
         )}
@@ -131,10 +148,12 @@ export function NotificationBell() {
       </button>
 
       {/* Dropdown Menu */}
-      {open && (
+      {open && dropdownPos && typeof document !== "undefined" && createPortal(
         <div
+          ref={dropdownRef}
+          style={{ top: dropdownPos.top, right: dropdownPos.right }}
           className={cn(
-            "fixed sm:absolute right-3 sm:right-0 top-16 sm:top-full z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
+            "fixed z-50 flex w-[calc(100vw-1.5rem)] sm:w-96 max-w-[24rem] flex-col rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl ring-1 ring-black/10 dark:ring-white/10",
             "motion-safe:animate-in motion-safe:fade-in-50 motion-safe:zoom-in-95",
           )}
           role="region"
@@ -198,7 +217,7 @@ export function NotificationBell() {
                   type="button"
                   onClick={() => handleNotificationClick(item)}
                   className={cn(
-                    "flex w-full items-start gap-3 p-3.5 text-left transition-colors hover:bg-muted/60",
+                    "flex w-full cursor-pointer items-start gap-3 p-3.5 text-left transition-colors hover:bg-muted/60",
                     !item.isRead ? "bg-accent/40" : "bg-transparent opacity-85",
                   )}
                 >
@@ -255,7 +274,8 @@ export function NotificationBell() {
               {footerLink.label}
             </Link>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -217,12 +217,28 @@ class MigrationConventionTest {
                                 "merchant create event consumer tables",
                                 "merchant/V202611141100__merchant_create_event_consumer_tables.sql"),
                         tuple(
+                                "202611141200",
+                                "notification add retry columns",
+                                "notification/V202611141200__notification_add_retry_columns.sql"),
+                        tuple(
                                 "202611151000",
                                 "merchant create webhook attempts",
                                 "merchant/V202611151000__merchant_create_webhook_attempts.sql"),
                         tuple(
                                 "202611161000",
                                 "merchant create webhook redeliveries",
-                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"));
+                                "merchant/V202611161000__merchant_create_webhook_redeliveries.sql"),
+                        tuple(
+                                "202611171000",
+                                "delivery create hub links",
+                                "delivery/V202611171000__delivery_create_hub_links.sql"),
+                        tuple(
+                                "202611171100",
+                                "delivery create hub staff",
+                                "delivery/V202611171100__delivery_create_hub_staff.sql"),
+                        tuple(
+                                "202611171200",
+                                "delivery remove head office",
+                                "delivery/V202611171200__delivery_remove_head_office.sql"));
     }
 }

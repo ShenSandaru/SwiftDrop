@@ -152,8 +152,40 @@ class NotificationTemplateResolverTest {
                 .isEqualTo("Your parcel SD3434343434 could not be delivered. Reason: Address not found.");
     }
 
+    @Test
+    @DisplayName("AT_HUB includes hubCode when present and falls back when absent")
+    void atHubStatus() {
+        ParcelStatusChanged withHub = ParcelStatusChanged.of(
+                UUID.randomUUID(),
+                Instant.now(),
+                new ParcelStatusChangedData(
+                        UUID.randomUUID(), "SD7778889990", ParcelStatus.PICKED_UP, ParcelStatus.AT_HUB,
+                        2, ParcelSource.CUSTOMER, UUID.randomUUID(), null, null, null, "POL-01", null));
+        Optional<NotificationContent> withHubContent = resolver.resolve(withHub);
+        assertThat(withHubContent).isPresent();
+        assertThat(withHubContent.get().title()).isEqualTo("Parcel Arrived at Hub");
+        assertThat(withHubContent.get().message()).isEqualTo("Your parcel SD7778889990 has arrived at hub POL-01.");
+
+        ParcelStatusChanged withoutHub = createEvent(ParcelStatus.AT_HUB, "SD7778889990", null, null);
+        Optional<NotificationContent> withoutHubContent = resolver.resolve(withoutHub);
+        assertThat(withoutHubContent).isPresent();
+        assertThat(withoutHubContent.get().title()).isEqualTo("Parcel Arrived at Hub");
+        assertThat(withoutHubContent.get().message()).isEqualTo("Your parcel SD7778889990 has arrived at a sorting hub.");
+    }
+
+    @Test
+    @DisplayName("IN_TRANSIT returns Parcel In Transit notification")
+    void inTransitStatus() {
+        ParcelStatusChanged event = createEvent(ParcelStatus.IN_TRANSIT, "SD7778889990", null, null);
+        Optional<NotificationContent> content = resolver.resolve(event);
+
+        assertThat(content).isPresent();
+        assertThat(content.get().title()).isEqualTo("Parcel In Transit");
+        assertThat(content.get().message()).isEqualTo("Your parcel SD7778889990 is on its way to the next hub.");
+    }
+
     @ParameterizedTest
-    @EnumSource(value = ParcelStatus.class, names = {"AT_HUB", "IN_TRANSIT", "RETURNING"})
+    @EnumSource(value = ParcelStatus.class, names = {"RETURNING"})
     @DisplayName("Non-notifying statuses return Optional.empty()")
     void nonNotifyingStatuses(ParcelStatus nonNotifyingStatus) {
         ParcelStatusChanged event = createEvent(nonNotifyingStatus, "SD7778889990", null, null);

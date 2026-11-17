@@ -67,6 +67,12 @@ public class NotificationRecord {
     @Column(name = "failure_reason", length = MAX_FAILURE_REASON_LENGTH)
     private String failureReason;
 
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -138,6 +144,7 @@ public class NotificationRecord {
         this.deliveryStatus = NotificationDeliveryStatus.SENT;
         this.sentAt = Objects.requireNonNull(sentAt, "sentAt");
         this.failureReason = null;
+        this.nextRetryAt = null;
     }
 
     public void markAsFailed(String failureReason) {
@@ -147,6 +154,20 @@ public class NotificationRecord {
         } else {
             this.failureReason = failureReason;
         }
+    }
+
+    public void scheduleRetry(int retryCount, Instant nextRetryAt, String failureReason) {
+        markAsFailed(failureReason);
+        this.retryCount = retryCount;
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
     }
 
     public UUID getId() {

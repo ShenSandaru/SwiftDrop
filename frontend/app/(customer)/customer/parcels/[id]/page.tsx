@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ArrowLeft, Ban, Camera, Loader2, MapPin, Phone, Receipt } from "lucide-react";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DeliveryEstimate } from "@/components/delivery/delivery-estimate";
 import { JourneyNotice, lastHubName } from "@/components/delivery/journey-notice";
 import { RouteHeading } from "@/components/delivery/route-heading";
 import { RouteProgress } from "@/components/delivery/route-progress";
@@ -79,6 +80,7 @@ export default function ParcelDetailPage() {
           </div>
           <RouteProgress status={status} history={history} live={connection === "live"} />
           <JourneyNotice status={status} attempts={detail.deliveryAttempts} hubName={lastHubName(detail.history)} />
+          <DeliveryEstimate day={view?.estimatedDelivery} />
         </div>
       </Ticket>
 

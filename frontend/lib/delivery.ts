@@ -186,6 +186,11 @@ export interface PublicTracking {
   pickupCity: string;
   dropoffCity: string;
   history: PublicStatusEvent[];
+  /**
+   * The day the parcel is expected (YYYY-MM-DD, Sri Lanka time), estimated from its route. Absent
+   * when the parcel is finished or returning, or its route is not known.
+   */
+  estimatedDelivery?: string | null;
 }
 
 export interface Zone {
@@ -261,6 +266,11 @@ export function getProofPhoto(id: string): Promise<Blob> {
 
 export function listZones(): Promise<Zone[]> {
   return api.get<Zone[]>("/api/v1/zones");
+}
+
+/** Active delivery zones that have an active hub assigned (ready for booking). */
+export function listAvailableZones(): Promise<Zone[]> {
+  return api.get<Zone[]>("/api/v1/delivery-zones");
 }
 
 export function getQuote(

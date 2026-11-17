@@ -37,3 +37,46 @@ export function updateHub(id: string, input: HubInput): Promise<Hub> {
 export function deleteHub(id: string): Promise<void> {
   return api.delete<void>(`/api/v1/hubs/${encodeURIComponent(id)}`);
 }
+
+/** A direct link between two branch hubs (ADR 0011): parcels between them skip the central hub. */
+export interface HubLink {
+  hubId: string;
+  otherHubId: string;
+  createdAt: string;
+}
+
+export function listHubLinks(): Promise<HubLink[]> {
+  return api.get<HubLink[]>("/api/v1/hubs/links");
+}
+
+/** Links two branches; the order of the two hubs does not matter. */
+export function createHubLink(hubId: string, otherHubId: string): Promise<HubLink> {
+  return api.post<HubLink>("/api/v1/hubs/links", { hubId, otherHubId });
+}
+
+export function deleteHubLink(hubId: string, otherHubId: string): Promise<void> {
+  return api.delete<void>(
+    `/api/v1/hubs/links/${encodeURIComponent(hubId)}/${encodeURIComponent(otherHubId)}`,
+  );
+}
+
+/** A dispatcher or courier and where they work (ADR 0012). Admin only. */
+export interface HubStaffMember {
+  userId: string;
+  fullName: string;
+  roles: ("DISPATCHER" | "COURIER")[];
+  hubIds: string[];
+}
+
+export function listHubStaff(): Promise<HubStaffMember[]> {
+  return api.get<HubStaffMember[]>("/api/v1/hubs/staff");
+}
+
+/** Gives the person a home hub. */
+export function addStaffToHub(hubId: string, userId: string): Promise<void> {
+  return api.put<void>(`/api/v1/hubs/${encodeURIComponent(hubId)}/staff/${encodeURIComponent(userId)}`);
+}
+
+export function removeStaffFromHub(hubId: string, userId: string): Promise<void> {
+  return api.delete<void>(`/api/v1/hubs/${encodeURIComponent(hubId)}/staff/${encodeURIComponent(userId)}`);
+}

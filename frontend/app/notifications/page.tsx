@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/notification-context";
 import {
   getNotifications,
+  resolveNotificationDestination,
   type NotificationResponse,
   type PageResponse,
 } from "@/lib/notifications";
@@ -213,23 +214,9 @@ export default function NotificationsPage() {
       void handleMarkOneAsRead(item);
     }
 
-    // Role-aware navigation matching notification bell logic
-    if (item.parcelId) {
-      if (hasRole("CUSTOMER")) {
-        router.push(`/customer/parcels/${item.parcelId}`);
-      } else if (hasRole("COURIER")) {
-        router.push(`/courier/parcels/${item.parcelId}`);
-      } else if (hasRole("ADMIN") || hasRole("DISPATCHER")) {
-        router.push("/dispatch");
-      } else if (item.trackingNumber) {
-        router.push(`/track?number=${encodeURIComponent(item.trackingNumber)}`);
-      }
-    } else {
-      if (hasRole("MERCHANT")) {
-        router.push("/merchant/status");
-      } else if (hasRole("CUSTOMER")) {
-        router.push("/customer/profile");
-      }
+    const destination = resolveNotificationDestination(item, hasRole);
+    if (destination) {
+      router.push(destination);
     }
   };
 

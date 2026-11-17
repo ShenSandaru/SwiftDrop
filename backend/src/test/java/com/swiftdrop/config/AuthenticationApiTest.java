@@ -77,6 +77,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         com.swiftdrop.pricing.domain.PricingConfigRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -196,7 +198,7 @@ class AuthenticationApiTest {
         String body = login("ALICE@example.com", "correct horse")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.accessToken");
 

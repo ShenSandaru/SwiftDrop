@@ -349,6 +349,18 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
     reassignment while `CREATED` is allowed.
   - Events gain optional `hubCode` and `attempt` fields (`schemaVersion` 1). Cash on delivery
     needs a separate ADR.
+- **Proposed ([ADR 0011](adr/0011-direct-links-between-branch-hubs.md)); implemented:** an admin
+  links two active branch hubs, and parcels picked up between them travel origin → destination
+  without the central hub. Links do not chain and the route is still fixed at pickup. This amends
+  only the route rule of ADR 0009 §1.
+- **Proposed ([ADR 0012](adr/0012-hub-scoped-staff.md)); implemented:** dispatchers and couriers have
+  home hubs (`hub_staff`, several per person). Exactly one hub is responsible for an unfinished
+  parcel at a time: the pickup branch until pickup, then the hub it is at or travelling to, and the
+  destination hub for delivery, attempts and returns. A dispatcher sees the parcels of their hubs and
+  may only follow, not change, those that passed through them. Only admins work everywhere; a
+  dispatcher with no hub sees nothing, so existing dispatchers need a hub from an admin after
+  deployment. A courier with hubs can only be given parcels of those hubs, and one with no hub only
+  by an admin. This replaces the sentence of ADR 0009 §6 that lets any dispatcher scan at any hub.
 - **Implemented:**
   - Customer API: `POST /api/v1/parcels` (fee recalculated by `pricing`), `GET /api/v1/parcels`,
     `GET /api/v1/parcels/{id}`, `GET /api/v1/parcels/{id}/receipt`.
@@ -362,10 +374,23 @@ assistant    → delivery, pricing   (Proposed, ADR 0010; implemented, enforced 
   - Public tracking `GET /api/v1/tracked-parcels/{trackingNumber}` (status, cities, timeline only,
     D-16) and the live SSE stream `GET /api/v1/tracked-parcels/{trackingNumber}/events`
     (`tracking` module, [ADR 0007](adr/0007-public-sse-tracking-stream.md), Proposed).
+    Both are rate limited per client address (60 requests a minute by default, then `429` with
+    `Retry-After`), and one client may hold at most 30 open streams. The view carries an
+    `estimatedDelivery` day worked out from the route (1, 2 or 3 days by default for one branch, two
+    hubs, or through the central hub), counted from pickup, or from booking while the parcel waits.
   - Hub network (ADR 0009): `GET /api/v1/hubs` (ADMIN, DISPATCHER), `POST`/`PUT /api/v1/hubs`
-    (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
+    (ADMIN). Direct links (ADR 0011): `GET /api/v1/hubs/links` (ADMIN, DISPATCHER), `POST
+    /api/v1/hubs/links` and `DELETE /api/v1/hubs/links/{hubId}/{otherHubId}` (ADMIN). The route is stored on the parcel at pickup; hub steps and attempts are recorded in
     the history and carry `hubCode` and `attempt` in events. Courier steps follow the courier's
     task (`PICKUP`, `DELIVERY`, `RETURN`).
+  - Hub staff (ADR 0012), `ADMIN` only: `GET /api/v1/hubs/staff`, `PUT`/`DELETE`
+    `/api/v1/hubs/{hubId}/staff/{userId}`. Dispatchers
+    read their own scope with `GET /api/v1/dispatch/scope`. The dispatch lists, hub steps and
+    courier assignment are limited to the caller's hubs (`403` outside them), and parcels a
+    dispatcher only follows carry `readOnly` and no actions.
+  - Stale parcels: `GET /api/v1/dispatch/stale-parcels` (DISPATCHER, ADMIN) lists unfinished parcels
+    with no status change or assignment for `swiftdrop.dispatch.stale-after-hours` (24 by default),
+    longest waiting first.
   - Dispatcher hub steps: `POST /api/v1/dispatch/parcels/{id}/hub-scans`, `.../transit`,
     `.../return`, `.../failure` and `.../cancellation` (DISPATCHER, ADMIN); the dispatch list
     offers each parcel's allowed actions. Customer cancellation before pickup:

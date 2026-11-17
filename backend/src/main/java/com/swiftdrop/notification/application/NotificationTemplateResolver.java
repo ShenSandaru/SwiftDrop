@@ -90,7 +90,65 @@ public class NotificationTemplateResolver {
                         "Your parcel " + trackingNumber + " could not be delivered. Reason: " + reasonDesc + "."));
             }
 
-            case AT_HUB, IN_TRANSIT, RETURNING -> Optional.empty();
+            case AT_HUB -> {
+                String hubLocation = (data.hubCode() != null && !data.hubCode().isBlank())
+                        ? "hub " + data.hubCode()
+                        : "a sorting hub";
+                yield Optional.of(new NotificationContent(
+                        "Parcel Arrived at Hub",
+                        "Your parcel " + trackingNumber + " has arrived at " + hubLocation + "."));
+            }
+
+            case IN_TRANSIT -> Optional.of(new NotificationContent(
+                    "Parcel In Transit",
+                    "Your parcel " + trackingNumber + " is on its way to the next hub."));
+
+            case RETURNING -> Optional.empty();
+        };
+    }
+
+    /**
+     * Resolves operational notification title and message for enabled dispatchers.
+     * Only operational exception and dispatch-queue statuses generate dispatcher alerts.
+     *
+     * @param event the parcel status changed event
+     * @return an {@link Optional} containing {@link NotificationContent} for supported
+     *         dispatcher statuses, or {@link Optional#empty()} otherwise
+     */
+    public Optional<NotificationContent> resolveForDispatcher(ParcelStatusChanged event) {
+        if (event == null || event.data() == null) {
+            throw new IllegalArgumentException("event and event.data must not be null");
+        }
+
+        ParcelStatusChangedData data = event.data();
+        ParcelStatus status = data.newStatus();
+        String trackingNumber = data.trackingNumber();
+
+        return switch (status) {
+            case CREATED -> Optional.of(new NotificationContent(
+                    "New Parcel Awaiting Dispatch",
+                    "Parcel " + trackingNumber + " has been created and is awaiting dispatch."));
+
+            case DELIVERY_ATTEMPT_FAILED -> {
+                String attemptSuffix = data.attempt() != null ? " (Attempt " + data.attempt() + ")" : "";
+                String reasonDesc = formatFailureReason(data.failureReasonCode());
+                yield Optional.of(new NotificationContent(
+                        "Delivery Attempt Failed",
+                        "Delivery attempt failed for parcel " + trackingNumber + attemptSuffix + ". Reason: " + reasonDesc + "."));
+            }
+
+            case FAILED -> {
+                String reasonDesc = formatFailureReason(data.failureReasonCode());
+                yield Optional.of(new NotificationContent(
+                        "Parcel Delivery Failed",
+                        "Parcel " + trackingNumber + " has permanently failed delivery. Reason: " + reasonDesc + "."));
+            }
+
+            case RETURNED -> Optional.of(new NotificationContent(
+                    "Parcel Returned",
+                    "Parcel " + trackingNumber + " has been returned to the sender."));
+
+            case PICKED_UP, AT_HUB, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, RETURNING, CANCELLED -> Optional.empty();
         };
     }
 

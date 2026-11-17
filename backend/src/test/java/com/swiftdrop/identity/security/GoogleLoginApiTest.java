@@ -98,6 +98,8 @@ import com.swiftdrop.pricing.domain.ZoneRepository;
         com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
+        com.swiftdrop.delivery.domain.HubLinkRepository.class,
+        com.swiftdrop.delivery.domain.HubStaffRepository.class,
         com.swiftdrop.merchant.domain.MerchantRepository.class,
         com.swiftdrop.merchant.domain.MerchantStatusHistoryRepository.class,
         com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository.class,
@@ -208,7 +210,7 @@ class GoogleLoginApiTest {
                         .content("{\"code\": \"%s\"}".formatted(code)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(exchangeBody, "$.accessToken");
 

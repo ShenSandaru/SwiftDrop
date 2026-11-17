@@ -39,8 +39,8 @@ public record DistrictResponse(
                 district.getProvince(),
                 district.getPostalCode(),
                 district.getDefaultBranchName(),
-                district.getLatitude(),
-                district.getLongitude(),
+                district.getLatitude() != null ? district.getLatitude().doubleValue() : null,
+                district.getLongitude() != null ? district.getLongitude().doubleValue() : null,
                 zoneResponses
         );
     }

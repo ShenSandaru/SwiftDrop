@@ -1,15 +1,22 @@
 package com.swiftdrop.dispatch.application;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
+import com.swiftdrop.delivery.api.HubStaffDirectory;
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignment;
@@ -23,6 +30,7 @@ import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.ParcelSource;
 import com.swiftdrop.delivery.api.ParcelStatus;
 import com.swiftdrop.delivery.api.Staff;
+import com.swiftdrop.delivery.api.StaffScopeView;
 import com.swiftdrop.identity.api.UserDirectory;
 import com.swiftdrop.identity.api.UserSummary;
 
@@ -33,34 +41,80 @@ public class DispatchService {
     private final ParcelAssignment assignments;
     private final ParcelHubOperations hubOperations;
     private final UserDirectory users;
+    private final HubStaffDirectory hubStaff;
+    private final Duration staleAfter;
+    private final Clock clock;
 
+    @Autowired
     public DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users) {
+            UserDirectory users, HubStaffDirectory hubStaff,
+            @Value("${swiftdrop.dispatch.stale-after-hours:24}") int staleAfterHours) {
+        this(parcels, assignments, hubOperations, users, hubStaff, Duration.ofHours(staleAfterHours),
+                Clock.systemUTC());
+    }
+
+    DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
+            UserDirectory users, HubStaffDirectory hubStaff, Duration staleAfter, Clock clock) {
+        if (staleAfter.isZero() || staleAfter.isNegative()) {
+            throw new IllegalStateException("swiftdrop.dispatch.stale-after-hours must be at least 1");
+        }
         this.parcels = parcels;
         this.assignments = assignments;
         this.hubOperations = hubOperations;
         this.users = users;
+        this.hubStaff = hubStaff;
+        this.staleAfter = staleAfter;
+        this.clock = clock;
+    }
+
+    /**
+     * Unfinished parcels nobody has touched for the configured time, longest waiting first, so a
+     * missed scan or a lost parcel does not stay hidden.
+     */
+    @Transactional(readOnly = true)
+    public PageResult<DispatchParcelSummary> staleParcels(Staff staff, PageRequest page) {
+        return parcels.findStaleParcels(staff.userId(), clock.instant().minus(staleAfter), page);
     }
 
     @Transactional(readOnly = true)
-    public PageResult<DispatchParcelSummary> parcels(
+    public PageResult<DispatchParcelSummary> parcels(Staff staff,
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
-        return parcels.findDispatchParcels(status, source, assigned, search, page);
+        return parcels.findDispatchParcels(staff.userId(), status, source, assigned, search, page);
     }
 
     @Transactional(readOnly = true)
-    public PageResult<ParcelAssignmentSummary> activeAssignments(ParcelAssignmentType type, PageRequest page) {
-        return parcels.findActiveAssignments(type, page);
+    public PageResult<ParcelAssignmentSummary> activeAssignments(Staff staff, ParcelAssignmentType type,
+            PageRequest page) {
+        return parcels.findActiveAssignments(staff.userId(), type, page);
     }
 
+    /** Where the caller works, so the portal can explain a short or empty list (ADR 0012 §5). */
     @Transactional(readOnly = true)
-    public Map<UUID, Long> courierWorkloads() {
-        return parcels.countActiveParcelsByCourier();
+    public StaffScopeView scope(Staff staff) {
+        return staff.admin() ? new StaffScopeView(true, List.of()) : hubStaff.scopeOf(staff.userId());
     }
 
+    /** Active parcels per courier, for the couriers the caller may assign (ADR 0012 §4). */
     @Transactional(readOnly = true)
-    public List<UserSummary> activeCouriers() {
-        return users.findEnabledCouriers();
+    public Map<UUID, Long> courierWorkloads(Staff staff) {
+        Map<UUID, Long> all = parcels.countActiveParcelsByCourier();
+        if (staff.admin() || hubStaff.worksEverywhere(staff.userId())) {
+            return all;
+        }
+        Set<UUID> visible = hubStaff.colleaguesOf(staff.userId());
+        return all.entrySet().stream().filter(entry -> visible.contains(entry.getKey()))
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /** The couriers the caller may assign: all of them for admins, else those of their hubs. */
+    @Transactional(readOnly = true)
+    public List<UserSummary> activeCouriers(Staff staff) {
+        List<UserSummary> couriers = users.findEnabledCouriers();
+        if (staff.admin() || hubStaff.worksEverywhere(staff.userId())) {
+            return couriers;
+        }
+        Set<UUID> visible = hubStaff.colleaguesOf(staff.userId());
+        return couriers.stream().filter(courier -> visible.contains(courier.id())).toList();
     }
 
     @Transactional(readOnly = true)
