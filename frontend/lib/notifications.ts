@@ -83,6 +83,27 @@ export async function markAllNotificationsAsRead(): Promise<BulkReadResponse> {
   return api.post<BulkReadResponse>("/api/v1/notifications/read-all");
 }
 
+export interface PushTokenResponse {
+  id: string;
+  platform: string;
+  active: boolean;
+  updatedAt: string;
+}
+
+export async function registerPushToken(
+  token: string,
+  platform = "WEB",
+): Promise<PushTokenResponse> {
+  return api.post<PushTokenResponse>("/api/v1/notifications/push-tokens", {
+    token,
+    platform,
+  });
+}
+
+export async function unregisterPushToken(token: string): Promise<void> {
+  await api.delete("/api/v1/notifications/push-tokens", { token });
+}
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**

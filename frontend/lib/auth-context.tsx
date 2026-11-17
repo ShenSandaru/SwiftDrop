@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, onUnauthorized, type UserResponse } from "./api";
+import { cleanupPushOnLogout } from "./push-notifications";
 
 const TOKEN_STORAGE_KEY = "swiftdrop_token";
 
@@ -111,8 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [loadCurrentUser]
   );
 
-  const logout = useCallback(() => {
-    clearAuth();
+  const logout = useCallback(async () => {
+    try {
+      await cleanupPushOnLogout();
+    } finally {
+      clearAuth();
+    }
   }, [clearAuth]);
 
   const refreshUser = useCallback(async () => {
