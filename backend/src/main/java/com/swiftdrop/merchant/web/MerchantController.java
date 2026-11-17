@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.swiftdrop.merchant.api.MerchantStatus;
-import com.swiftdrop.merchant.application.MerchantAdminService;
 import com.swiftdrop.merchant.application.MerchantApprovalService;
 import com.swiftdrop.merchant.application.MerchantRegistrationService;
 import com.swiftdrop.merchant.security.MerchantAccessSecurity;
@@ -39,15 +38,12 @@ public class MerchantController {
 
     private final MerchantRegistrationService registrationService;
     private final MerchantApprovalService approvalService;
-    private final MerchantAdminService adminService;
 
     public MerchantController(
             MerchantRegistrationService registrationService,
-            MerchantApprovalService approvalService,
-            MerchantAdminService adminService) {
+            MerchantApprovalService approvalService) {
         this.registrationService = registrationService;
         this.approvalService = approvalService;
-        this.adminService = adminService;
     }
 
     /**

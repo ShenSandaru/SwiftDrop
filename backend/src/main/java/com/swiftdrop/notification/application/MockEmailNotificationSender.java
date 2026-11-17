@@ -2,6 +2,7 @@ package com.swiftdrop.notification.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -9,6 +10,10 @@ import org.springframework.stereotype.Component;
  * without connecting to an external SMTP or email provider.
  */
 @Component
+@ConditionalOnProperty(
+        name = "swiftdrop.notification.email.provider",
+        havingValue = "mock",
+        matchIfMissing = true)
 public class MockEmailNotificationSender implements EmailNotificationSender {
 
     private static final Logger log = LoggerFactory.getLogger(MockEmailNotificationSender.class);
