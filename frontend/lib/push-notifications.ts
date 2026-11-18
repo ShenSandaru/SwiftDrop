@@ -41,6 +41,40 @@ export async function getInitialPushStatus(): Promise<PushNotificationStatus> {
   return "idle";
 }
 
+async function waitForActiveServiceWorker(
+  registration: ServiceWorkerRegistration,
+): Promise<ServiceWorkerRegistration> {
+  if (registration.active) {
+    return registration;
+  }
+
+  const worker = registration.installing ?? registration.waiting;
+  if (worker) {
+    await new Promise<void>((resolve, reject) => {
+      if (worker.state === "activated") {
+        resolve();
+        return;
+      }
+      if (worker.state === "redundant") {
+        reject(new Error("Service worker became redundant before activation."));
+        return;
+      }
+      const onStateChange = () => {
+        if (worker.state === "activated") {
+          worker.removeEventListener("statechange", onStateChange);
+          resolve();
+        } else if (worker.state === "redundant") {
+          worker.removeEventListener("statechange", onStateChange);
+          reject(new Error("Service worker became redundant before activation."));
+        }
+      };
+      worker.addEventListener("statechange", onStateChange);
+    });
+  }
+
+  return navigator.serviceWorker.ready;
+}
+
 export async function enablePushNotifications(): Promise<{
   status: PushNotificationStatus;
   error?: string;
@@ -66,10 +100,13 @@ export async function enablePushNotifications(): Promise<{
   }
 
   try {
-    const registration = await navigator.serviceWorker.register(buildServiceWorkerUrl());
+    const registration = await navigator.serviceWorker.register(buildServiceWorkerUrl(), {
+      scope: "/",
+    });
+    const activeRegistration = await waitForActiveServiceWorker(registration);
     const token = await getToken(messaging, {
       vapidKey: FIREBASE_VAPID_KEY,
-      serviceWorkerRegistration: registration,
+      serviceWorkerRegistration: activeRegistration,
     });
     if (!token) {
       return { status: "error", error: "Failed to obtain push registration token." };

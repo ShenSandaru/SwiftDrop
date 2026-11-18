@@ -408,13 +408,21 @@ public class NotificationEventProcessor {
             UserSummary user,
             NotificationTemplateResolver.NotificationContent content) {
         if (pushSender == null || pushTokenRepository == null) {
+            log.info("Skipping PUSH dispatch for event {} user {}: pushSender or pushTokenRepository not configured",
+                    event.eventId(), user.id());
             return;
         }
 
         List<NotificationPushToken> activeTokens = pushTokenRepository.findByUserIdAndIsActiveTrue(user.id());
-        if (activeTokens == null || activeTokens.isEmpty()) {
+        int tokenCount = activeTokens != null ? activeTokens.size() : 0;
+        if (tokenCount == 0) {
+            log.info("Skipping PUSH dispatch for event {} user {}: 0 active push tokens",
+                    event.eventId(), user.id());
             return;
         }
+
+        log.info("Dispatching PUSH for event {} user {} across {} active token(s)",
+                event.eventId(), user.id(), tokenCount);
 
         UUID pushRecordId = UUID.randomUUID();
         int inserted = recordRepository.insertIfAbsent(
@@ -462,9 +470,12 @@ public class NotificationEventProcessor {
             }
         }
 
-        recordRepository.updateDeliveryStatus(
-                pushRecordId,
-                anySent ? NotificationDeliveryStatus.SENT : NotificationDeliveryStatus.FAILED);
+        NotificationDeliveryStatus finalStatus = anySent
+                ? NotificationDeliveryStatus.SENT
+                : NotificationDeliveryStatus.FAILED;
+        recordRepository.updateDeliveryStatus(pushRecordId, finalStatus);
+        log.info("Completed PUSH dispatch for event {} user {}: status={}",
+                event.eventId(), user.id(), finalStatus);
     }
 
     private NotificationConsumerState updateWatermark(
