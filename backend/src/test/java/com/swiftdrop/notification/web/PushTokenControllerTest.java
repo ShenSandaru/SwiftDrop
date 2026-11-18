@@ -123,6 +123,9 @@ class PushTokenControllerTest {
         @MockitoBean
         private PushTokenService pushTokenService;
 
+        @MockitoBean
+        private NotificationPushTokenRepository pushTokenRepository;
+
         @Test
         @DisplayName("POST /api/v1/notifications/push-tokens registers token for authenticated user")
         void postRegistersToken() throws Exception {

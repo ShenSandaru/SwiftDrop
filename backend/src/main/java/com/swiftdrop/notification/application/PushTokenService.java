@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,7 @@ import com.swiftdrop.notification.domain.NotificationPushTokenRepository;
  * Application service for registering and deactivating user FCM push tokens.
  */
 @Service
+@ConditionalOnBean(NotificationPushTokenRepository.class)
 public class PushTokenService {
 
     private final NotificationPushTokenRepository pushTokenRepository;

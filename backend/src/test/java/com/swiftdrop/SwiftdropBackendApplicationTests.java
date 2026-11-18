@@ -25,6 +25,7 @@ import com.swiftdrop.merchant.domain.MerchantWebhookEndpointRepository;
 import com.swiftdrop.pricing.api.FeeCalculator;
 import com.swiftdrop.pricing.domain.PricingRuleRepository;
 import com.swiftdrop.pricing.domain.ZoneRepository;
+import com.swiftdrop.notification.domain.NotificationPushTokenRepository;
 
 /**
  * Checks that the application context starts without Docker, PostgreSQL or RabbitMQ.
@@ -88,6 +89,8 @@ class SwiftdropBackendApplicationTests {
     private com.swiftdrop.merchant.domain.MerchantWebhookAttemptRepository merchantWebhookAttempts;
     @MockitoBean
     private com.swiftdrop.merchant.domain.MerchantWebhookRedeliveryRepository merchantWebhookRedeliveries;
+    @MockitoBean
+    private NotificationPushTokenRepository pushTokens;
 
     @Autowired
     private ApplicationContext context;

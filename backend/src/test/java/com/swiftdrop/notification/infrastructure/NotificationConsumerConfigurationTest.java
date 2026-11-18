@@ -16,9 +16,11 @@ import com.swiftdrop.notification.application.EmailNotificationSender;
 import com.swiftdrop.notification.application.NotificationReconciliationService;
 import com.swiftdrop.notification.application.NotificationTemplateResolver;
 import com.swiftdrop.notification.application.ParcelStatusEventParser;
+import com.swiftdrop.notification.application.PushNotificationSender;
 import com.swiftdrop.notification.application.SmsNotificationSender;
 import com.swiftdrop.notification.domain.NotificationConsumerStateRepository;
 import com.swiftdrop.notification.domain.NotificationPendingEventRepository;
+import com.swiftdrop.notification.domain.NotificationPushTokenRepository;
 import com.swiftdrop.notification.domain.NotificationRecordRepository;
 
 class NotificationConsumerConfigurationTest {
@@ -35,6 +37,7 @@ class NotificationConsumerConfigurationTest {
                 .withBean(ConnectionFactory.class, () -> mock(ConnectionFactory.class))
                 .withBean(NotificationConsumerStateRepository.class, () -> mock(NotificationConsumerStateRepository.class))
                 .withBean(NotificationPendingEventRepository.class, () -> mock(NotificationPendingEventRepository.class))
+                .withBean(NotificationPushTokenRepository.class, () -> mock(NotificationPushTokenRepository.class))
                 .withBean(NotificationRecordRepository.class, () -> mock(NotificationRecordRepository.class))
                 .withBean(NotificationTemplateResolver.class, () -> mock(NotificationTemplateResolver.class))
                 .withBean(ParcelStatusEventParser.class, () -> mock(ParcelStatusEventParser.class))
@@ -42,7 +45,8 @@ class NotificationConsumerConfigurationTest {
                 .withBean(UserDirectory.class, () -> mock(UserDirectory.class))
                 .withBean(MerchantLookup.class, () -> mock(MerchantLookup.class))
                 .withBean(EmailNotificationSender.class, () -> mock(EmailNotificationSender.class))
-                .withBean(SmsNotificationSender.class, () -> mock(SmsNotificationSender.class));
+                .withBean(SmsNotificationSender.class, () -> mock(SmsNotificationSender.class))
+                .withBean(PushNotificationSender.class, () -> mock(PushNotificationSender.class));
     }
 
     @Test

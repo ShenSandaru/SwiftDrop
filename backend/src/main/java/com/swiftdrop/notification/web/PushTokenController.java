@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,10 +31,11 @@ import jakarta.validation.constraints.Size;
 @PreAuthorize("isAuthenticated()")
 public class PushTokenController {
 
-    private final PushTokenService pushTokenService;
+    private PushTokenService pushTokenService;
 
-    public PushTokenController(PushTokenService pushTokenService) {
-        this.pushTokenService = Objects.requireNonNull(pushTokenService, "pushTokenService must not be null");
+    @Autowired(required = false)
+    public void setPushTokenService(PushTokenService pushTokenService) {
+        this.pushTokenService = pushTokenService;
     }
 
     @PostMapping
