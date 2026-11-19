@@ -25,6 +25,12 @@ import {
   type NotificationResponse,
   type PageResponse,
 } from "@/lib/notifications";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getInitialPushStatus,
+  type PushNotificationStatus,
+} from "@/lib/push-notifications";
 import { formatApiError } from "@/lib/api";
 
 const PAGE_SIZE = 10;
@@ -80,6 +86,64 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [markingIds, setMarkingIds] = useState<Set<string>>(new Set());
+  const [pushStatus, setPushStatus] = useState<PushNotificationStatus>("idle");
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || isAuthLoading) return;
+    let active = true;
+    void getInitialPushStatus().then((status) => {
+      if (active) setPushStatus(status);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isAuthLoading]);
+
+  const handleTogglePush = async () => {
+    if (pushStatus === "requesting" || pushStatus === "unsupported" || pushStatus === "denied") {
+      return;
+    }
+    setPushError(null);
+    if (pushStatus === "enabled") {
+      setPushStatus("requesting");
+      const res = await disablePushNotifications();
+      setPushStatus(res.status);
+      if (res.error) setPushError(res.error);
+    } else {
+      setPushStatus("requesting");
+      const res = await enablePushNotifications();
+      setPushStatus(res.status);
+      if (res.error) setPushError(res.error);
+    }
+  };
+
+  // Redirect to role-appropriate destination when opened from a background push notification click
+  useEffect(() => {
+    if (!isAuthenticated || isAuthLoading || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const parcelId = params.get("parcelId");
+    const trackingNumber = params.get("trackingNumber");
+    if (!parcelId && !trackingNumber) return;
+
+    const destination = resolveNotificationDestination(
+      {
+        id: "",
+        parcelId,
+        trackingNumber,
+        title: "",
+        message: "",
+        channel: "PUSH",
+        isRead: false,
+        readAt: null,
+        createdAt: new Date().toISOString(),
+      },
+      hasRole,
+    );
+    if (destination) {
+      router.replace(destination);
+    }
+  }, [isAuthenticated, isAuthLoading, hasRole, router]);
 
   // Protect route: redirect unauthenticated users to /login
   useEffect(() => {
@@ -288,8 +352,32 @@ export default function NotificationsPage() {
             )}
             Mark all as read
           </Button>
+          {pushStatus !== "unsupported" && (
+            <Button
+              type="button"
+              variant={pushStatus === "enabled" ? "secondary" : "outline"}
+              size="sm"
+              disabled={pushStatus === "requesting" || pushStatus === "denied"}
+              onClick={handleTogglePush}
+              title={pushError ?? undefined}
+            >
+              <Bell className="mr-1.5 size-3.5" aria-hidden="true" />
+              {pushStatus === "requesting"
+                ? "Updating..."
+                : pushStatus === "enabled"
+                  ? "Push Enabled"
+                  : pushStatus === "denied"
+                    ? "Push Blocked"
+                    : "Enable Push"}
+            </Button>
+          )}
         </div>
       </div>
+      {pushError && (
+        <p className="mb-4 text-xs text-destructive" role="alert">
+          {pushError}
+        </p>
+      )}
 
       {/* Tabs / Filter Controls */}
       <div className="flex items-center justify-between border-b border-border pb-3">

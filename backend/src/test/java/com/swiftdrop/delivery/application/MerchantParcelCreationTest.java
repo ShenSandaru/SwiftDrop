@@ -32,14 +32,16 @@ class MerchantParcelCreationTest {
     private static final Instant NOW = Instant.parse("2026-11-03T10:15:30Z");
 
     private ParcelBookingService booking;
+    private ParcelHubService hubOperations;
     private ParcelRepository parcels;
     private MerchantParcelCreation creation;
 
     @BeforeEach
     void setUp() {
         booking = mock(ParcelBookingService.class);
+        hubOperations = mock(ParcelHubService.class);
         parcels = mock(ParcelRepository.class);
-        creation = new MerchantParcelCreation(booking, parcels);
+        creation = new MerchantParcelCreation(booking, hubOperations, parcels);
     }
 
     @Test

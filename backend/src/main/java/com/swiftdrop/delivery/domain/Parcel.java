@@ -204,6 +204,14 @@ public class Parcel {
                 weightGrams, description, fee, customerId, now);
     }
 
+    /** A walk-in customer delivery booked at a hub counter by staff; no registered customer owner. */
+    public static Parcel forWalkInCustomer(String trackingNumber, UUID staffUserId, ParcelAddress pickup,
+            ParcelAddress dropoff, ParcelSize size, int weightGrams, String description, Fee fee, Instant now) {
+        Objects.requireNonNull(staffUserId, "staffUserId");
+        return new Parcel(trackingNumber, ParcelSource.CUSTOMER, null, null, null, pickup, dropoff, size,
+                weightGrams, description, fee, staffUserId, now);
+    }
+
     /** A delivery ordered through the merchant API; there is no creating user. */
     public static Parcel forMerchant(String trackingNumber, UUID merchantId, String merchantOrderReference,
             ParcelAddress pickup, ParcelAddress dropoff, ParcelSize size, int weightGrams, String description,
@@ -383,6 +391,28 @@ public class Parcel {
     // ---- Dispatcher steps -----------------------------------------------------------------------
 
     /**
+     * Receives a {@code CREATED} parcel directly at its origin hub (walk-in or merchant counter
+     * drop-off), computing its route and skipping courier pickup.
+     */
+    public void receiveAtHub(UUID hubId, HubRoute route, Instant now) {
+        Objects.requireNonNull(hubId, "hubId");
+        Objects.requireNonNull(route, "route");
+        if (status != ParcelStatus.CREATED) {
+            throw new ParcelConflictException("Only booked parcels can be received as walk-in hub intake");
+        }
+        if (!hubId.equals(route.origin())) {
+            throw new ParcelConflictException("The parcel is not routed from this hub");
+        }
+        move(ParcelStatus.AT_HUB, now);
+        this.originHubId = route.origin();
+        this.viaHubId = route.via();
+        this.destinationHubId = route.destination();
+        this.currentHubId = hubId;
+        this.nextHubId = null;
+        clearCurrentCourier();
+    }
+
+    /**
      * Scans the parcel in at a hub: its origin hub after pickup, the next hub of its route after a
      * line-haul leg, or its destination hub after a failed attempt (ADR 0009 §3).
      */
@@ -477,7 +507,7 @@ public class Parcel {
             return Set.of();
         }
         if (status == ParcelStatus.CREATED) {
-            return EnumSet.of(DispatchAction.ASSIGN_PICKUP, DispatchAction.CANCEL);
+            return EnumSet.of(DispatchAction.ASSIGN_PICKUP, DispatchAction.RECEIVE_AT_HUB, DispatchAction.CANCEL);
         }
         Set<DispatchAction> actions = EnumSet.of(DispatchAction.MARK_FAILED);
         if (isLegacy()) {

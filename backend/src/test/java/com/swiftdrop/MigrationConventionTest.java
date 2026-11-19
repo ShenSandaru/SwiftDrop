@@ -239,6 +239,18 @@ class MigrationConventionTest {
                         tuple(
                                 "202611171200",
                                 "delivery remove head office",
-                                "delivery/V202611171200__delivery_remove_head_office.sql"));
+                                "delivery/V202611171200__delivery_remove_head_office.sql"),
+                        tuple(
+                                "202611171300",
+                                "delivery allow walk in customer parcels",
+                                "delivery/V202611171300__delivery_allow_walk_in_customer_parcels.sql"),
+                        tuple(
+                                "202611171400",
+                                "identity add hub id to users",
+                                "identity/V202611171400__identity_add_hub_id_to_users.sql"),
+                        tuple(
+                                "202611181000",
+                                "notification create push tokens",
+                                "notification/V202611181000__notification_create_push_tokens.sql"));
     }
 }
