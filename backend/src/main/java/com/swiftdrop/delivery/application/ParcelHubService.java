@@ -44,22 +44,29 @@ public class ParcelHubService implements ParcelHubOperations {
     private final Clock clock;
     private final ApplicationEventPublisher publisher;
     private final HubAuthority authority;
+    private final HubNetwork hubNetwork;
 
     @Autowired
     public ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
             ParcelEventRecorder recorder, DeliveryPolicy policy, ApplicationEventPublisher publisher,
-            HubAuthority authority) {
-        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), publisher, authority);
+            HubAuthority authority, HubNetwork hubNetwork) {
+        this(parcels, hubs, assignments, recorder, policy, Clock.systemUTC(), publisher, authority, hubNetwork);
     }
 
     ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
             ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, HubAuthority authority) {
-        this(parcels, hubs, assignments, recorder, policy, clock, null, authority);
+        this(parcels, hubs, assignments, recorder, policy, clock, null, authority, null);
     }
 
     ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
             ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, ApplicationEventPublisher publisher,
             HubAuthority authority) {
+        this(parcels, hubs, assignments, recorder, policy, clock, publisher, authority, null);
+    }
+
+    ParcelHubService(ParcelRepository parcels, HubRepository hubs, ParcelAssignmentRepository assignments,
+            ParcelEventRecorder recorder, DeliveryPolicy policy, Clock clock, ApplicationEventPublisher publisher,
+            HubAuthority authority, HubNetwork hubNetwork) {
         this.parcels = parcels;
         this.hubs = hubs;
         this.assignments = assignments;
@@ -68,6 +75,25 @@ public class ParcelHubService implements ParcelHubOperations {
         this.clock = clock;
         this.publisher = publisher;
         this.authority = authority;
+        this.hubNetwork = hubNetwork;
+    }
+
+    @Override
+    @Transactional
+    public void receiveAtHub(UUID parcelId, UUID hubId, Staff staff) {
+        Objects.requireNonNull(hubId, "hubId");
+        Hub hub = hubs.findById(hubId).orElseThrow(() -> new ParcelConflictException("Unknown hub"));
+        if (!hub.isActive()) {
+            throw new ParcelConflictException("Hub is inactive");
+        }
+        Parcel parcel = lock(parcelId);
+        com.swiftdrop.delivery.domain.HubRoute route = Objects.requireNonNull(hubNetwork, "hubNetwork")
+                .routeFor(parcel.getPickup().getZoneId(), parcel.getDropoff().getZoneId());
+        ParcelStatus previous = parcel.getStatus();
+        Instant now = clock.instant();
+        parcel.receiveAtHub(hub.getId(), route, now);
+        cancelActiveTask(parcel, now);
+        record(parcel, previous, staff, null, null, now, hub.getCode());
     }
 
     @Override

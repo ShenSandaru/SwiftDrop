@@ -277,6 +277,11 @@ class NotificationReconciliationServiceTest {
         }
 
         @Override
+        public List<UserSummary> findEnabledCouriersByHub(UUID hubId) {
+            return List.of();
+        }
+
+        @Override
         public List<UserSummary> findEnabledAdmins() {
             return List.of();
         }

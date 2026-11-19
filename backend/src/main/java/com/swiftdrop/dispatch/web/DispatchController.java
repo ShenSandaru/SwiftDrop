@@ -50,10 +50,11 @@ class DispatchController {
             @RequestParam(required = false) ParcelSource source,
             @RequestParam(required = false) Boolean assigned,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean terminal,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         com.swiftdrop.delivery.api.PageRequest request = pageRequest(page, size);
-        return toResponse(dispatch.parcels(staff(jwt), status, source, assigned, search, request), request);
+        return toResponse(dispatch.parcels(staff(jwt), status, source, assigned, search, terminal, request), request);
     }
 
     /** Unfinished parcels with no scan, status change or assignment for too long; longest waiting first. */
@@ -101,11 +102,33 @@ class DispatchController {
     @ResponseStatus(HttpStatus.CREATED)
     ParcelAssignmentSummary assign(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody DispatchAssignmentRequest request) {
-        return dispatch.assign(request.parcelId(), request.courierId(), UUID.fromString(jwt.getSubject()),
-                request.type());
+        return dispatch.assign(request.parcelId(), request.courierId(), staff(jwt).userId(), request.type());
     }
 
     // ---- Hub network (ADR 0009 §3, §6); each answers 204, or 404 / 409 from delivery's rules ----
+
+    /** Books a walk-in customer parcel at a hub counter and receives it immediately at {@code hubId}. */
+    @PostMapping("/parcels/walk-in")
+    @ResponseStatus(HttpStatus.CREATED)
+    WalkInParcelResponse createWalkInParcel(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateWalkInParcelRequest request) {
+        return WalkInParcelResponse.from(dispatch.createWalkInParcel(
+                request.hubId(),
+                request.pickup().toContact(),
+                request.dropoff().toContact(),
+                request.size(),
+                request.weightGrams(),
+                request.description(),
+                staff(jwt)));
+    }
+
+    /** Receives a booked parcel directly at its origin hub (walk-in / counter drop-off). */
+    @PostMapping("/parcels/{id}/hub-intake")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void receiveAtHub(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+            @Valid @RequestBody HubScanRequest request) {
+        dispatch.receiveAtHub(id, request.hubId(), staff(jwt));
+    }
 
     /** Scans a parcel in at the hub it is expected at. */
     @PostMapping("/parcels/{id}/hub-scans")

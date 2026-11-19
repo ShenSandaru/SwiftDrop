@@ -15,11 +15,17 @@ public record UserSummary(
         String phoneNumber,
         Set<String> roles,
         boolean enabled,
-        boolean profileCompleted
+        boolean profileCompleted,
+        UUID hubId
 ) {
 
     public UserSummary(UUID id, String fullName, String email, Set<String> roles, boolean enabled) {
-        this(id, fullName, email, null, roles, enabled, true);
+        this(id, fullName, email, null, roles, enabled, true, null);
+    }
+
+    public UserSummary(UUID id, String fullName, String email, String phoneNumber, Set<String> roles, boolean enabled,
+            boolean profileCompleted) {
+        this(id, fullName, email, phoneNumber, roles, enabled, profileCompleted, null);
     }
 
     public UserSummary {

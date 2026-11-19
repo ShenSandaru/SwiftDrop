@@ -102,6 +102,44 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
             @Param("zoneIds") Collection<UUID> zoneIds,
             Pageable pageable);
 
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE p.status IN (com.swiftdrop.delivery.api.ParcelStatus.DELIVERED,
+                               com.swiftdrop.delivery.api.ParcelStatus.FAILED,
+                               com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND """ + IN_SCOPE)
+    Page<Parcel> findCompletedForDispatch(@Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            @Param("everywhere") boolean everywhere,
+            @Param("hubIds") Collection<UUID> hubIds,
+            @Param("zoneIds") Collection<UUID> zoneIds,
+            Pageable pageable);
+
+    @Query("""
+            SELECT p FROM Parcel p
+            WHERE p.status IN (com.swiftdrop.delivery.api.ParcelStatus.DELIVERED,
+                               com.swiftdrop.delivery.api.ParcelStatus.FAILED,
+                               com.swiftdrop.delivery.api.ParcelStatus.CANCELLED)
+              AND (:source IS NULL OR p.source = :source)
+              AND (:assigned IS NULL
+                   OR (:assigned = true AND p.assignedCourierId IS NOT NULL)
+                   OR (:assigned = false AND p.assignedCourierId IS NULL))
+              AND (LOWER(p.trackingNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                   OR (:parcelId IS NOT NULL AND p.id = :parcelId))
+              AND """ + IN_SCOPE)
+    Page<Parcel> findCompletedForDispatchBySearch(@Param("source") ParcelSource source,
+            @Param("assigned") Boolean assigned,
+            @Param("search") String search,
+            @Param("parcelId") UUID parcelId,
+            @Param("everywhere") boolean everywhere,
+            @Param("hubIds") Collection<UUID> hubIds,
+            @Param("zoneIds") Collection<UUID> zoneIds,
+            Pageable pageable);
+
     /** A merchant's parcels (MER-4); always scoped by merchant, never across merchants. */
     Page<Parcel> findByMerchantId(UUID merchantId, Pageable pageable);
 

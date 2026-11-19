@@ -26,6 +26,14 @@ public interface UserDirectory {
     List<UserSummary> findEnabledCouriers();
 
     /**
+     * Retrieves all enabled users having the {@code COURIER} role assigned to the given hub.
+     *
+     * @param hubId the hub ID
+     * @return list of enabled courier user summaries for that hub
+     */
+    List<UserSummary> findEnabledCouriersByHub(UUID hubId);
+
+    /**
      * Retrieves all enabled users having the {@code ADMIN} role.
      *
      * @return list of enabled admin user summaries

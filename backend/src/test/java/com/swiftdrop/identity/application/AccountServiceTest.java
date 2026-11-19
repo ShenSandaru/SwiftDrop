@@ -330,6 +330,21 @@ class AccountServiceTest {
     }
 
     @Test
+    void findEnabledCouriersByHubReturnsCouriersForRequestedHub() {
+        UUID hubId = UUID.randomUUID();
+        User courier = withId(new User("hubcourier@example.com", "hash", "Nimali Silva", Set.of(Role.COURIER)));
+        courier.setHubId(hubId);
+        when(users.findByRoleAndEnabledTrueAndHubId(Role.COURIER, hubId)).thenReturn(List.of(courier));
+
+        List<UserSummary> result = service.findEnabledCouriersByHub(hubId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().fullName()).isEqualTo("Nimali Silva");
+        assertThat(result.getFirst().hubId()).isEqualTo(hubId);
+        verify(users).findByRoleAndEnabledTrueAndHubId(Role.COURIER, hubId);
+    }
+
+    @Test
     void updatesCustomerProfileAndCompletesProfile() {
         User user = existing("hash");
         when(users.findById(user.getId())).thenReturn(Optional.of(user));

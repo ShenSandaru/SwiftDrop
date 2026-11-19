@@ -23,6 +23,7 @@ import com.swiftdrop.delivery.api.ParcelAssignment;
 import com.swiftdrop.delivery.api.ParcelAssignmentStatus;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
+import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelQueries;
 import com.swiftdrop.delivery.api.Staff;
@@ -38,6 +39,7 @@ class DispatchServiceTest {
     private ParcelQueries parcels;
     private ParcelAssignment assignments;
     private ParcelHubOperations hubOperations;
+    private ParcelCreation parcelCreation;
     private UserDirectory users;
     private final HubStaffDirectory hubStaff = mock(HubStaffDirectory.class);
     private DispatchService service;
@@ -47,8 +49,9 @@ class DispatchServiceTest {
         parcels = mock(ParcelQueries.class);
         assignments = mock(ParcelAssignment.class);
         hubOperations = mock(ParcelHubOperations.class);
+        parcelCreation = mock(ParcelCreation.class);
         users = mock(UserDirectory.class);
-        service = new DispatchService(parcels, assignments, hubOperations, users, hubStaff,
+        service = new DispatchService(parcels, assignments, hubOperations, parcelCreation, users, hubStaff,
                 java.time.Duration.ofHours(24),
                 java.time.Clock.fixed(Instant.parse("2026-11-14T08:00:00Z"), java.time.ZoneOffset.UTC));
     }
@@ -152,7 +155,7 @@ class DispatchServiceTest {
 
     @Test
     void theStaleTimeMustBePositive() {
-        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, users, hubStaff, 0))
+        assertThatThrownBy(() -> new DispatchService(parcels, assignments, hubOperations, parcelCreation, users, hubStaff, 0))
                 .isInstanceOf(IllegalStateException.class);
     }
 

@@ -83,3 +83,74 @@ export async function markAllNotificationsAsRead(): Promise<BulkReadResponse> {
   return api.post<BulkReadResponse>("/api/v1/notifications/read-all");
 }
 
+export interface PushTokenResponse {
+  id: string;
+  platform: string;
+  active: boolean;
+  updatedAt: string;
+}
+
+export async function registerPushToken(
+  token: string,
+  platform = "WEB",
+): Promise<PushTokenResponse> {
+  return api.post<PushTokenResponse>("/api/v1/notifications/push-tokens", {
+    token,
+    platform,
+  });
+}
+
+export async function unregisterPushToken(token: string): Promise<void> {
+  await api.delete("/api/v1/notifications/push-tokens", { token });
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolves the role-appropriate navigation destination for a notification item,
+ * or returns null when no valid destination can be determined.
+ */
+export function resolveNotificationDestination(
+  item: NotificationResponse,
+  hasRole: (role: string) => boolean,
+): string | null {
+  const hasValidParcelId = Boolean(item.parcelId && UUID_REGEX.test(item.parcelId));
+
+  if (hasValidParcelId && item.parcelId) {
+    if (hasRole("CUSTOMER")) {
+      return `/customer/parcels/${item.parcelId}`;
+    }
+    if (hasRole("COURIER")) {
+      return `/courier/parcels/${item.parcelId}`;
+    }
+    if (hasRole("ADMIN") || hasRole("DISPATCHER")) {
+      return "/dispatch";
+    }
+    if (hasRole("MERCHANT")) {
+      return "/merchant/orders";
+    }
+    if (item.trackingNumber) {
+      return `/track?number=${encodeURIComponent(item.trackingNumber)}`;
+    }
+    return null;
+  }
+
+  if (hasRole("ADMIN") || hasRole("DISPATCHER")) {
+    return "/admin/merchants";
+  }
+  if (hasRole("MERCHANT")) {
+    if (item.title.toLowerCase().includes("approved")) {
+      return "/merchant";
+    }
+    return "/merchant/status";
+  }
+  if (hasRole("CUSTOMER")) {
+    return "/customer/profile";
+  }
+  if (item.trackingNumber) {
+    return `/track?number=${encodeURIComponent(item.trackingNumber)}`;
+  }
+
+  return null;
+}
+
