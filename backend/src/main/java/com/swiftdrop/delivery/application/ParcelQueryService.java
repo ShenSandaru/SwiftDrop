@@ -35,6 +35,7 @@ import com.swiftdrop.delivery.domain.Hub;
 import com.swiftdrop.delivery.domain.HubRepository;
 import com.swiftdrop.delivery.domain.HubScope;
 import com.swiftdrop.delivery.domain.Parcel;
+import com.swiftdrop.delivery.domain.ParcelAssignmentRecord;
 import com.swiftdrop.delivery.domain.ParcelAssignmentRepository;
 import com.swiftdrop.delivery.domain.ParcelRepository;
 import com.swiftdrop.delivery.domain.ParcelStatusHistoryEntry;
@@ -97,16 +98,32 @@ class ParcelQueryService implements ParcelQueries {
     @Override
     public PageResult<DispatchParcelSummary> findDispatchParcels(UUID staffUserId,
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
+        return findDispatchParcels(staffUserId, status, source, assigned, search, null, page);
+    }
+
+    @Override
+    public PageResult<DispatchParcelSummary> findDispatchParcels(UUID staffUserId,
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, Boolean terminal,
+            PageRequest page) {
         Objects.requireNonNull(page, "page");
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
         UUID parcelId = parseParcelId(normalizedSearch);
         Pageable pageable = pageable(page, NEWEST_FIRST);
         Scope scope = scopeOf(staffUserId);
-        Page<Parcel> found = normalizedSearch == null
-                ? parcels.findForDispatch(status, source, assigned, scope.everywhere(), scope.hubIds(),
-                        scope.zoneIds(), pageable)
-                : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId,
-                        scope.everywhere(), scope.hubIds(), scope.zoneIds(), pageable);
+        Page<Parcel> found;
+        if (Boolean.TRUE.equals(terminal) && status == null) {
+            found = normalizedSearch == null
+                    ? parcels.findCompletedForDispatch(source, assigned, scope.everywhere(), scope.hubIds(),
+                            scope.zoneIds(), pageable)
+                    : parcels.findCompletedForDispatchBySearch(source, assigned, normalizedSearch, parcelId,
+                            scope.everywhere(), scope.hubIds(), scope.zoneIds(), pageable);
+        } else {
+            found = normalizedSearch == null
+                    ? parcels.findForDispatch(status, source, assigned, scope.everywhere(), scope.hubIds(),
+                            scope.zoneIds(), pageable)
+                    : parcels.findForDispatchBySearch(status, source, assigned, normalizedSearch, parcelId,
+                            scope.everywhere(), scope.hubIds(), scope.zoneIds(), pageable);
+        }
         return toDispatchResult(found, scope, page);
     }
 
@@ -161,7 +178,7 @@ class ParcelQueryService implements ParcelQueries {
         Map<UUID, UUID> branchByZone = allHubs.stream().filter(hub -> hub.isActive() && hub.getZoneId() != null)
                 .collect(Collectors.toMap(Hub::getZoneId, Hub::getId, (first, second) -> first));
         return PageResult.of(found.getContent().stream()
-                .map(parcel -> toDispatchSummary(parcel, hubCodes,
+                .map(parcel -> toDispatchSummary(parcel, hubCodes, branchByZone,
                         !parcel.accessFor(scope.hubScope(), branchByZone.get(parcel.getPickup().getZoneId())).canAct()))
                 .toList(), page, found.getTotalElements());
     }
@@ -243,8 +260,12 @@ class ParcelQueryService implements ParcelQueries {
     }
 
     /** The board row: where the parcel is in the network and what a dispatcher may do (ADR 0009). */
-    private DispatchParcelSummary toDispatchSummary(Parcel parcel, Map<UUID, String> hubCodes, boolean readOnly) {
+    private DispatchParcelSummary toDispatchSummary(Parcel parcel, Map<UUID, String> hubCodes,
+            Map<UUID, UUID> activeHubIdsByZone, boolean readOnly) {
         UUID expected = parcel.expectedHubId();
+        if (expected == null && parcel.getStatus() == ParcelStatus.CREATED && parcel.getPickup() != null) {
+            expected = activeHubIdsByZone.get(parcel.getPickup().getZoneId());
+        }
         return new DispatchParcelSummary(parcel.getId(), parcel.getTrackingNumber(), parcel.getStatus(),
                 parcel.getSource(), parcel.getMerchantOrderReference(), parcel.getAssignedCourierId(),
                 parcel.getSize(), parcel.getWeightGrams(), parcel.getPickup().getCity(),

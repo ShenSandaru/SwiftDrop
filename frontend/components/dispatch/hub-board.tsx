@@ -30,9 +30,9 @@ interface Lane {
 
 /** One lane per next step; a parcel sits in the lane of the step the backend offers. */
 const LANES: Lane[] = [
-  { key: "scan", title: "Scan in at hub", hint: "Picked up, arriving from a line haul, or back from a failed attempt",
+  { key: "scan", title: "Scan in at hub", hint: "Picked up, arriving from another hub, or back from a failed attempt",
     icon: ScanLine, matches: (actions) => actions.includes("SCAN_AT_HUB") },
-  { key: "send", title: "Send onwards", hint: "At a hub on the way; load on the next line haul",
+  { key: "send", title: "Send onwards", hint: "At a hub on the way; send to the next hub",
     icon: Truck, matches: (actions) => actions.includes("SEND_TO_NEXT_HUB") },
   { key: "deliver", title: "Ready for delivery", hint: "At the destination branch; assign a delivery courier",
     icon: UserPlus, matches: (actions) => actions.includes("ASSIGN_DELIVERY") },
@@ -139,6 +139,12 @@ function HubCard({ parcel, couriers, busy, run }: {
   const [reason, setReason] = useState<FailureReason>("DAMAGED");
   const has = (action: DispatchAction) => parcel.actions.includes(action);
   const taskType = has("ASSIGN_RETURN") ? "RETURN" : "DELIVERY";
+  const workflowLabel =
+    parcel.status === "AT_HUB"
+      ? has("ASSIGN_DELIVERY") && parcel.assignedCourierId
+        ? "Delivery Pending"
+        : "Pickup Done (At Hub)"
+      : undefined;
 
   return (
     <article className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-xs">
@@ -149,7 +155,10 @@ function HubCard({ parcel, couriers, busy, run }: {
             <span className="capitalize">{parcel.pickupCity}</span> → <span className="capitalize">{parcel.dropoffCity}</span>
           </p>
         </div>
-        <span className="flex flex-col items-end gap-1"><StatusBadge status={parcel.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span>
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={workflowLabel} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
 
       <RouteStrip parcel={parcel} />

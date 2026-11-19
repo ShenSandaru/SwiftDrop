@@ -1,5 +1,12 @@
 import { api, type PageResponse } from "@/lib/api";
-import type { FailureReason, ParcelDetail, ParcelStatus, ParcelSize } from "@/lib/delivery";
+import type {
+  BookingRequest,
+  FailureReason,
+  ParcelCreated,
+  ParcelDetail,
+  ParcelSize,
+  ParcelStatus,
+} from "@/lib/delivery";
 
 export type DispatchAssignmentType = "PICKUP" | "DELIVERY" | "RETURN";
 export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "CANCELLED";
@@ -7,6 +14,7 @@ export type DispatchAssignmentStatus = "ACTIVE" | "COMPLETED" | "REASSIGNED" | "
 /** What a dispatcher may do next with a parcel; the backend works it out (ADR 0009). */
 export type DispatchAction =
   | "ASSIGN_PICKUP"
+  | "RECEIVE_AT_HUB"
   | "CANCEL"
   | "SCAN_AT_HUB"
   | "SEND_TO_NEXT_HUB"
@@ -83,6 +91,8 @@ export interface DispatchParcelPageRequest {
   source?: "CUSTOMER" | "MERCHANT";
   assigned?: boolean;
   search?: string;
+  hubId?: string;
+  terminal?: boolean;
 }
 
 export function listDispatchParcels({
@@ -92,6 +102,8 @@ export function listDispatchParcels({
   source,
   assigned,
   search,
+  hubId,
+  terminal,
 }: DispatchParcelPageRequest): Promise<PageResponse<DispatchParcelItem>> {
   const query = new URLSearchParams({ page: String(page), size: String(size) });
   if (status) {
@@ -106,6 +118,12 @@ export function listDispatchParcels({
   if (search?.trim()) {
     query.set("search", search.trim());
   }
+  if (hubId) {
+    query.set("hubId", hubId);
+  }
+  if (terminal !== undefined) {
+    query.set("terminal", String(terminal));
+  }
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/parcels?${query.toString()}`);
 }
 
@@ -118,25 +136,30 @@ export function listStaleDispatchParcels(page = 0, size = 5): Promise<PageRespon
   return api.get<PageResponse<DispatchParcelItem>>(`/api/v1/dispatch/stale-parcels?${query.toString()}`);
 }
 
-export async function countDispatchParcels(status?: ParcelStatus): Promise<number> {
-  const page = await listDispatchParcels({ page: 0, size: 1, status });
+export async function countDispatchParcels(status?: ParcelStatus, hubId?: string): Promise<number> {
+  const page = await listDispatchParcels({ page: 0, size: 1, status, hubId });
   return page.totalItems;
 }
 
-export function listDispatchCouriers(): Promise<DispatchCourier[]> {
-  return api.get<DispatchCourier[]>("/api/v1/dispatch/couriers");
+export function listDispatchCouriers(hubId?: string): Promise<DispatchCourier[]> {
+  const query = hubId ? `?${new URLSearchParams({ hubId }).toString()}` : "";
+  return api.get<DispatchCourier[]>(`/api/v1/dispatch/couriers${query}`);
 }
 
-export async function listAllDispatchCouriers(): Promise<DispatchCourier[]> {
-  return listDispatchCouriers();
+export async function listAllDispatchCouriers(hubId?: string): Promise<DispatchCourier[]> {
+  return listDispatchCouriers(hubId);
 }
 
 export function listActiveDispatchAssignments(
   type: DispatchAssignmentType,
   page: number,
   size: number,
+  hubId?: string,
 ): Promise<PageResponse<DispatchAssignment>> {
   const query = new URLSearchParams({ type, page: String(page), size: String(size) });
+  if (hubId) {
+    query.set("hubId", hubId);
+  }
   return api.get<PageResponse<DispatchAssignment>>(
     `/api/v1/dispatch/active-assignments?${query.toString()}`,
   );
@@ -144,22 +167,24 @@ export function listActiveDispatchAssignments(
 
 export async function listAllActiveDispatchAssignments(
   type: DispatchAssignmentType,
+  hubId?: string,
 ): Promise<DispatchAssignment[]> {
-  const firstPage = await listActiveDispatchAssignments(type, 0, 100);
+  const firstPage = await listActiveDispatchAssignments(type, 0, 100, hubId);
   if (firstPage.totalPages < 2) {
     return firstPage.items;
   }
 
   const remaining = await Promise.all(
     Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-      listActiveDispatchAssignments(type, index + 1, 100),
+      listActiveDispatchAssignments(type, index + 1, 100, hubId),
     ),
   );
   return [...firstPage.items, ...remaining.flatMap((page) => page.items)];
 }
 
-export function getCourierWorkloads(): Promise<Record<string, number>> {
-  return api.get<Record<string, number>>("/api/v1/dispatch/courier-workloads");
+export function getCourierWorkloads(hubId?: string): Promise<Record<string, number>> {
+  const query = hubId ? `?${new URLSearchParams({ hubId }).toString()}` : "";
+  return api.get<Record<string, number>>(`/api/v1/dispatch/courier-workloads${query}`);
 }
 
 export function assignDispatchCourier(
@@ -185,6 +210,18 @@ export function getDispatchParcelDetails(id: string): Promise<ParcelDetail> {
 }
 
 // ---- Hub network steps (ADR 0009 §3); each answers 204, or 409 when the rules do not allow it ----
+
+export interface CreateWalkInParcelRequest extends BookingRequest {
+  hubId: string;
+}
+
+export function createWalkInParcel(request: CreateWalkInParcelRequest): Promise<ParcelCreated> {
+  return api.post<ParcelCreated>("/api/v1/dispatch/parcels/walk-in", request);
+}
+
+export function receiveParcelAtHub(parcelId: string, hubId: string): Promise<void> {
+  return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-intake`, { hubId });
+}
 
 export function scanParcelAtHub(parcelId: string, hubId: string): Promise<void> {
   return api.post<void>(`/api/v1/dispatch/parcels/${encodeURIComponent(parcelId)}/hub-scans`, { hubId });

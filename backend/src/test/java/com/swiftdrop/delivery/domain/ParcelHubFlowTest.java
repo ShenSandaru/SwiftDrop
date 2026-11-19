@@ -225,7 +225,7 @@ class ParcelHubFlowTest {
     @Test
     void dispatcherActionsFollowTheJourney() {
         assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).containsExactlyInAnyOrder(DispatchAction.ASSIGN_PICKUP,
-                DispatchAction.CANCEL);
+                DispatchAction.RECEIVE_AT_HUB, DispatchAction.CANCEL);
 
         parcel.pickUp(pickupCourier, ROUTE, NOW);
         assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
@@ -268,5 +268,25 @@ class ParcelHubFlowTest {
 
         assertThat(parcel.dispatchActions(MAX_ATTEMPTS)).containsExactly(DispatchAction.MARK_FAILED);
         assertThat(parcel.expectedHubId()).isNull();
+    }
+
+    @Test
+    void walkInReceiveAtHubMovesDirectlyFromCreatedToAtHub() {
+        parcel.assignPickupCourier(pickupCourier, NOW);
+
+        parcel.receiveAtHub(KANDY, ROUTE, NOW);
+
+        assertThat(parcel.getStatus()).isEqualTo(ParcelStatus.AT_HUB);
+        assertThat(parcel.getCurrentHubId()).isEqualTo(KANDY);
+        assertThat(parcel.getOriginHubId()).isEqualTo(KANDY);
+        assertThat(parcel.getViaHubId()).isEqualTo(COLOMBO);
+        assertThat(parcel.getDestinationHubId()).isEqualTo(JAFFNA);
+        assertThat(parcel.getAssignedCourierId()).isNull();
+        assertThat(parcel.dispatchActions(MAX_ATTEMPTS))
+                .containsExactlyInAnyOrder(DispatchAction.SEND_TO_NEXT_HUB, DispatchAction.MARK_FAILED);
+
+        assertThatThrownBy(() -> parcel.receiveAtHub(KANDY, ROUTE, NOW))
+                .isInstanceOf(ParcelConflictException.class)
+                .hasMessageContaining("walk-in hub intake");
     }
 }

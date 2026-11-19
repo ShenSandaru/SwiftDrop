@@ -7,6 +7,8 @@ package com.swiftdrop.delivery.api;
 public enum DispatchAction {
     /** Assign or reassign the pickup courier. */
     ASSIGN_PICKUP,
+    /** Receive a booked parcel directly at its origin hub (walk-in / counter drop-off). */
+    RECEIVE_AT_HUB,
     /** Cancel before pickup. */
     CANCEL,
     /** Scan the parcel in at the hub it is expected at. */

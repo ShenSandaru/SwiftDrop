@@ -15,4 +15,13 @@ public interface ParcelCreation {
      * @throws IllegalArgumentException if a field is missing or invalid
      */
     CreatedParcel createMerchantParcel(NewMerchantParcel order);
+
+    /**
+     * Books a walk-in customer parcel at a hub counter and immediately receives it at {@code hubId}
+     * in {@link ParcelStatus#AT_HUB}, recording both {@code CREATED} and {@code AT_HUB} events in
+     * one transaction.
+     *
+     * @throws IllegalArgumentException if a field is missing or invalid
+     */
+    CreatedParcel createWalkInParcel(NewWalkInParcel walkIn);
 }
