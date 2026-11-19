@@ -28,7 +28,7 @@ public final class ParcelLifecycle {
     private static final Map<ParcelStatus, Set<ParcelStatus>> LEGACY = new EnumMap<>(ParcelStatus.class);
 
     static {
-        HUB.put(ParcelStatus.CREATED, EnumSet.of(ParcelStatus.PICKED_UP, ParcelStatus.CANCELLED));
+        HUB.put(ParcelStatus.CREATED, EnumSet.of(ParcelStatus.PICKED_UP, ParcelStatus.AT_HUB, ParcelStatus.CANCELLED));
         HUB.put(ParcelStatus.PICKED_UP, EnumSet.of(ParcelStatus.AT_HUB, ParcelStatus.FAILED));
         HUB.put(ParcelStatus.AT_HUB, EnumSet.of(ParcelStatus.IN_TRANSIT, ParcelStatus.OUT_FOR_DELIVERY,
                 ParcelStatus.RETURNING, ParcelStatus.FAILED));

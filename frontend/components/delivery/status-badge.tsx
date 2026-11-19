@@ -20,7 +20,15 @@ const STATUS_STYLES: Record<ParcelStatus, string> = {
   CANCELLED: "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800/60 dark:text-zinc-300 dark:border-zinc-700",
 };
 
-export function StatusBadge({ status, className }: { status: ParcelStatus; className?: string }) {
+export function StatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: ParcelStatus;
+  label?: string;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
@@ -30,7 +38,7 @@ export function StatusBadge({ status, className }: { status: ParcelStatus; class
       )}
     >
       <span className="size-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
-      {STATUS_LABELS[status]}
+      {label ?? STATUS_LABELS[status]}
     </span>
   );
 }

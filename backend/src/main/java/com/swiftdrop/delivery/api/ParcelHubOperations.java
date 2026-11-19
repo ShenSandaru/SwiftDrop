@@ -13,6 +13,12 @@ import java.util.UUID;
 public interface ParcelHubOperations {
 
     /**
+     * Receives a {@code CREATED} parcel directly at its origin hub (walk-in or counter drop-off),
+     * computing its route and skipping courier pickup.
+     */
+    void receiveAtHub(UUID parcelId, UUID hubId, Staff staff);
+
+    /**
      * Scans the parcel in at a hub: the origin hub after pickup, the next hub after a line-haul
      * leg, or the destination hub after a failed delivery attempt.
      */
