@@ -247,6 +247,10 @@ class MigrationConventionTest {
                         tuple(
                                 "202611171400",
                                 "identity add hub id to users",
-                                "identity/V202611171400__identity_add_hub_id_to_users.sql"));
+                                "identity/V202611171400__identity_add_hub_id_to_users.sql"),
+                        tuple(
+                                "202611181000",
+                                "notification create push tokens",
+                                "notification/V202611181000__notification_create_push_tokens.sql"));
     }
 }

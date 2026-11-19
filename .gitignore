@@ -55,3 +55,7 @@ desktop.ini
 
 # Course handout: do not commit; requirements are summarized in docs/project-requirements.md
 /docs/Group Assignment.pdf
+
+# Firebase credentials
+firebase-service-account.json
+*service-account*.json

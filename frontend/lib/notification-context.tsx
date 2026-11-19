@@ -8,12 +8,16 @@ import React, {
   useCallback,
   useRef,
 } from "react";
+import { useRouter } from "next/navigation";
+import { onMessage } from "firebase/messaging";
 import { useAuth } from "./auth-context";
+import { getFirebaseMessaging } from "./firebase";
 import {
   getNotifications,
   getUnreadCount,
   markNotificationAsRead as apiMarkAsRead,
   markAllNotificationsAsRead as apiMarkAllAsRead,
+  resolveNotificationDestination,
   type NotificationResponse,
 } from "./notifications";
 
@@ -32,15 +36,22 @@ export interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const router = useRouter();
+  const { isAuthenticated, isLoading: isAuthLoading, hasRole } = useAuth();
 
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [foregroundToast, setForegroundToast] = useState<{
+    title: string;
+    body: string;
+    destination: string | null;
+  } | null>(null);
 
   // Guard to prevent concurrent fetches
   const isFetchingRef = useRef(false);
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
 
   const fetchNotificationData = useCallback(async (showLoading = false) => {
     if (!isAuthenticated || isAuthLoading || isFetchingRef.current) {
@@ -125,6 +136,64 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [isAuthenticated, isAuthLoading, fetchNotificationData]);
 
+  // Foreground FCM listener
+  useEffect(() => {
+    if (!isAuthenticated || isAuthLoading) {
+      return;
+    }
+
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    let toastTimer: number | undefined;
+
+    void getFirebaseMessaging().then((messaging) => {
+      if (!messaging || cancelled) {
+        return;
+      }
+      unsubscribe = onMessage(messaging, (payload) => {
+        const dedupKey = payload.messageId || `${payload.notification?.title ?? ""}:${payload.notification?.body ?? ""}`;
+        if (seenMessageIdsRef.current.has(dedupKey)) {
+          return;
+        }
+        seenMessageIdsRef.current.add(dedupKey);
+
+        const title = payload.notification?.title || payload.data?.title || "New Notification";
+        const body = payload.notification?.body || payload.data?.body || "";
+        const destination = resolveNotificationDestination(
+          {
+            id: "",
+            parcelId: payload.data?.parcelId ?? null,
+            trackingNumber: payload.data?.trackingNumber ?? null,
+            title,
+            message: body,
+            channel: "PUSH",
+            isRead: false,
+            readAt: null,
+            createdAt: new Date().toISOString(),
+          },
+          hasRole,
+        );
+
+        setForegroundToast({ title, body, destination });
+        if (toastTimer) {
+          window.clearTimeout(toastTimer);
+        }
+        toastTimer = window.setTimeout(() => setForegroundToast(null), 6000);
+        void fetchNotificationData();
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (toastTimer) {
+        window.clearTimeout(toastTimer);
+      }
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [isAuthenticated, isAuthLoading, hasRole, fetchNotificationData]);
+
   const markAsRead = useCallback(async (id: string) => {
     // Optimistic update
     setNotifications((prev) =>
@@ -180,6 +249,40 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   return (
     <NotificationContext.Provider value={value}>
       {children}
+      {foregroundToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const dest = foregroundToast.destination;
+                setForegroundToast(null);
+                if (dest) {
+                  router.push(dest);
+                }
+              }}
+              className="text-left"
+            >
+              <p className="text-sm font-semibold text-foreground">{foregroundToast.title}</p>
+              {foregroundToast.body && (
+                <p className="mt-1 text-xs text-muted-foreground">{foregroundToast.body}</p>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => setForegroundToast(null)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </NotificationContext.Provider>
   );
 }
