@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -12,13 +12,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  LayoutDashboard,
+  History,
+  Loader2,
   MapPin,
   MapPinned,
   Package,
   PackageCheck,
   PackagePlus,
-  RefreshCw,
+  Plus,
   Search,
   Truck,
   Warehouse,
@@ -26,6 +27,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect, type SelectOption } from "@/components/ui/select";
+import { BookDeliveryForm } from "@/components/delivery/book-delivery-form";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { ReadOnlyBadge } from "@/components/dispatch/read-only-badge";
 import { ScopeBanner } from "@/components/dispatch/scope-banner";
@@ -33,7 +36,7 @@ import { StaleParcelsCard } from "@/components/dispatch/stale-parcels-card";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { HubBoard } from "@/components/dispatch/hub-board";
 import { ParcelDialog } from "@/components/dispatch/parcel-dialog";
-import { formatApiError, type PageResponse } from "@/lib/api";
+import { api, formatApiError, type HubResponse, type PageResponse, type UserResponse } from "@/lib/api";
 import type { ParcelStatus } from "@/lib/delivery";
 import type {
   DispatchAssignment,
@@ -48,6 +51,7 @@ import {
   listAllActiveDispatchAssignments,
   listAllDispatchCouriers,
   listDispatchParcels,
+  receiveParcelAtHub,
 } from "@/lib/dispatch";
 
 const PARCEL_PAGE_SIZE = 8;
@@ -55,16 +59,22 @@ const FILTER_STATUSES: Array<ParcelStatus | "ALL"> = [
   "ALL",
   "CREATED",
   "PICKED_UP",
+  "AT_HUB",
   "IN_TRANSIT",
   "OUT_FOR_DELIVERY",
+  "DELIVERY_ATTEMPT_FAILED",
+  "RETURNING",
   "DELIVERED",
   "FAILED",
+  "CANCELLED",
 ];
 
 const SOURCE_FILTERS = ["ALL", "CUSTOMER", "MERCHANT"] as const;
 type SourceFilter = (typeof SOURCE_FILTERS)[number];
 
-type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "tracking";
+type HistoryStatusFilter = ParcelStatus | "ALL" | "COMPLETED";
+
+type DispatchMainTab = "overview" | "pickup" | "warehouse" | "delivery" | "history" | "tracking";
 
 interface DashboardMetrics {
   total: number | null;
@@ -82,9 +92,34 @@ const EMPTY_METRICS: DashboardMetrics = {
   delivered: null,
 };
 
+function parseDispatchTab(value: string | null): DispatchMainTab {
+  if (
+    value === "overview" ||
+    value === "pickup" ||
+    value === "warehouse" ||
+    value === "delivery" ||
+    value === "history" ||
+    value === "tracking"
+  ) {
+    return value;
+  }
+  return "overview";
+}
+
 export default function DispatchPage() {
+  return (
+    <Suspense fallback={<div className="py-12 text-center text-sm text-muted-foreground">Loading dispatch workspace...</div>}>
+      <DispatchPageContent />
+    </Suspense>
+  );
+}
+
+function DispatchPageContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<DispatchMainTab>("overview");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<DispatchMainTab>(() =>
+    parseDispatchTab(searchParams.get("tab")),
+  );
   const [refreshKey, setRefreshKey] = useState(0);
 
   const today = useMemo(
@@ -117,6 +152,25 @@ export default function DispatchPage() {
   const [warehouseLoading, setWarehouseLoading] = useState(true);
   const [warehouseError, setWarehouseError] = useState<string | null>(null);
 
+  const [incomingParcels, setIncomingParcels] = useState<DispatchParcelItem[]>([]);
+  const [incomingLoading, setIncomingLoading] = useState(true);
+  const [receivingParcelId, setReceivingParcelId] = useState<string | null>(null);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [showWalkInForm, setShowWalkInForm] = useState(false);
+
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>("ALL");
+  const [historySource, setHistorySource] = useState<SourceFilter>("ALL");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPageNumber, setHistoryPageNumber] = useState(0);
+  const [historyPage, setHistoryPage] = useState<PageResponse<DispatchParcelItem> | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyCounts, setHistoryCounts] = useState<{
+    delivered: number | null;
+    failed: number | null;
+    cancelled: number | null;
+  }>({ delivered: null, failed: null, cancelled: null });
+
   const [couriers, setCouriers] = useState<DispatchCourier[]>([]);
   const [workloads, setWorkloads] = useState<Record<string, number> | null>(null);
   const [activeAssignments, setActiveAssignments] = useState<DispatchAssignment[]>([]);
@@ -125,21 +179,73 @@ export default function DispatchPage() {
 
   const [quickTrackCode, setQuickTrackCode] = useState("");
 
+  const [currentUser, setCurrentUser] = useState<UserResponse | null>(null);
+  const [hubs, setHubs] = useState<HubResponse[]>([]);
+  const [hubContextLoaded, setHubContextLoaded] = useState(false);
+  const [adminHubFilter, setAdminHubFilter] = useState<string>("ALL");
+
   const [selectedParcel, setSelectedParcel] = useState<
     | { parcel: DispatchParcelItem; mode: "details" }
     | { parcel: DispatchParcelItem; mode: "assignment"; assignmentType: DispatchAssignmentType }
     | null
   >(null);
 
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      api.get<UserResponse>("/api/v1/users/me"),
+      api.get<HubResponse[]>("/api/v1/hubs"),
+    ])
+      .then(([meResult, hubsResult]) => {
+        if (!active) return;
+        if (meResult.status === "fulfilled") {
+          setCurrentUser(meResult.value);
+        }
+        if (hubsResult.status === "fulfilled") {
+          const sorted = [...hubsResult.value].sort((a, b) => {
+            if (a.central !== b.central) return a.central ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+          setHubs(sorted);
+        }
+      })
+      .finally(() => {
+        if (active) setHubContextLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const isAdmin = Boolean(currentUser?.roles?.includes("ADMIN"));
+  const assignedHub = useMemo(
+    () => (currentUser?.hubId ? hubs.find((h) => h.id === currentUser.hubId) ?? null : null),
+    [currentUser, hubs],
+  );
+  const effectiveHubFilter = isAdmin && adminHubFilter !== "ALL" ? adminHubFilter : undefined;
+
+  const adminHubOptions = useMemo<SelectOption[]>(() => {
+    return [
+      { value: "ALL", label: "All Hubs (Network-wide)" },
+      ...hubs.map((h) => ({
+        value: h.id,
+        label: `${h.name} (${h.code})`,
+        description: `${h.city} · ${h.central ? "Main Hub" : "Sub-hub"}`,
+        badge: !h.active ? "Inactive" : h.central ? "Main" : undefined,
+        badgeVariant: (!h.active ? "warning" : "success") as SelectOption["badgeVariant"],
+      })),
+    ];
+  }, [hubs]);
+
   // 1. Overall Metrics
   useEffect(() => {
     let active = true;
     const requests = [
-      countDispatchParcels(),
-      listDispatchParcels({ page: 0, size: 1, status: "CREATED", assigned: false }),
-      listActiveDispatchAssignments("PICKUP", 0, 1),
-      listActiveDispatchAssignments("DELIVERY", 0, 1),
-      countDispatchParcels("DELIVERED"),
+      countDispatchParcels(undefined, effectiveHubFilter),
+      listDispatchParcels({ page: 0, size: 1, status: "CREATED", assigned: false, hubId: effectiveHubFilter }),
+      listActiveDispatchAssignments("PICKUP", 0, 1, effectiveHubFilter),
+      listActiveDispatchAssignments("DELIVERY", 0, 1, effectiveHubFilter),
+      countDispatchParcels("DELIVERED", effectiveHubFilter),
     ] as const;
 
     Promise.allSettled(requests).then((results) => {
@@ -170,7 +276,38 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
+
+  // 1b. Incoming Requests Queue (Unassigned CREATED parcels)
+  useEffect(() => {
+    let active = true;
+    listDispatchParcels({
+      page: 0,
+      size: 12,
+      status: "CREATED",
+      assigned: false,
+      hubId: effectiveHubFilter,
+    })
+      .then((loaded) => {
+        if (active) {
+          setIncomingParcels(loaded.items);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setIncomingParcels([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIncomingLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshKey, effectiveHubFilter]);
 
   // 2. Pickup / Main Parcel Page
   useEffect(() => {
@@ -182,6 +319,7 @@ export default function DispatchPage() {
       source: sourceFilter === "ALL" ? undefined : sourceFilter,
       assigned: assignmentFilter === "ALL" ? undefined : assignmentFilter === "ASSIGNED",
       search,
+      hubId: effectiveHubFilter,
     })
       .then((loaded) => {
         if (active) {
@@ -203,15 +341,74 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [parcelPageNumber, parcelStatus, sourceFilter, assignmentFilter, search, refreshKey]);
+  }, [parcelPageNumber, parcelStatus, sourceFilter, assignmentFilter, search, refreshKey, effectiveHubFilter]);
+
+  // 2b. Order History Counts & Paginated List
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([
+      countDispatchParcels("DELIVERED", effectiveHubFilter),
+      countDispatchParcels("FAILED", effectiveHubFilter),
+      countDispatchParcels("CANCELLED", effectiveHubFilter),
+    ]).then(([deliveredRes, failedRes, cancelledRes]) => {
+      if (!active) {
+        return;
+      }
+      setHistoryCounts({
+        delivered: deliveredRes.status === "fulfilled" ? deliveredRes.value : null,
+        failed: failedRes.status === "fulfilled" ? failedRes.value : null,
+        cancelled: cancelledRes.status === "fulfilled" ? cancelledRes.value : null,
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshKey, effectiveHubFilter]);
+
+  useEffect(() => {
+    let active = true;
+    listDispatchParcels({
+      page: historyPageNumber,
+      size: PARCEL_PAGE_SIZE,
+      status:
+        historyStatus === "COMPLETED" || historyStatus === "ALL"
+          ? undefined
+          : historyStatus,
+      terminal: historyStatus === "COMPLETED" ? true : undefined,
+      source: historySource === "ALL" ? undefined : historySource,
+      search: historySearch,
+      hubId: effectiveHubFilter,
+    })
+      .then((loaded) => {
+        if (active) {
+          setHistoryPage(loaded);
+          setHistoryError(null);
+        }
+      })
+      .catch((failure: unknown) => {
+        if (active) {
+          setHistoryError(formatApiError(failure));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [historyPageNumber, historyStatus, historySource, historySearch, refreshKey, effectiveHubFilter]);
 
   // 3. Active Deliveries
   useEffect(() => {
     let active = true;
     Promise.all([
-      listDispatchParcels({ page: 0, size: 10, status: "PICKED_UP", assigned: true }),
-      listDispatchParcels({ page: 0, size: 10, status: "IN_TRANSIT", assigned: true }),
-      listDispatchParcels({ page: 0, size: 10, status: "OUT_FOR_DELIVERY", assigned: true }),
+      listDispatchParcels({ page: 0, size: 10, status: "PICKED_UP", assigned: true, hubId: effectiveHubFilter }),
+      listDispatchParcels({ page: 0, size: 10, status: "IN_TRANSIT", assigned: true, hubId: effectiveHubFilter }),
+      listDispatchParcels({ page: 0, size: 10, status: "OUT_FOR_DELIVERY", assigned: true, hubId: effectiveHubFilter }),
     ])
       .then((pages) => {
         if (active) {
@@ -238,14 +435,14 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   // 4. Warehouse & Hub Parcels (Items collected & being sorted / transferred)
   useEffect(() => {
     let active = true;
     Promise.all([
       ...(["PICKED_UP", "AT_HUB", "IN_TRANSIT", "DELIVERY_ATTEMPT_FAILED", "RETURNING"] as const).map((status) =>
-        listDispatchParcels({ page: 0, size: 25, status })),
+        listDispatchParcels({ page: 0, size: 25, status, hubId: effectiveHubFilter })),
     ])
       .then((pages) => {
         if (active) {
@@ -271,16 +468,16 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   // 5. Couriers, Workloads, Active Assignments
   useEffect(() => {
     let active = true;
     Promise.allSettled([
-      listAllDispatchCouriers(),
-      getCourierWorkloads(),
-      listAllActiveDispatchAssignments("PICKUP"),
-      listAllActiveDispatchAssignments("DELIVERY"),
+      listAllDispatchCouriers(effectiveHubFilter),
+      getCourierWorkloads(effectiveHubFilter),
+      listAllActiveDispatchAssignments("PICKUP", effectiveHubFilter),
+      listAllActiveDispatchAssignments("DELIVERY", effectiveHubFilter),
     ])
       .then(([couriersResult, workloadsResult, pickupsResult, deliveriesResult]) => {
         if (!active) {
@@ -312,7 +509,7 @@ export default function DispatchPage() {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, effectiveHubFilter]);
 
   const visibleParcels = useMemo(() => parcelPage?.items ?? [], [parcelPage]);
   const courierById = useMemo(
@@ -353,12 +550,38 @@ export default function DispatchPage() {
 
   function refreshDashboard() {
     setMetricsLoading(true);
+    setIncomingLoading(true);
     setParcelPageLoading(true);
+    setHistoryLoading(true);
     setActiveLoading(true);
     setWarehouseLoading(true);
     setCouriersLoading(true);
     setAssignmentFeedback(null);
+    setIntakeError(null);
     setRefreshKey((current) => current + 1);
+  }
+
+  function resolveIntakeHubId(parcel: DispatchParcelItem): string | null {
+    return parcel.expectedHubId ?? currentUser?.hubId ?? effectiveHubFilter ?? null;
+  }
+
+  async function handleReceiveAtHub(parcel: DispatchParcelItem) {
+    const targetHubId = resolveIntakeHubId(parcel);
+    if (!targetHubId) {
+      setIntakeError("Select or assign a hub before receiving a walk-in parcel at the hub.");
+      return;
+    }
+    setReceivingParcelId(parcel.id);
+    setIntakeError(null);
+    try {
+      await receiveParcelAtHub(parcel.id, targetHubId);
+      setAssignmentFeedback(`${parcel.trackingNumber} received at hub (At Hub).`);
+      setRefreshKey((current) => current + 1);
+    } catch (failure: unknown) {
+      setIntakeError(formatApiError(failure));
+    } finally {
+      setReceivingParcelId(null);
+    }
   }
 
   function changeParcelStatus(value: string) {
@@ -379,6 +602,55 @@ export default function DispatchPage() {
 
   return (
     <div className="space-y-6">
+      {/* Main Operational Tabs Bar */}
+      <nav
+        aria-label="Dispatch navigation tabs"
+        className="flex items-center gap-0.5 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <TabButton
+          active={activeTab === "overview"}
+          onClick={() => setActiveTab("overview")}
+          label="Overview"
+        />
+        <TabButton
+          active={activeTab === "pickup"}
+          onClick={() => setActiveTab("pickup")}
+          label="Pickup Operations"
+          badge={metrics.pendingPickup ?? 0}
+        />
+        <TabButton
+          active={activeTab === "warehouse"}
+          onClick={() => setActiveTab("warehouse")}
+          label="Hub Sorting"
+          badge={warehouseCount}
+        />
+        <TabButton
+          active={activeTab === "delivery"}
+          onClick={() => setActiveTab("delivery")}
+          label="Delivery Operations"
+          badge={metrics.activeDeliveries ?? 0}
+        />
+        <TabButton
+          active={activeTab === "history"}
+          onClick={() => setActiveTab("history")}
+          label="Order History"
+          badge={metrics.total ?? 0}
+        />
+        <TabButton
+          active={activeTab === "tracking"}
+          onClick={() => setActiveTab("tracking")}
+          label="Live Tracking"
+        />
+        {!isAdmin && (
+          <Link
+            href="/profile"
+            className="inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-border transition-colors whitespace-nowrap -mb-px"
+          >
+            My Profile
+          </Link>
+        )}
+      </nav>
+
       <ScopeBanner />
 
       {/* Top Operations Header & Quick Status */}
@@ -395,75 +667,81 @@ export default function DispatchPage() {
               <time suppressHydrationWarning>{today}</time>
             </span>
             <span aria-hidden="true">·</span>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              Island Network Active
-            </span>
+            {assignedHub ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                <Warehouse className="size-3" aria-hidden="true" />
+                {assignedHub.name} ({assignedHub.code}) · {assignedHub.central ? "Main Hub" : "Sub-hub"}
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                Island Network Active
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
-            Coordinate first-mile pickups, warehouse sorting & branch transfers, and final-mile deliveries.
+            {assignedHub
+              ? `Managing pickups, hub sorting, transfers, and deliveries for ${assignedHub.name} (${assignedHub.city}).`
+              : "Coordinate first-mile pickups, warehouse sorting & branch transfers, and final-mile deliveries."}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={refreshDashboard}
-          disabled={metricsLoading || parcelPageLoading || activeLoading || couriersLoading}
-          className="w-full shrink-0 sm:w-auto"
-        >
-          <RefreshCw
-            className={`size-3.5 mr-1.5 ${
-              metricsLoading || parcelPageLoading || activeLoading || couriersLoading
-                ? "animate-spin"
-                : ""
-            }`}
-            aria-hidden="true"
-          />
-          Refresh data
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {isAdmin && hubs.length > 0 && (
+            <div className="w-full sm:w-64">
+              <ThemedSelect
+                value={adminHubFilter}
+                onChange={(val) => {
+                  setParcelPageNumber(0);
+                  setAdminHubFilter(val);
+                }}
+                options={adminHubOptions}
+                size="sm"
+                searchable={hubs.length > 6}
+                searchPlaceholder="Filter by hub..."
+                placeholder="All Hubs (Network-wide)"
+              />
+            </div>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant={showWalkInForm ? "outline" : "default"}
+            onClick={() => setShowWalkInForm((open) => !open)}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            {showWalkInForm ? "Close Walk-in Form" : "Create Walk-in Parcel"}
+          </Button>
+        </div>
       </div>
 
-      {/* Main Operational Tabs Bar */}
-      <div className="border-b border-border">
-        <nav aria-label="Dispatch navigation tabs" className="flex gap-2 overflow-x-auto pb-px">
-          <TabButton
-            active={activeTab === "overview"}
-            onClick={() => setActiveTab("overview")}
-            icon={LayoutDashboard}
-            label="Overview"
+      {showWalkInForm && (
+        <section
+          aria-label="Create walk-in parcel"
+          className="rounded-2xl border border-primary/25 bg-card p-5 shadow-xs sm:p-6"
+        >
+          <BookDeliveryForm
+            mode="walkin"
+            hubId={currentUser?.hubId ?? effectiveHubFilter ?? null}
+            hubLabel={assignedHub ? `${assignedHub.name} (${assignedHub.code})` : undefined}
+            onWalkInCreated={(parcel) => {
+              setAssignmentFeedback(`${parcel.trackingNumber} booked & received at hub (At Hub).`);
+              setRefreshKey((current) => current + 1);
+            }}
+            onCancel={() => setShowWalkInForm(false)}
           />
-          <TabButton
-            active={activeTab === "pickup"}
-            onClick={() => setActiveTab("pickup")}
-            icon={PackagePlus}
-            label="Pickup Operations"
-            badge={metrics.pendingPickup ?? 0}
-            badgeVariant="warning"
-          />
-          <TabButton
-            active={activeTab === "warehouse"}
-            onClick={() => setActiveTab("warehouse")}
-            icon={Warehouse}
-            label="Warehouse & Sorting"
-            badge={warehouseCount}
-            badgeVariant="accent"
-          />
-          <TabButton
-            active={activeTab === "delivery"}
-            onClick={() => setActiveTab("delivery")}
-            icon={Truck}
-            label="Delivery Operations"
-            badge={metrics.activeDeliveries ?? 0}
-            badgeVariant="primary"
-          />
-          <TabButton
-            active={activeTab === "tracking"}
-            onClick={() => setActiveTab("tracking")}
-            icon={MapPin}
-            label="Live Tracking"
-          />
-        </nav>
-      </div>
+        </section>
+      )}
+
+      {hubContextLoaded && currentUser && !isAdmin && !currentUser.hubId && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300"
+        >
+          <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <p>
+            No hub is assigned to your dispatcher account yet — showing the network-wide view. Contact an administrator to assign your hub.
+          </p>
+        </div>
+      )}
 
       {assignmentFeedback && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-accent p-4 text-sm font-medium text-primary">
@@ -479,6 +757,101 @@ export default function DispatchPage() {
             Dismiss
           </button>
         </div>
+      )}
+
+      {(activeTab === "overview" || activeTab === "pickup") && (intakeError || (!incomingLoading && incomingParcels.length > 0)) && (
+        <section
+          aria-label="Incoming requests queue"
+          className="rounded-2xl border border-primary/25 bg-card p-4 shadow-xs space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <PackagePlus className="size-4 text-primary" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-foreground">
+                Incoming Requests (Customer &amp; Merchant)
+              </h2>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                {incomingParcels.length}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Accept &amp; assign a pickup courier, or receive walk-in drop-offs directly at the hub.
+            </p>
+          </div>
+
+          {intakeError && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <span>{intakeError}</span>
+              <button type="button" onClick={() => setIntakeError(null)} className="font-semibold hover:underline">
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {incomingParcels.length > 0 && (
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {incomingParcels.slice(0, 6).map((parcel) => {
+                const canReceiveAtHub =
+                  parcel.actions.includes("RECEIVE_AT_HUB") && Boolean(resolveIntakeHubId(parcel));
+                const isReceiving = receivingParcelId === parcel.id;
+                return (
+                  <article
+                    key={parcel.id}
+                    className="flex flex-col justify-between gap-2.5 rounded-xl border border-border bg-background p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs font-semibold text-primary">
+                          {parcel.trackingNumber}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {parcelLocation(parcel)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                        {parcel.source}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 flex-1 text-xs"
+                        disabled={isReceiving}
+                        onClick={() =>
+                          setSelectedParcel({
+                            parcel,
+                            mode: "assignment",
+                            assignmentType: "PICKUP",
+                          })
+                        }
+                      >
+                        Accept &amp; Assign
+                      </Button>
+                      {canReceiveAtHub && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 flex-1 text-xs"
+                          disabled={isReceiving}
+                          onClick={() => handleReceiveAtHub(parcel)}
+                        >
+                          {isReceiving ? (
+                            <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <PackageCheck className="mr-1 size-3" aria-hidden="true" />
+                          )}
+                          Receive at Hub
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {/* ======================================================== */}
@@ -531,34 +904,6 @@ export default function DispatchPage() {
               <p className="text-sm opacity-90 sm:text-base leading-relaxed">
                 Connect customer bookings to couriers, intake and sort parcels at regional warehouse hubs, and assign transfer routes to destination branches for final delivery.
               </p>
-              <div className="flex flex-wrap gap-2.5 pt-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setActiveTab("pickup")}
-                  className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 font-semibold"
-                >
-                  <PackagePlus className="size-4 mr-1.5" /> First-Mile Pickups ({metrics.pendingPickup ?? 0})
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveTab("warehouse")}
-                  className="border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 font-semibold"
-                >
-                  <Warehouse className="size-4 mr-1.5" /> Warehouse & Sorting ({warehouseCount})
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveTab("delivery")}
-                  className="border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 font-semibold"
-                >
-                  <Truck className="size-4 mr-1.5" /> Final Deliveries ({metrics.activeDeliveries ?? 0})
-                </Button>
-              </div>
             </div>
           </section>
 
@@ -585,7 +930,7 @@ export default function DispatchPage() {
               loading={metricsLoading}
             />
             <MetricCard
-              label="Warehouse & sorting"
+              label="Hub sorting"
               value={warehouseCount}
               description="Inbound intake & transfers"
               icon={Warehouse}
@@ -613,36 +958,23 @@ export default function DispatchPage() {
             onDetails={(parcel) => setSelectedParcel({ parcel, mode: "details" })}
           />
 
-          {/* 3-Stage Interactive Lifecycle Cards */}
-          <section className="space-y-4">
+          <section aria-labelledby="lifecycle-overview" className="space-y-3">
             <SectionHeading
               id="lifecycle-overview"
-              eyebrow="Workflow pipeline"
-              title="Parcel Delivery Lifecycle"
-              description="Track parcels through the three mandatory operational phases from pickup to final recipient."
+              eyebrow="Workflow"
+              title="Dispatch Stages"
+              description="Quick access to each stage of your hub's parcel flow."
             />
             <div className="grid gap-4 md:grid-cols-3">
-              {/* Stage 1 */}
-              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition-shadow hover:shadow-sm">
-                <div className="space-y-3">
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                      1
-                    </span>
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                      First-Mile
-                    </span>
+                    <h3 className="text-sm font-bold text-foreground">1. Pickup Operations</h3>
+                    <span className="text-xs font-semibold text-primary">{metrics.pendingPickup ?? 0} pending</span>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">Pickup Operations</h3>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Customer bookings and merchant parcel orders waiting for courier pickup assignment. Couriers collect items from senders.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
-                    <span className="text-muted-foreground">Active queue: </span>
-                    <strong className="text-foreground">{metrics.pendingPickup ?? 0} pending pickups</strong>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Assign pickup couriers or receive walk-in drop-offs at the hub.
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -656,27 +988,15 @@ export default function DispatchPage() {
                 </Button>
               </div>
 
-              {/* Stage 2 */}
-              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition-shadow hover:shadow-sm">
-                <div className="space-y-3">
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                      2
-                    </span>
-                    <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-primary">
-                      Warehouse Hub
-                    </span>
+                    <h3 className="text-sm font-bold text-foreground">2. Hub Sorting</h3>
+                    <span className="text-xs font-semibold text-primary">{warehouseCount} in hub</span>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">Warehouse & Hub Sorting</h3>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Picked-up items arrive at origin sorting hub. Dispatchers sort items by destination province and assign inter-hub transfer routes to nearest branches.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
-                    <span className="text-muted-foreground">In hub & transit: </span>
-                    <strong className="text-foreground">{warehouseCount} items in sorting</strong>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Scan parcels into the hub, send onwards, or assign delivery couriers.
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -685,32 +1005,20 @@ export default function DispatchPage() {
                   onClick={() => setActiveTab("warehouse")}
                   className="mt-4 w-full justify-between"
                 >
-                  <span>Manage Warehouse Hub</span>
+                  <span>Open Hub Sorting</span>
                   <ArrowRight className="size-4" />
                 </Button>
               </div>
 
-              {/* Stage 3 */}
-              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition-shadow hover:shadow-sm">
-                <div className="space-y-3">
+              <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-xs">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                      3
-                    </span>
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
-                      Final-Mile
-                    </span>
+                    <h3 className="text-sm font-bold text-foreground">3. Delivery Operations</h3>
+                    <span className="text-xs font-semibold text-primary">{metrics.activeDeliveries ?? 0} active</span>
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">Delivery Operations</h3>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Parcels arriving at destination branches are assigned to delivery couriers for final handover, live GPS tracking, and delivery proof capture.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
-                    <span className="text-muted-foreground">In delivery: </span>
-                    <strong className="text-foreground">{metrics.activeDeliveries ?? 0} active runs</strong>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Monitor active delivery runs and handover completion.
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -725,45 +1033,6 @@ export default function DispatchPage() {
               </div>
             </div>
           </section>
-
-          {/* Quick Tracking Search Box */}
-          <Card className="rounded-xl border-border bg-card shadow-xs">
-            <CardContent className="p-5">
-              <form
-                className="flex flex-col gap-3 sm:flex-row sm:items-center"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (quickTrackCode.trim()) {
-                    router.push(`/track?code=${encodeURIComponent(quickTrackCode.trim())}`);
-                  }
-                }}
-              >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-accent text-primary">
-                  <Search className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <label htmlFor="quick-track-input" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Quick Island Tracking Lookup
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Enter any tracking number to inspect real-time events, coordinates, and journey history.
-                  </p>
-                </div>
-                <div className="flex w-full gap-2 sm:w-auto">
-                  <Input
-                    id="quick-track-input"
-                    value={quickTrackCode}
-                    onChange={(e) => setQuickTrackCode(e.target.value)}
-                    placeholder="e.g. SDNTQ67FQDFA"
-                    className="h-10 min-w-56"
-                  />
-                  <Button type="submit" size="default">
-                    Track
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
         </div>
       )}
 
@@ -796,54 +1065,54 @@ export default function DispatchPage() {
                     className="h-10 bg-background pl-9"
                   />
                 </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Status</span>
-                  <select
-                    value={parcelStatus}
-                    onChange={(event) => changeParcelStatus(event.target.value)}
-                    className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    {FILTER_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {status === "ALL" ? "All statuses" : STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <div className="w-full min-w-40 sm:w-44">
+                    <ThemedSelect
+                      value={parcelStatus}
+                      onChange={(val) => changeParcelStatus(val)}
+                      options={FILTER_STATUSES.map((status) => ({
+                        value: status,
+                        label: status === "ALL" ? "All statuses" : STATUS_LABELS[status],
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
                   <span className="shrink-0">Source</span>
-                  <select
-                    value={sourceFilter}
-                    onChange={(event) => {
-                      setSourceFilter(event.target.value as SourceFilter);
-                      setParcelPageNumber(0);
-                      setParcelPageLoading(true);
-                    }}
-                    className="h-10 w-full min-w-32 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    {SOURCE_FILTERS.map((source) => (
-                      <option key={source} value={source}>
-                        {source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:col-span-2 sm:justify-start lg:col-span-1">
+                  <div className="w-full min-w-36 sm:w-36">
+                    <ThemedSelect
+                      value={sourceFilter}
+                      onChange={(val) => {
+                        setSourceFilter(val as SourceFilter);
+                        setParcelPageNumber(0);
+                        setParcelPageLoading(true);
+                      }}
+                      options={SOURCE_FILTERS.map((source) => ({
+                        value: source,
+                        label: source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant",
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:col-span-2 sm:justify-start lg:col-span-1">
                   <span className="shrink-0">Assignment</span>
-                  <select
-                    value={assignmentFilter}
-                    onChange={(event) => {
-                      setAssignmentFilter(event.target.value as typeof assignmentFilter);
-                      setParcelPageNumber(0);
-                      setParcelPageLoading(true);
-                    }}
-                    className="h-10 w-full min-w-36 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-auto"
-                  >
-                    <option value="ALL">All assignments</option>
-                    <option value="UNASSIGNED">Unassigned</option>
-                    <option value="ASSIGNED">Assigned</option>
-                  </select>
-                </label>
+                  <div className="w-full min-w-40 sm:w-44">
+                    <ThemedSelect
+                      value={assignmentFilter}
+                      onChange={(val) => {
+                        setAssignmentFilter(val as typeof assignmentFilter);
+                        setParcelPageNumber(0);
+                        setParcelPageLoading(true);
+                      }}
+                      options={[
+                        { value: "ALL", label: "All assignments" },
+                        { value: "UNASSIGNED", label: "Unassigned" },
+                        { value: "ASSIGNED", label: "Assigned" },
+                      ]}
+                    />
+                  </div>
+                </div>
               </div>
 
               {parcelPageError && <ErrorMessage message={parcelPageError} />}
@@ -881,6 +1150,12 @@ export default function DispatchPage() {
                             key={parcel.id}
                             parcel={parcel}
                             courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                            canReceiveAtHub={
+                              parcel.status === "CREATED" &&
+                              parcel.actions.includes("RECEIVE_AT_HUB") &&
+                              Boolean(resolveIntakeHubId(parcel))
+                            }
+                            receiving={receivingParcelId === parcel.id}
                             onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
                             onAssign={() =>
                               setSelectedParcel({
@@ -889,6 +1164,7 @@ export default function DispatchPage() {
                                 assignmentType: "PICKUP",
                               })
                             }
+                            onReceiveAtHub={() => handleReceiveAtHub(parcel)}
                           />
                         ))}
                       </tbody>
@@ -900,6 +1176,12 @@ export default function DispatchPage() {
                         key={parcel.id}
                         parcel={parcel}
                         courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                        canReceiveAtHub={
+                          parcel.status === "CREATED" &&
+                          parcel.actions.includes("RECEIVE_AT_HUB") &&
+                          Boolean(resolveIntakeHubId(parcel))
+                        }
+                        receiving={receivingParcelId === parcel.id}
                         onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
                         onAssign={() =>
                           setSelectedParcel({
@@ -908,6 +1190,7 @@ export default function DispatchPage() {
                             assignmentType: "PICKUP",
                           })
                         }
+                        onReceiveAtHub={() => handleReceiveAtHub(parcel)}
                       />
                     ))}
                   </div>
@@ -938,7 +1221,7 @@ export default function DispatchPage() {
           <SectionHeading
             id="heading-warehouse-ops"
             eyebrow="Hub network"
-            title="Hubs & line haul"
+            title="Hub Sorting & Transfers"
             description="Scan picked-up parcels in at their origin branch, send them along their route through the central hub, then hand them to a delivery courier at the destination branch. Failed attempts come back here for another try or the return."
           />
           <HubBoard
@@ -1035,7 +1318,172 @@ export default function DispatchPage() {
       )}
 
       {/* ======================================================== */}
-      {/* TAB 5: PARCEL TRACKING                                   */}
+      {/* TAB 5: ORDER HISTORY                                     */}
+      {/* ======================================================== */}
+      {activeTab === "history" && (
+        <section aria-labelledby="heading-order-history" className="space-y-4">
+          <SectionHeading
+            id="heading-order-history"
+            eyebrow="Hub parcel ledger"
+            title="Order History"
+            description="Review all parcels handled by your hub with their current or final status, and inspect full status and courier timelines."
+          />
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Delivered parcels</p>
+                <p className="mt-1 text-2xl font-bold text-primary">{historyCounts.delivered ?? "—"}</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Failed parcels</p>
+                <p className="mt-1 text-2xl font-bold text-foreground">{historyCounts.failed ?? "—"}</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-muted-foreground">Cancelled parcels</p>
+                <p className="mt-1 text-2xl font-bold text-foreground">{historyCounts.cancelled ?? "—"}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-xl border-border bg-card py-0 shadow-xs">
+            <CardContent className="space-y-4 p-4 sm:p-5">
+              {/* Filters */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <label className="relative block sm:col-span-2 lg:col-span-1">
+                  <span className="sr-only">Search parcel IDs or tracking numbers</span>
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={historySearch}
+                    onChange={(event) => {
+                      setHistorySearch(event.target.value);
+                      setHistoryPageNumber(0);
+                      setHistoryLoading(true);
+                    }}
+                    placeholder="Search parcel ID or tracking number"
+                    className="h-10 bg-background pl-9"
+                  />
+                </label>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <span className="shrink-0">Status</span>
+                  <div className="w-full min-w-44 sm:w-48">
+                    <ThemedSelect
+                      value={historyStatus}
+                      onChange={(val) => {
+                        setHistoryStatus(val as HistoryStatusFilter);
+                        setHistoryPageNumber(0);
+                        setHistoryLoading(true);
+                      }}
+                      options={[
+                        { value: "ALL", label: "All statuses" },
+                        { value: "COMPLETED", label: "All completed" },
+                        ...FILTER_STATUSES.filter((status) => status !== "ALL").map((status) => ({
+                          value: status,
+                          label: STATUS_LABELS[status],
+                        })),
+                      ]}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground sm:justify-start">
+                  <span className="shrink-0">Source</span>
+                  <div className="w-full min-w-36 sm:w-36">
+                    <ThemedSelect
+                      value={historySource}
+                      onChange={(val) => {
+                        setHistorySource(val as SourceFilter);
+                        setHistoryPageNumber(0);
+                        setHistoryLoading(true);
+                      }}
+                      options={SOURCE_FILTERS.map((source) => ({
+                        value: source,
+                        label: source === "ALL" ? "All sources" : source === "CUSTOMER" ? "Customer" : "Merchant",
+                      }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {historyError && <ErrorMessage message={historyError} />}
+              {historyLoading && <LoadingRows label="Loading order history" />}
+              {!historyLoading && !historyError && (historyPage?.items.length ?? 0) === 0 && (
+                <EmptyState
+                  icon={History}
+                  title="No order history found"
+                  description={
+                    historySearch.trim() || historyStatus !== "ALL" || historySource !== "ALL"
+                      ? "Try another search, status, or source filter."
+                      : "All parcels handled by your hub will appear here."
+                  }
+                />
+              )}
+
+              {!historyLoading && !historyError && (historyPage?.items.length ?? 0) > 0 && historyPage && (
+                <>
+                  <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+                    <table className="w-full min-w-[900px] text-left text-sm">
+                      <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Parcel / tracking</th>
+                          <th className="px-4 py-3 font-semibold">Source</th>
+                          <th className="px-4 py-3 font-semibold">Route</th>
+                          <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Assigned courier</th>
+                          <th className="px-4 py-3 font-semibold">Updated</th>
+                          <th className="px-4 py-3 font-semibold">History</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {historyPage.items.map((parcel) => (
+                          <HistoryTableRow
+                            key={parcel.id}
+                            parcel={parcel}
+                            courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                            onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="space-y-3 md:hidden">
+                    {historyPage.items.map((parcel) => (
+                      <HistoryMobileCard
+                        key={parcel.id}
+                        parcel={parcel}
+                        courierName={parcel.assignedCourierId ? courierById.get(parcel.assignedCourierId) : undefined}
+                        onDetails={() => setSelectedParcel({ parcel, mode: "details" })}
+                      />
+                    ))}
+                  </div>
+
+                  <Pagination
+                    page={historyPage.page}
+                    totalPages={historyPage.totalPages}
+                    totalItems={historyPage.totalItems}
+                    pageSize={PARCEL_PAGE_SIZE}
+                    loading={historyLoading}
+                    onPrevious={() => {
+                      setHistoryPageNumber((current) => Math.max(0, current - 1));
+                      setHistoryLoading(true);
+                    }}
+                    onNext={() => {
+                      setHistoryPageNumber((current) => current + 1);
+                      setHistoryLoading(true);
+                    }}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB 6: PARCEL TRACKING                                   */}
       {/* ======================================================== */}
       {activeTab === "tracking" && (
         <section aria-labelledby="heading-tracking" className="space-y-4">
@@ -1111,43 +1559,27 @@ export default function DispatchPage() {
 function TabButton({
   active,
   onClick,
-  icon: Icon,
   label,
   badge,
-  badgeVariant = "default",
 }: {
   active: boolean;
   onClick: () => void;
-  icon: typeof LayoutDashboard;
   label: string;
   badge?: number;
-  badgeVariant?: "default" | "primary" | "warning" | "accent";
 }) {
-  const badgeClasses = {
-    default: "bg-muted text-muted-foreground",
-    primary: "bg-primary text-primary-foreground",
-    warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold",
-    accent: "bg-accent text-primary font-bold",
-  }[badgeVariant];
-
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap transition-all rounded-lg border ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
         active
-          ? "border-primary/20 bg-primary text-primary-foreground shadow-xs"
-          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "border-primary text-foreground font-semibold"
+          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
       }`}
     >
-      <Icon className={`size-4 shrink-0 ${active ? "text-primary-foreground" : "text-primary"}`} aria-hidden="true" />
       <span>{label}</span>
       {typeof badge === "number" && (
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-mono transition-colors ${
-            active ? "bg-primary-foreground/20 text-primary-foreground" : badgeClasses
-          }`}
-        >
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent text-primary">
           {badge}
         </span>
       )}
@@ -1249,13 +1681,19 @@ function EmptyState({
 function ParcelTableRow({
   parcel,
   courierName,
+  canReceiveAtHub,
+  receiving,
   onDetails,
   onAssign,
+  onReceiveAtHub,
 }: {
   parcel: DispatchParcelItem;
   courierName?: string;
+  canReceiveAtHub: boolean;
+  receiving: boolean;
   onDetails: () => void;
   onAssign: () => void;
+  onReceiveAtHub: () => void;
 }) {
   return (
     <tr className="hover:bg-muted/40">
@@ -1267,19 +1705,30 @@ function ParcelTableRow({
       </td>
       <td className="px-4 py-3 text-foreground">{parcelSourceLabel(parcel.source)}</td>
       <td className="px-4 py-3 text-muted-foreground">{parcelLocation(parcel)}</td>
-      <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><StatusBadge status={parcel.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span></td>
+      <td className="px-4 py-3">
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
+      </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(parcel.createdAt)}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button type="button" variant="ghost" size="sm" onClick={onDetails} aria-label={`View ${parcel.trackingNumber} details`}>
             View
           </Button>
           {parcel.status === "CREATED" && (
-            <Button type="button" variant="outline" size="sm" onClick={onAssign}>
-              {parcel.assignedCourierId ? "Reassign pickup" : "Assign pickup"}
+            <Button type="button" variant="outline" size="sm" onClick={onAssign} disabled={receiving}>
+              {parcel.assignedCourierId ? "Reassign pickup" : "Accept & Assign"}
+            </Button>
+          )}
+          {canReceiveAtHub && (
+            <Button type="button" variant="outline" size="sm" onClick={onReceiveAtHub} disabled={receiving}>
+              {receiving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null}
+              Receive at Hub
             </Button>
           )}
         </div>
@@ -1291,13 +1740,19 @@ function ParcelTableRow({
 function ParcelMobileCard({
   parcel,
   courierName,
+  canReceiveAtHub,
+  receiving,
   onDetails,
   onAssign,
+  onReceiveAtHub,
 }: {
   parcel: DispatchParcelItem;
   courierName?: string;
+  canReceiveAtHub: boolean;
+  receiving: boolean;
   onDetails: () => void;
   onAssign: () => void;
+  onReceiveAtHub: () => void;
 }) {
   return (
     <article className="space-y-3 rounded-lg border border-border bg-background p-3">
@@ -1306,7 +1761,10 @@ function ParcelMobileCard({
           <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">ID {parcel.id.slice(0, 8)}… · {parcelSourceLabel(parcel.source)}</p>
         </div>
-        <span className="flex flex-col items-end gap-1"><StatusBadge status={parcel.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span>
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -1318,13 +1776,19 @@ function ParcelMobileCard({
           Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
         </span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onDetails} className="flex-1">
           View details
         </Button>
         {parcel.status === "CREATED" && (
-          <Button type="button" size="sm" onClick={onAssign} className="flex-1">
-            {parcel.assignedCourierId ? "Reassign pickup" : "Assign pickup"}
+          <Button type="button" size="sm" onClick={onAssign} disabled={receiving} className="flex-1">
+            {parcel.assignedCourierId ? "Reassign pickup" : "Accept & Assign"}
+          </Button>
+        )}
+        {canReceiveAtHub && (
+          <Button type="button" variant="outline" size="sm" onClick={onReceiveAtHub} disabled={receiving} className="w-full">
+            {receiving ? <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" /> : null}
+            Receive at Hub (Walk-in)
           </Button>
         )}
       </div>
@@ -1357,7 +1821,12 @@ function ActiveDeliveryRow({
       <td className="px-4 py-3 text-xs text-muted-foreground">
         {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Not assigned"}
       </td>
-      <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><StatusBadge status={parcel.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span></td>
+      <td className="px-4 py-3">
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
+      </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
       <td className="px-4 py-3">
         <Button type="button" variant="ghost" size="sm" onClick={onDetails}>View details</Button>
@@ -1388,7 +1857,10 @@ function ActiveDeliveryCard({
           </Link>
           <span className="mt-1 block text-xs text-muted-foreground">Destination: {parcel.dropoffCity}</span>
         </span>
-        <span className="flex flex-col items-end gap-1"><StatusBadge status={parcel.status} /><ReadOnlyBadge readOnly={parcel.readOnly} /></span>
+        <span className="flex flex-col items-end gap-1">
+          <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+          <ReadOnlyBadge readOnly={parcel.readOnly} />
+        </span>
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
@@ -1397,6 +1869,76 @@ function ActiveDeliveryCard({
         <span>{formatDateTime(parcel.updatedAt)}</span>
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onDetails}>View details</Button>
+    </article>
+  );
+}
+
+function HistoryTableRow({
+  parcel,
+  courierName,
+  onDetails,
+}: {
+  parcel: DispatchParcelItem;
+  courierName?: string;
+  onDetails: () => void;
+}) {
+  return (
+    <tr className="hover:bg-muted/40">
+      <td className="px-4 py-3">
+        <span className="block font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</span>
+        <span className="mt-0.5 block text-[10px] text-muted-foreground">
+          {parcel.merchantOrderReference ? `Ref: ${parcel.merchantOrderReference}` : `ID ${parcel.id.slice(0, 8)}…`}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-foreground">{parcelSourceLabel(parcel.source)}</td>
+      <td className="px-4 py-3 text-muted-foreground">{parcelLocation(parcel)}</td>
+      <td className="px-4 py-3"><StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} /></td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{formatDateTime(parcel.updatedAt)}</td>
+      <td className="px-4 py-3">
+        <Button type="button" variant="ghost" size="sm" onClick={onDetails} aria-label={`View ${parcel.trackingNumber} history`}>
+          View history
+        </Button>
+      </td>
+    </tr>
+  );
+}
+
+function HistoryMobileCard({
+  parcel,
+  courierName,
+  onDetails,
+}: {
+  parcel: DispatchParcelItem;
+  courierName?: string;
+  onDetails: () => void;
+}) {
+  return (
+    <article className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-xs font-semibold text-primary">{parcel.trackingNumber}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {parcel.merchantOrderReference ? `Ref: ${parcel.merchantOrderReference}` : `ID ${parcel.id.slice(0, 8)}…`} · {parcelSourceLabel(parcel.source)}
+          </p>
+        </div>
+        <StatusBadge status={parcel.status} label={dispatchWorkflowLabel(parcel)} />
+      </div>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span className="truncate">{parcelLocation(parcel)}</span>
+      </p>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="truncate">
+          Courier: {parcel.assignedCourierId ? courierName ?? `Courier ${parcel.assignedCourierId.slice(0, 8)}…` : "Unassigned"}
+        </span>
+        <span>{formatDateTime(parcel.updatedAt)}</span>
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={onDetails} className="w-full">
+        View history
+      </Button>
     </article>
   );
 }
@@ -1463,6 +2005,19 @@ interface MetricCardProps {
   description: string;
   icon: typeof Package;
   unavailable?: boolean;
+}
+
+function dispatchWorkflowLabel(parcel: DispatchParcelItem): string {
+  if (parcel.status === "CREATED") {
+    return parcel.assignedCourierId ? "Pickup Pending" : "Pickup Requested";
+  }
+  if (parcel.status === "AT_HUB") {
+    if (parcel.actions.includes("ASSIGN_DELIVERY") && parcel.assignedCourierId) {
+      return "Delivery Pending";
+    }
+    return "Pickup Done (At Hub)";
+  }
+  return STATUS_LABELS[parcel.status];
 }
 
 function parcelLocation(parcel: DispatchParcelItem): string {

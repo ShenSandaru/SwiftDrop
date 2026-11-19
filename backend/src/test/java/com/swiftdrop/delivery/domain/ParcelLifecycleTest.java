@@ -31,6 +31,7 @@ class ParcelLifecycleTest {
 
     private static final Set<String> HUB = Set.of(
             "CREATED->PICKED_UP",
+            "CREATED->AT_HUB",
             "CREATED->CANCELLED",
             "PICKED_UP->AT_HUB",
             "PICKED_UP->FAILED",
@@ -81,7 +82,8 @@ class ParcelLifecycleTest {
 
     @Test
     void nextStatusesMatchTheHubTable() {
-        assertThat(ParcelLifecycle.nextStatuses(CREATED, false)).containsExactlyInAnyOrder(PICKED_UP, CANCELLED);
+        assertThat(ParcelLifecycle.nextStatuses(CREATED, false))
+                .containsExactlyInAnyOrder(PICKED_UP, AT_HUB, CANCELLED);
         assertThat(ParcelLifecycle.nextStatuses(AT_HUB, false))
                 .containsExactlyInAnyOrder(IN_TRANSIT, OUT_FOR_DELIVERY, RETURNING, FAILED);
         assertThat(ParcelLifecycle.nextStatuses(OUT_FOR_DELIVERY, false))

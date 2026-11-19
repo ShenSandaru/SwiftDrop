@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.NewMerchantParcel;
+import com.swiftdrop.delivery.api.Staff;
 import com.swiftdrop.delivery.domain.Parcel;
 import com.swiftdrop.delivery.domain.ParcelAddress;
 import com.swiftdrop.delivery.domain.ParcelRepository;
@@ -87,6 +88,23 @@ public class ParcelBookingService {
                 checked.pickup(), checked.dropoff(), booking.size(), booking.weightGrams(), booking.description(),
                 fee(checked, booking), now);
         return saveAndRecord(parcel, Actor.merchantApi(), now);
+    }
+
+    /**
+     * Books a walk-in customer parcel created at a hub counter by staff.
+     *
+     * @throws IllegalArgumentException if the booking is invalid
+     * @throws com.swiftdrop.delivery.api.ParcelConflictException if a zone is not served by a hub
+     */
+    @Transactional
+    public Parcel bookWalkIn(Booking booking, Staff staff) {
+        Objects.requireNonNull(staff, "staff");
+        Checked checked = check(booking);
+        Instant now = clock.instant();
+        Parcel parcel = Parcel.forWalkInCustomer(nextTrackingNumber(), staff.userId(), checked.pickup(),
+                checked.dropoff(), booking.size(), booking.weightGrams(), booking.description(),
+                fee(checked, booking), now);
+        return saveAndRecord(parcel, Actor.staff(staff), now);
     }
 
     /** Builds the addresses first, so invalid input never reaches pricing. */

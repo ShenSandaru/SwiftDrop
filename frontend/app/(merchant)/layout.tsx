@@ -9,6 +9,8 @@ const MERCHANT_NAV: PortalNavItem[] = [
   { href: "/merchant/orders", label: "Orders", exact: true },
   { href: "/merchant/api-keys", label: "API Keys", exact: true },
   { href: "/merchant/webhooks", label: "Webhooks", exact: true },
+  { href: "/merchant/deliveries", label: "Deliveries", exact: true },
+  { href: "/merchant/profile", label: "Business Profile", exact: true },
   { href: "/merchant/status", label: "Application Status", exact: true },
 ];
 

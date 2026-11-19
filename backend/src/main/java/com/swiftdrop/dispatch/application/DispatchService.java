@@ -14,9 +14,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.swiftdrop.delivery.api.CreatedParcel;
+import com.swiftdrop.delivery.api.DeliveryContact;
 import com.swiftdrop.delivery.api.DispatchParcelSummary;
 import com.swiftdrop.delivery.api.FailureReason;
 import com.swiftdrop.delivery.api.HubStaffDirectory;
+import com.swiftdrop.delivery.api.NewWalkInParcel;
 import com.swiftdrop.delivery.api.PageRequest;
 import com.swiftdrop.delivery.api.PageResult;
 import com.swiftdrop.delivery.api.ParcelAssignment;
@@ -24,6 +27,7 @@ import com.swiftdrop.delivery.api.ParcelAssignmentHistory;
 import com.swiftdrop.delivery.api.ParcelAssignmentSummary;
 import com.swiftdrop.delivery.api.ParcelAssignmentType;
 import com.swiftdrop.delivery.api.ParcelConflictException;
+import com.swiftdrop.delivery.api.ParcelCreation;
 import com.swiftdrop.delivery.api.ParcelHubOperations;
 import com.swiftdrop.delivery.api.ParcelNotFoundException;
 import com.swiftdrop.delivery.api.ParcelQueries;
@@ -40,6 +44,7 @@ public class DispatchService {
     private final ParcelQueries parcels;
     private final ParcelAssignment assignments;
     private final ParcelHubOperations hubOperations;
+    private final ParcelCreation parcelCreation;
     private final UserDirectory users;
     private final HubStaffDirectory hubStaff;
     private final Duration staleAfter;
@@ -47,20 +52,22 @@ public class DispatchService {
 
     @Autowired
     public DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users, HubStaffDirectory hubStaff,
+            ParcelCreation parcelCreation, UserDirectory users, HubStaffDirectory hubStaff,
             @Value("${swiftdrop.dispatch.stale-after-hours:24}") int staleAfterHours) {
-        this(parcels, assignments, hubOperations, users, hubStaff, Duration.ofHours(staleAfterHours),
+        this(parcels, assignments, hubOperations, parcelCreation, users, hubStaff, Duration.ofHours(staleAfterHours),
                 Clock.systemUTC());
     }
 
     DispatchService(ParcelQueries parcels, ParcelAssignment assignments, ParcelHubOperations hubOperations,
-            UserDirectory users, HubStaffDirectory hubStaff, Duration staleAfter, Clock clock) {
+            ParcelCreation parcelCreation, UserDirectory users, HubStaffDirectory hubStaff, Duration staleAfter,
+            Clock clock) {
         if (staleAfter.isZero() || staleAfter.isNegative()) {
             throw new IllegalStateException("swiftdrop.dispatch.stale-after-hours must be at least 1");
         }
         this.parcels = parcels;
         this.assignments = assignments;
         this.hubOperations = hubOperations;
+        this.parcelCreation = parcelCreation;
         this.users = users;
         this.hubStaff = hubStaff;
         this.staleAfter = staleAfter;
@@ -79,7 +86,14 @@ public class DispatchService {
     @Transactional(readOnly = true)
     public PageResult<DispatchParcelSummary> parcels(Staff staff,
             ParcelStatus status, ParcelSource source, Boolean assigned, String search, PageRequest page) {
-        return parcels.findDispatchParcels(staff.userId(), status, source, assigned, search, page);
+        return parcels(staff, status, source, assigned, search, null, page);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResult<DispatchParcelSummary> parcels(Staff staff,
+            ParcelStatus status, ParcelSource source, Boolean assigned, String search, Boolean terminal,
+            PageRequest page) {
+        return parcels.findDispatchParcels(staff.userId(), status, source, assigned, search, terminal, page);
     }
 
     @Transactional(readOnly = true)
@@ -143,6 +157,34 @@ public class DispatchService {
     }
 
     // Hub network steps (ADR 0009 §3, §6); delivery enforces the rules and records the history
+
+    public CreatedParcel createWalkInParcel(UUID hubId, DeliveryContact pickup, DeliveryContact dropoff,
+            String sizeName, int weightGrams, String description, Staff staff) {
+        UUID targetHubId = hubId;
+        if (targetHubId == null && !staff.admin()) {
+            StaffScopeView view = hubStaff.scopeOf(staff.userId());
+            if (view.hubs().size() == 1) {
+                targetHubId = view.hubs().getFirst().id();
+            }
+        }
+        if (targetHubId == null) {
+            throw new IllegalArgumentException("hubId is required");
+        }
+        if (!staff.admin() && !hubStaff.worksEverywhere(staff.userId())) {
+            UUID finalHubId = targetHubId;
+            boolean assignedToHub = hubStaff.scopeOf(staff.userId()).hubs().stream()
+                    .anyMatch(hub -> hub.id().equals(finalHubId));
+            if (!assignedToHub) {
+                throw new ParcelConflictException("Dispatchers can only receive parcels at their assigned hub");
+            }
+        }
+        return parcelCreation.createWalkInParcel(NewWalkInParcel.withSizeName(
+                targetHubId, pickup, dropoff, sizeName, weightGrams, description, staff));
+    }
+
+    public void receiveAtHub(UUID parcelId, UUID hubId, Staff staff) {
+        hubOperations.receiveAtHub(parcelId, Objects.requireNonNull(hubId, "hubId"), staff);
+    }
 
     public void scanAtHub(UUID parcelId, UUID hubId, Staff staff) {
         hubOperations.scanAtHub(parcelId, Objects.requireNonNull(hubId, "hubId"), staff);

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.swiftdrop.merchant.application.DuplicateRegistrationException;
+import com.swiftdrop.merchant.application.PortalOrderNotFoundException;
 import com.swiftdrop.merchant.domain.IllegalStateTransitionException;
 import com.swiftdrop.merchant.domain.WebhookEndpointLimitExceededException;
 import com.swiftdrop.merchant.domain.WebhookEndpointNotFoundException;
@@ -98,6 +99,14 @@ public class MerchantExceptionHandler {
         problem.setTitle("Not Found");
         problem.setType(URI.create("https://swiftdrop.com/problems/webhook-endpoint-not-found"));
         problem.setProperty("endpointId", e.getEndpointId());
+        return problem;
+    }
+
+    @ExceptionHandler(PortalOrderNotFoundException.class)
+    ProblemDetail handlePortalOrderNotFound(PortalOrderNotFoundException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problem.setTitle("Not Found");
+        problem.setType(URI.create("https://swiftdrop.com/problems/order-not-found"));
         return problem;
     }
 
