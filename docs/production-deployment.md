@@ -209,3 +209,104 @@ Watch for:
 * **Disk growth** from `BYTEA` proof photos and Docker images (`df -h` and `docker system df`).
 
 If you observe frequent OOM kills or slow login/API responses under demo load, upgrade the VM temporarily to a 4 GB RAM machine (e.g., `e2-medium`) and switch `.env.prod` to the 4 GB profile.
+
+---
+
+## 8. Automatic Production Deployment via GitHub Actions (GCP VM)
+
+Pushing to `main` triggers [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml), which builds and publishes both images to GHCR and then runs the `deploy-production` job over SSH on the GCP VM (`/opt/swiftdrop`).
+
+### Branch & Trigger Behavior
+
+| Event | Behavior |
+|---|---|
+| Pull request (`main`, `dev`) | Validates Docker builds only (`push: false`); **never deploys** |
+| Push to `dev` | Builds and publishes `dev` + `sha-<commit>` images; **never deploys production** |
+| Push to `main` | Builds and publishes `main`, `latest`, + `sha-<commit>` images, then **automatically deploys `sha-<commit>`** to the GCP VM |
+| Version tag (`v*.*.*`) | Publishes versioned images (`X.Y.Z`, `X.Y`, `sha-<commit>`); does **not** auto-deploy |
+| Manual `workflow_dispatch` on `main` | Deploys only if `deploy_production` input is explicitly checked (`true`) |
+
+### GitHub Actions Secrets vs VM `.env.prod`
+
+Keep deployment credentials strictly separated from runtime application secrets:
+
+* **Stored ONLY in GitHub Actions Secrets** (Settings → Secrets and variables → Actions, or `production` Environment secrets):
+  * `GCP_VM_HOST` — Public IP or DNS name of the GCP VM (e.g., `34.60.94.116`)
+  * `GCP_VM_USER` — Dedicated Linux deployment user on the VM (e.g., `swiftdrop-deploy`)
+  * `GCP_VM_SSH_PRIVATE_KEY` — Private key of the dedicated Ed25519 deployment SSH key
+  * `GCP_VM_SSH_KNOWN_HOSTS` — Verified SSH host key line(s) for strict host-key verification
+  * `GHCR_USERNAME` *(optional)* — GitHub username, only if GHCR packages are Private
+  * `GHCR_TOKEN` *(optional)* — PAT with `read:packages` scope, only if GHCR packages are Private
+* **Stored ONLY on the GCP VM in `/opt/swiftdrop/.env.prod`** (`chmod 600`, git-ignored):
+  * PostgreSQL/RabbitMQ passwords, `SWIFTDROP_JWT_SECRET`, `SWIFTDROP_WEBHOOK_SECRET_KEY`, bootstrap admin password, OAuth2/Gemini/Resend/FCM credentials.
+
+### One-Time SSH & VM Setup
+
+1. **Generate a dedicated deployment SSH key pair** (on your local workstation, not a personal key):
+
+   ```bash
+   ssh-keygen -t ed25519 -C "swiftdrop-github-actions-deploy" -f ~/.ssh/swiftdrop_deploy_ed25519 -N ""
+   ```
+
+2. **Install the public key on the GCP VM** (add `~/.ssh/swiftdrop_deploy_ed25519.pub` to `/home/<GCP_VM_USER>/.ssh/authorized_keys` with `chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys`, and ensure `<GCP_VM_USER>` is in the `docker` group and owns `/opt/swiftdrop`):
+
+   ```bash
+   sudo usermod -aG docker <GCP_VM_USER>
+   sudo chown -R <GCP_VM_USER>:<GCP_VM_USER> /opt/swiftdrop
+   ```
+
+3. **Capture the verified VM host key** (run on a trusted machine or directly from the VM's `/etc/ssh/ssh_host_ed25519_key.pub`):
+
+   ```bash
+   ssh-keyscan -t ed25519 -H <GCP_VM_HOST>
+   ```
+
+4. **Add the GitHub Secrets** in **Settings → Secrets and variables → Actions** (or under the `production` Environment):
+   * Paste the contents of `~/.ssh/swiftdrop_deploy_ed25519` into `GCP_VM_SSH_PRIVATE_KEY`.
+   * Paste the `ssh-keyscan` output into `GCP_VM_SSH_KNOWN_HOSTS`.
+   * Set `GCP_VM_HOST` and `GCP_VM_USER` (and `GHCR_USERNAME` / `GHCR_TOKEN` if packages are Private).
+   * Delete the local copy of the private key once stored if not needed locally.
+
+5. *(Only if the GitHub repository itself is Private)* **Configure a read-only GitHub Deploy Key on the VM** so `git fetch origin main` succeeds without interactive prompts or write-scoped tokens:
+
+   ```bash
+   # On the GCP VM as <GCP_VM_USER>:
+   ssh-keygen -t ed25519 -C "swiftdrop-vm-readonly-git" -f ~/.ssh/github_deploy_ed25519 -N ""
+   cat ~/.ssh/github_deploy_ed25519.pub
+   ```
+
+   * In GitHub, open **Settings → Deploy keys → Add deploy key**, paste the public key, and leave **Allow write access** **unchecked** (read-only).
+   * Configure `~/.ssh/config` on the VM for `github.com` using `~/.ssh/github_deploy_ed25519`, add GitHub's host key (`ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts`), and point the VM clone to SSH:
+
+   ```bash
+   cd /opt/swiftdrop
+   git remote set-url origin git@github.com:ShenSandaru/SwiftDrop.git
+   GIT_TERMINAL_PROMPT=0 git fetch origin main
+   ```
+
+### Checking Deployment Status, Manual Deploy & Rollback
+
+* **Check CI/CD status:** Open the **Actions → Docker Publish** tab in GitHub and inspect the `deploy-gcp-production` job logs.
+* **Inspect live VM logs:**
+  ```bash
+  cd /opt/swiftdrop
+  docker compose --env-file .env.prod -f compose.prod.yaml ps
+  docker compose --env-file .env.prod -f compose.prod.yaml logs --tail=100 backend frontend nginx
+  ```
+* **Manual deployment on the VM** (using an immutable SHA tag already published to GHCR):
+  ```bash
+  cd /opt/swiftdrop
+  git fetch origin main && git checkout --force origin/main
+  bash deploy/scripts/deploy-prod.sh sha-<7-char-commit>
+  ```
+* **Automatic & manual rollback:**
+  * Before checking out the new commit, the workflow captures `PREVIOUS_COMMIT` (`git rev-parse HEAD`), and [`deploy/scripts/deploy-prod.sh`](../deploy/scripts/deploy-prod.sh) records `PREVIOUS_TAG` from `.env.prod`. If `compose config`, image pull, `compose up`, Nginx `nginx -t` / reload, container health checks, or HTTP checks fail, the script automatically checks out `PREVIOUS_COMMIT`, restores `.env.prod`, recreates the previous containers, validates and reloads Nginx, verifies health, and exits non-zero so GitHub Actions flags the failure.
+  * To roll back manually at any time, run `git checkout --force <previous-commit>` and `bash deploy/scripts/deploy-prod.sh sha-<previous-commit>`.
+  * **Database migration caveat:** Flyway migrations are **not** automatically rolled back because schema changes may not be backward-compatible. Always take a `pg_dump` backup (Section 5) before merging destructive or irreversible migrations into `main`.
+
+### Troubleshooting Automatic Deployments
+
+* **SSH `Host key verification failed`:** Regenerate `GCP_VM_SSH_KNOWN_HOSTS` from the VM's `/etc/ssh/ssh_host_ed25519_key.pub` or `ssh-keyscan -t ed25519 -H <GCP_VM_HOST>`.
+* **SSH `Permission denied (publickey)`:** Confirm the public key is in `/home/<GCP_VM_USER>/.ssh/authorized_keys` (`chmod 600`), `GCP_VM_USER` matches the VM account, and `GCP_VM_SSH_PRIVATE_KEY` was pasted completely without extra whitespace.
+* **GHCR `unauthorized` / `denied`:** Either make `swiftdrop-frontend` and `swiftdrop-backend` packages Public in GitHub Packages, or set `GHCR_USERNAME` + `GHCR_TOKEN` (`read:packages`) in GitHub Secrets.
+* **Container health check timeout:** Check `docker compose --env-file .env.prod -f compose.prod.yaml logs --tail=100 backend` and `free -h` on the VM; heavy swap pressure on `e2-micro` can slow JVM startup beyond 180 s (override `HEALTH_TIMEOUT_SECONDS` if needed, or temporarily scale the VM).

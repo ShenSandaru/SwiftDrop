@@ -4,6 +4,8 @@
 !.env.example
 !.env.prod.example
 deploy/nginx/https.conf
+swiftdrop-k8s/secrets/*.yaml
+!swiftdrop-k8s/secrets/*.yaml.example
 *.pem
 *.key
 *.p12

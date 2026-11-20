@@ -1,0 +1,45 @@
+# Non-sensitive configuration for SwiftDrop on K3s.
+# Sensitive credentials (passwords, JWT secret, webhook encryption key, API keys) live in
+# swiftdrop-k8s/secrets/swiftdrop-secrets.yaml (created from swiftdrop-secrets.yaml.example).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swiftdrop-config
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError"
+  NODE_OPTIONS: "--max-old-space-size=256"
+
+  # Internal Kubernetes Service DNS names (same namespace: swiftdrop)
+  SWIFTDROP_POSTGRES_HOST: "postgres"
+  SWIFTDROP_POSTGRES_PORT: "5432"
+  SWIFTDROP_POSTGRES_DB: "swiftdrop"
+  SWIFTDROP_POSTGRES_USER: "swiftdrop"
+
+  SWIFTDROP_RABBITMQ_HOST: "rabbitmq"
+  SWIFTDROP_RABBITMQ_PORT: "5672"
+  SWIFTDROP_RABBITMQ_USER: "swiftdrop"
+
+  # Public origin & CORS — update to your real domain (https://swiftdrop.example.com)
+  SWIFTDROP_FRONTEND_BASE_URL: "https://swiftdrop.example.com"
+  SWIFTDROP_CORS_ALLOWED_ORIGINS: "https://swiftdrop.example.com"
+
+  # Security & operational settings
+  SWIFTDROP_JWT_ISSUER: "swiftdrop"
+  SWIFTDROP_JWT_ACCESS_TOKEN_TTL: "PT1H"
+  SWIFTDROP_WEBHOOK_ALLOW_LOCAL: "false"
+  SWIFTDROP_BUSINESS_TIME_ZONE: "Asia/Colombo"
+  SWIFTDROP_MAX_DELIVERY_ATTEMPTS: "3"
+  SWIFTDROP_TRACKING_RATE_LIMIT_PER_MINUTE: "60"
+  SWIFTDROP_DISPATCH_STALE_AFTER_HOURS: "24"
+  SWIFTDROP_SWAGGER_ENABLED: "false"
+
+  # Optional integrations (disabled/mocked by default)
+  SWIFTDROP_ASSISTANT_MODEL: "gemini-3.5-flash-lite"
+  SWIFTDROP_NOTIFICATION_EMAIL_PROVIDER: "mock"
+  RESEND_FROM_EMAIL: "onboarding@resend.dev"
+  SWIFTDROP_NOTIFICATION_PUSH_PROVIDER: "mock"
+  SWIFTDROP_FIREBASE_SERVICE_ACCOUNT_PATH: ""

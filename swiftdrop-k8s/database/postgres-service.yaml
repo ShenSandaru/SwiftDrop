@@ -1,0 +1,35 @@
+# Internal-only ClusterIP and headless Services for PostgreSQL 18.
+# Never expose PostgreSQL via NodePort, LoadBalancer, or Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

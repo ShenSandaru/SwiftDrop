@@ -1,0 +1,42 @@
+# K3s ships with Traefik as its default Ingress controller.
+# These Middlewares enforce baseline security headers and the 3 MB request body limit
+# (matching spring.servlet.multipart.max-request-size=3MB in application.properties).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: swiftdrop-security-headers
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  headers:
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: "strict-origin-when-cross-origin"
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: swiftdrop-upload-limit
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  buffering:
+    # 3 MiB request body cap (delivery proof photos and avatars are max 2 MB + multipart overhead)
+    maxRequestBodyBytes: 3145728
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: swiftdrop-sse-headers
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  headers:
+    customResponseHeaders:
+      X-Accel-Buffering: "no"
+      Cache-Control: "no-cache"
