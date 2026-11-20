@@ -1,0 +1,104 @@
+# K3s Traefik Ingress manifests for SwiftDrop.
+#
+# Replace `swiftdrop.example.com` with your real domain before applying.
+# For HTTPS with cert-manager, ensure a ClusterIssuer named `letsencrypt-prod` exists (see
+# docs/kubernetes-deployment.md). For initial HTTP-only testing, comment out the `tls:` block
+# and the `cert-manager.io/cluster-issuer` annotation.
+#
+# Split into two Ingress resources so the SSE live-tracking stream does not pass through the
+# Traefik buffering middleware, while standard API routes enforce the 3 MB upload limit.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swiftdrop-ingress
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      swiftdrop-swiftdrop-security-headers@kubernetescrd,swiftdrop-swiftdrop-upload-limit@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - swiftdrop.example.com
+      secretName: swiftdrop-tls
+  rules:
+    - host: swiftdrop.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          - path: /oauth2
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          # /login itself is a Next.js page; only /login/oauth2 routes to Spring Security OAuth2
+          - path: /login/oauth2
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          - path: /mcp
+            pathType: Exact
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          - path: /actuator/health
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+---
+# Dedicated unbuffered Ingress for public live-tracking SSE streams (ADR 0007).
+# Traefik flushes text/event-stream responses immediately when no buffering middleware is attached.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swiftdrop-sse-ingress
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      swiftdrop-swiftdrop-security-headers@kubernetescrd,swiftdrop-swiftdrop-sse-headers@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - swiftdrop.example.com
+      secretName: swiftdrop-tls
+  rules:
+    - host: swiftdrop.example.com
+      http:
+        paths:
+          - path: /api/v1/tracked-parcels
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8080

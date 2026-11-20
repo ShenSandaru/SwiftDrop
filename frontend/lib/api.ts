@@ -144,7 +144,15 @@ export function onUnauthorized(handler: UnauthorizedHandler): () => void {
 }
 
 export function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configured === undefined) {
+    return "http://localhost:8080";
+  }
+  const trimmed = configured.trim();
+  if (trimmed === "" || trimmed === "/") {
+    return "";
+  }
+  return trimmed;
 }
 
 export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {

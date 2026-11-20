@@ -1,0 +1,35 @@
+# Internal-only ClusterIP and headless Services for RabbitMQ 4.3.
+# Never expose AMQP (5672) or management ports publicly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/part-of: swiftdrop
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672

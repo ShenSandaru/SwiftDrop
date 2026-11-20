@@ -52,11 +52,11 @@ reviewers must check that they were followed.
 
 **Architecture** (see [docs/architecture.md](architecture.md) for the current status)
 
-- Modular monolith: one Spring Boot backend split into business modules. No microservices, Kubernetes, Redis, extra message brokers or service meshes.
+- Modular monolith: one Spring Boot backend split into business modules. No microservices, Redis, extra message brokers or service meshes.
 - The backend owns business rules, validation that matters, authorization, persistence and integrations. The frontend only presents data and calls the REST API.
 - Authorization is enforced on the backend by role and ownership. Hiding UI is never a security control.
 - A module exposes a small public API; other modules never use its internal classes or repositories. The modules, their allowed dependencies, table ownership and the package rules are decided in the accepted [ADR 0003](adr/0003-backend-modules-and-boundaries.md): import another module only through its `api` package, along the allowed dependency graph. Module dependencies change only through a reviewed ADR.
-- Kubernetes stays excluded although the brief offers it as an optional bonus; it needs a separate, explicitly approved ADR.
+- Single-node K3s deployment manifests (`BON-1`) are authorized by [ADR 0013](adr/0013-containerized-and-k3s-deployment.md) while keeping the single-replica modular monolith architecture.
 - Asynchronous work (notifications, domain events, webhook delivery with retries) goes through RabbitMQ, using classic or quorum queues, not classic mirrored queues.
 - Real-time tracking uses SSE (`SseEmitter`). WebSockets need a verified requirement and an ADR.
 

@@ -21,6 +21,7 @@ current state of each decision and lists the open questions that still need one.
 | [0010](0010-ai-delivery-assistant-and-mcp-server.md) | AI delivery assistant and MCP server (BON-2) | Proposed *(implemented in `assistant`; awaiting formal ADR acceptance)* |
 | [0011](0011-direct-links-between-branch-hubs.md) | Direct links between branch hubs | Proposed |
 | [0012](0012-hub-scoped-staff.md) | Hub-scoped dispatchers and couriers | Proposed |
+| [0013](0013-containerized-and-k3s-deployment.md) | Containerized production deployment and K3s manifests (BON-1) | Accepted |
 
 ## Process
 

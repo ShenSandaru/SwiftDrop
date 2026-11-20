@@ -1,0 +1,237 @@
+name: Docker Publish
+
+on:
+  push:
+    branches: [main, dev]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/docker-publish.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_production:
+        description: 'Deploy to GCP production VM (only applies when run on main)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  frontend:
+    name: frontend-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/swiftdrop-frontend
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL || '' }}
+            NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN=${{ vars.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN || 'false' }}
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY || '' }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '' }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '' }}
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ vars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '' }}
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '' }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID || '' }}
+            NEXT_PUBLIC_FIREBASE_VAPID_KEY=${{ vars.NEXT_PUBLIC_FIREBASE_VAPID_KEY || '' }}
+          cache-from: type=gha,scope=swiftdrop-frontend
+          cache-to: type=gha,mode=max,scope=swiftdrop-frontend
+
+  backend:
+    name: backend-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/swiftdrop-backend
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=swiftdrop-backend
+          cache-to: type=gha,mode=max,scope=swiftdrop-backend
+
+  deploy-production:
+    name: deploy-gcp-production
+    needs: [frontend, backend]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy_production == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    concurrency:
+      group: production-deploy-gcp
+      cancel-in-progress: false
+    steps:
+      - name: Validate deployment configuration
+        env:
+          GCP_VM_HOST: ${{ secrets.GCP_VM_HOST }}
+          GCP_VM_USER: ${{ secrets.GCP_VM_USER }}
+          GCP_VM_SSH_PRIVATE_KEY: ${{ secrets.GCP_VM_SSH_PRIVATE_KEY }}
+          GCP_VM_SSH_KNOWN_HOSTS: ${{ secrets.GCP_VM_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for var in GCP_VM_HOST GCP_VM_USER GCP_VM_SSH_PRIVATE_KEY GCP_VM_SSH_KNOWN_HOSTS; do
+            if [[ -z "${!var:-}" ]]; then
+              echo "ERROR: Required GitHub Secret ${var} is not configured." >&2
+              exit 1
+            fi
+          done
+          SHORT_SHA="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          echo "IMAGE_TAG=sha-${SHORT_SHA}" >> "${GITHUB_ENV}"
+          echo "Prepared immutable production image tag: sha-${SHORT_SHA}"
+
+      - name: Configure SSH with strict host-key verification
+        env:
+          GCP_VM_SSH_PRIVATE_KEY: ${{ secrets.GCP_VM_SSH_PRIVATE_KEY }}
+          GCP_VM_SSH_KNOWN_HOSTS: ${{ secrets.GCP_VM_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          SSH_DIR="${RUNNER_TEMP}/swiftdrop-ssh"
+          mkdir -p "${SSH_DIR}"
+          chmod 700 "${SSH_DIR}"
+          printf '%s\n' "${GCP_VM_SSH_PRIVATE_KEY}" > "${SSH_DIR}/deploy_key"
+          chmod 600 "${SSH_DIR}/deploy_key"
+          printf '%s\n' "${GCP_VM_SSH_KNOWN_HOSTS}" > "${SSH_DIR}/known_hosts"
+          chmod 600 "${SSH_DIR}/known_hosts"
+          echo "SSH_DIR=${SSH_DIR}" >> "${GITHUB_ENV}"
+
+      - name: Deploy immutable images to GCP VM
+        env:
+          GCP_VM_HOST: ${{ secrets.GCP_VM_HOST }}
+          GCP_VM_USER: ${{ secrets.GCP_VM_USER }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${DEPLOY_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: Unexpected commit SHA format." >&2
+            exit 1
+          fi
+          if [[ -n "${GHCR_USERNAME:-}" && ! "${GHCR_USERNAME}" =~ ^[a-zA-Z0-9-]+$ ]]; then
+            echo "ERROR: Unexpected GHCR_USERNAME format." >&2
+            exit 1
+          fi
+
+          GHCR_TOKEN_ON_STDIN=0
+          if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_TOKEN:-}" ]]; then
+            GHCR_TOKEN_ON_STDIN=1
+          fi
+
+          # Capture current commit, sync deployment files to the exact commit being deployed
+          # (preserving git-ignored .env.prod and deploy/nginx/https.conf), and run deploy-prod.sh.
+          # Redirect Git stdin from /dev/null with GIT_TERMINAL_PROMPT=0 so only deploy-prod.sh
+          # receives GHCR_TOKEN over SSH stdin.
+          printf '%s' "${GHCR_TOKEN:-}" | ssh \
+            -i "${SSH_DIR}/deploy_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${SSH_DIR}/known_hosts" \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            "${GCP_VM_USER}@${GCP_VM_HOST}" \
+            "set -euo pipefail; \
+             cd /opt/swiftdrop; \
+             PREVIOUS_COMMIT=\"\$(git rev-parse HEAD </dev/null)\"; \
+             GIT_TERMINAL_PROMPT=0 git fetch origin main </dev/null; \
+             GIT_TERMINAL_PROMPT=0 git checkout --force ${DEPLOY_COMMIT} </dev/null; \
+             SWIFTDROP_DEPLOY_DIR=/opt/swiftdrop \
+             PREVIOUS_COMMIT=\"\${PREVIOUS_COMMIT}\" \
+             GHCR_USERNAME='${GHCR_USERNAME:-}' \
+             GHCR_TOKEN_ON_STDIN='${GHCR_TOKEN_ON_STDIN}' \
+             bash /opt/swiftdrop/deploy/scripts/deploy-prod.sh '${IMAGE_TAG}'"
+
+      - name: Clean up temporary SSH files
+        if: always()
+        run: |
+          rm -rf "${RUNNER_TEMP}/swiftdrop-ssh"

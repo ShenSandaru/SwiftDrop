@@ -1,0 +1,207 @@
+# Production Docker Compose stack for SwiftDrop (single-VM deployment).
+# Local development continues to use compose.yaml (PostgreSQL + RabbitMQ only).
+#
+# Defaults are tuned for a low-memory GCP Debian 13 e2-micro VM (1 GB RAM + 2 GB swap).
+# Override resource and JVM settings in .env.prod for 4 GB / 8 GB VMs (see .env.prod.example).
+#
+# Usage:
+#   cp .env.prod.example .env.prod   # fill in strong generated secrets
+#   docker compose --env-file .env.prod -f compose.prod.yaml up -d
+
+name: swiftdrop-prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    # Low-memory tuning for e2-micro (1 GB RAM + 2 GB swap).
+    # For 4 GB VM: shared_buffers=256MB, work_mem=4MB, maintenance_work_mem=64MB, max_connections=80
+    # For 8 GB VM: shared_buffers=512MB, work_mem=8MB, maintenance_work_mem=128MB, max_connections=100
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${SWIFTDROP_POSTGRES_SHARED_BUFFERS:-64MB}
+      - -c
+      - work_mem=${SWIFTDROP_POSTGRES_WORK_MEM:-2MB}
+      - -c
+      - maintenance_work_mem=${SWIFTDROP_POSTGRES_MAINTENANCE_WORK_MEM:-32MB}
+      - -c
+      - max_connections=${SWIFTDROP_POSTGRES_MAX_CONNECTIONS:-40}
+    environment:
+      POSTGRES_DB: ${SWIFTDROP_POSTGRES_DB:-swiftdrop}
+      POSTGRES_USER: ${SWIFTDROP_POSTGRES_USER:-swiftdrop}
+      POSTGRES_PASSWORD: ${SWIFTDROP_POSTGRES_PASSWORD:?Set SWIFTDROP_POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      # PostgreSQL 18+ keeps PGDATA under /var/lib/postgresql/18/docker; mount the parent directory.
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - internal
+    mem_limit: ${SWIFTDROP_POSTGRES_MEM_LIMIT:-256m}
+    memswap_limit: ${SWIFTDROP_POSTGRES_MEMSWAP_LIMIT:-512m}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  rabbitmq:
+    # Alpine image without the management UI plugin to save memory and reduce attack surface.
+    image: rabbitmq:4.3-alpine
+    # Fixed hostname preserves Mnesia/Raft node data in the volume across container recreations.
+    hostname: rabbitmq
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      RABBITMQ_DEFAULT_USER: ${SWIFTDROP_RABBITMQ_USER:-swiftdrop}
+      RABBITMQ_DEFAULT_PASS: ${SWIFTDROP_RABBITMQ_PASSWORD:?Set SWIFTDROP_RABBITMQ_PASSWORD in .env.prod}
+      # Prevent premature memory alarms on tight container limits (e2-micro default: 384m).
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: ${SWIFTDROP_RABBITMQ_ERL_ARGS:--rabbit vm_memory_high_watermark 0.7}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - internal
+    mem_limit: ${SWIFTDROP_RABBITMQ_MEM_LIMIT:-384m}
+    memswap_limit: ${SWIFTDROP_RABBITMQ_MEMSWAP_LIMIT:-768m}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  backend:
+    image: ${SWIFTDROP_BACKEND_IMAGE:-ghcr.io/shensandaru/swiftdrop-backend}:${SWIFTDROP_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # Conservative JVM defaults for e2-micro (1 GB RAM + 2 GB swap).
+      # For 4 GB VM: -Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError
+      # For 8 GB VM: -Xms512m -Xmx1024m -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: ${SWIFTDROP_JAVA_TOOL_OPTIONS:--Xms128m -Xmx288m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
+      # Internal Docker service hostnames
+      SWIFTDROP_POSTGRES_HOST: postgres
+      SWIFTDROP_POSTGRES_PORT: 5432
+      SWIFTDROP_POSTGRES_DB: ${SWIFTDROP_POSTGRES_DB:-swiftdrop}
+      SWIFTDROP_POSTGRES_USER: ${SWIFTDROP_POSTGRES_USER:-swiftdrop}
+      SWIFTDROP_POSTGRES_PASSWORD: ${SWIFTDROP_POSTGRES_PASSWORD:?Set SWIFTDROP_POSTGRES_PASSWORD in .env.prod}
+      SWIFTDROP_RABBITMQ_HOST: rabbitmq
+      SWIFTDROP_RABBITMQ_PORT: 5672
+      SWIFTDROP_RABBITMQ_USER: ${SWIFTDROP_RABBITMQ_USER:-swiftdrop}
+      SWIFTDROP_RABBITMQ_PASSWORD: ${SWIFTDROP_RABBITMQ_PASSWORD:?Set SWIFTDROP_RABBITMQ_PASSWORD in .env.prod}
+      # Required application secrets (minimum 32 bytes each)
+      SWIFTDROP_JWT_SECRET: ${SWIFTDROP_JWT_SECRET:?Set SWIFTDROP_JWT_SECRET in .env.prod}
+      SWIFTDROP_JWT_ISSUER: ${SWIFTDROP_JWT_ISSUER:-swiftdrop}
+      SWIFTDROP_JWT_ACCESS_TOKEN_TTL: ${SWIFTDROP_JWT_ACCESS_TOKEN_TTL:-PT1H}
+      SWIFTDROP_WEBHOOK_SECRET_KEY: ${SWIFTDROP_WEBHOOK_SECRET_KEY:?Set SWIFTDROP_WEBHOOK_SECRET_KEY in .env.prod}
+      SWIFTDROP_WEBHOOK_ALLOW_LOCAL: "false"
+      # Public origin and CORS (set to https://<your-domain> once TLS is active)
+      SWIFTDROP_FRONTEND_BASE_URL: ${SWIFTDROP_FRONTEND_BASE_URL:?Set SWIFTDROP_FRONTEND_BASE_URL in .env.prod}
+      SWIFTDROP_CORS_ALLOWED_ORIGINS: ${SWIFTDROP_CORS_ALLOWED_ORIGINS:?Set SWIFTDROP_CORS_ALLOWED_ORIGINS in .env.prod}
+      # Optional bootstrap admin
+      SWIFTDROP_BOOTSTRAP_ADMIN_EMAIL: ${SWIFTDROP_BOOTSTRAP_ADMIN_EMAIL:-}
+      SWIFTDROP_BOOTSTRAP_ADMIN_PASSWORD: ${SWIFTDROP_BOOTSTRAP_ADMIN_PASSWORD:-}
+      # Optional Google OAuth2
+      SWIFTDROP_GOOGLE_CLIENT_ID: ${SWIFTDROP_GOOGLE_CLIENT_ID:-}
+      SWIFTDROP_GOOGLE_CLIENT_SECRET: ${SWIFTDROP_GOOGLE_CLIENT_SECRET:-}
+      # Optional Gemini AI assistant
+      SWIFTDROP_GEMINI_API_KEY: ${SWIFTDROP_GEMINI_API_KEY:-}
+      SWIFTDROP_ASSISTANT_MODEL: ${SWIFTDROP_ASSISTANT_MODEL:-gemini-3.5-flash-lite}
+      # Optional notifications (default mock)
+      SWIFTDROP_NOTIFICATION_EMAIL_PROVIDER: ${SWIFTDROP_NOTIFICATION_EMAIL_PROVIDER:-mock}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
+      SWIFTDROP_NOTIFICATION_PUSH_PROVIDER: ${SWIFTDROP_NOTIFICATION_PUSH_PROVIDER:-mock}
+      SWIFTDROP_FIREBASE_SERVICE_ACCOUNT_PATH: ${SWIFTDROP_FIREBASE_SERVICE_ACCOUNT_PATH:-}
+      # Operational settings
+      SWIFTDROP_BUSINESS_TIME_ZONE: ${SWIFTDROP_BUSINESS_TIME_ZONE:-Asia/Colombo}
+      SWIFTDROP_MAX_DELIVERY_ATTEMPTS: ${SWIFTDROP_MAX_DELIVERY_ATTEMPTS:-3}
+      SWIFTDROP_TRACKING_RATE_LIMIT_PER_MINUTE: ${SWIFTDROP_TRACKING_RATE_LIMIT_PER_MINUTE:-60}
+      SWIFTDROP_DISPATCH_STALE_AFTER_HOURS: ${SWIFTDROP_DISPATCH_STALE_AFTER_HOURS:-24}
+      SWIFTDROP_SWAGGER_ENABLED: ${SWIFTDROP_SWAGGER_ENABLED:-false}
+    networks:
+      - internal
+      - edge
+    mem_limit: ${SWIFTDROP_BACKEND_MEM_LIMIT:-512m}
+    memswap_limit: ${SWIFTDROP_BACKEND_MEMSWAP_LIMIT:-1024m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  frontend:
+    image: ${SWIFTDROP_FRONTEND_IMAGE:-ghcr.io/shensandaru/swiftdrop-frontend}:${SWIFTDROP_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: ${SWIFTDROP_NODE_OPTIONS:---max-old-space-size=192}
+    networks:
+      - edge
+    mem_limit: ${SWIFTDROP_FRONTEND_MEM_LIMIT:-256m}
+    memswap_limit: ${SWIFTDROP_FRONTEND_MEMSWAP_LIMIT:-512m}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    ports:
+      - "${SWIFTDROP_HTTP_PORT:-80}:80"
+      - "${SWIFTDROP_HTTPS_PORT:-443}:443"
+    volumes:
+      - ${SWIFTDROP_NGINX_CONF:-./deploy/nginx/http.conf}:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/snippets:/etc/nginx/snippets:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    networks:
+      - edge
+    mem_limit: ${SWIFTDROP_NGINX_MEM_LIMIT:-64m}
+    memswap_limit: ${SWIFTDROP_NGINX_MEMSWAP_LIMIT:-128m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  certbot-webroot:
+  certbot-conf:
