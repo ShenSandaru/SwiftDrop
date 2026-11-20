@@ -45,7 +45,20 @@ Replace every `CHANGE_ME_*` placeholder:
 
 ---
 
-## 3. Starting and Stopping the Production Stack
+## 3. Pulling Prebuilt Images, Starting & Stopping
+
+Images are built and published to GitHub Container Registry (GHCR) by [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml):
+
+* **Pull requests (`main`, `dev`):** Validates Docker builds only (no image push).
+* **Push to `main`:** Publishes `main`, `latest`, and `sha-<commit>`.
+* **Push to `dev`:** Publishes `dev` and `sha-<commit>`.
+* **Version tag (`vX.Y.Z`):** Publishes `X.Y.Z`, `X.Y`, and `sha-<commit>`.
+
+If the GHCR packages are private, authenticate once on the VM with a GitHub Personal Access Token (`read:packages` scope):
+
+```bash
+echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u ShenSandaru --password-stdin
+```
 
 Validate the Compose configuration first:
 
@@ -53,12 +66,14 @@ Validate the Compose configuration first:
 docker compose --env-file .env.prod -f compose.prod.yaml config --quiet
 ```
 
-Pull prebuilt images and start all 5 services:
+Pull prebuilt images and start all 5 services (no local build occurs on the VM):
 
 ```bash
 docker compose --env-file .env.prod -f compose.prod.yaml pull
 docker compose --env-file .env.prod -f compose.prod.yaml up -d
 ```
+
+To roll back to a previous release, set `SWIFTDROP_IMAGE_TAG=sha-<previous-commit>` in `.env.prod` and run `pull` + `up -d`.
 
 Stop the stack **without deleting persistent data**:
 
