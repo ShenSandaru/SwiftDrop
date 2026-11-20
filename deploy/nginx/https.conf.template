@@ -1,0 +1,55 @@
+# HTTPS Nginx configuration template for Let's Encrypt / Certbot.
+#
+# Setup steps (see docs/production-deployment.md):
+#   1. Copy this file to deploy/nginx/https.conf (git-ignored).
+#   2. Replace every occurrence of YOUR_DOMAIN with your real domain (e.g. swiftdrop.example.com).
+#   3. Set SWIFTDROP_NGINX_CONF=./deploy/nginx/https.conf,
+#      SWIFTDROP_FRONTEND_BASE_URL=https://YOUR_DOMAIN, and
+#      SWIFTDROP_CORS_ALLOWED_ORIGINS=https://YOUR_DOMAIN in .env.prod.
+#   4. Recreate nginx and backend:
+#      docker compose --env-file .env.prod -f compose.prod.yaml up -d nginx backend
+
+server_tokens off;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name YOUR_DOMAIN;
+
+    # Keep ACME challenge reachable over HTTP for automated certificate renewals
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+
+    # Lightweight container health check over HTTP
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name YOUR_DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    include /etc/nginx/snippets/swiftdrop-routes.conf;
+}

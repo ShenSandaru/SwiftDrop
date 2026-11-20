@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+!.env.prod.example
+deploy/nginx/https.conf
 *.pem
 *.key
 *.p12
