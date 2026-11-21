@@ -23,7 +23,10 @@ export function initiateGoogleAuth(redirectTarget?: string | null): void {
     }
   }
 
-  const target = new URL("/oauth2/authorization/google", getApiBaseUrl()).href;
+  const apiBase = getApiBaseUrl();
+  const target = apiBase
+    ? new URL("/oauth2/authorization/google", apiBase).href
+    : "/oauth2/authorization/google";
   window.location.assign(target);
 }
 
