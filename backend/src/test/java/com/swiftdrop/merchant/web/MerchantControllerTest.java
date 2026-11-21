@@ -52,14 +52,12 @@ import com.swiftdrop.test.security.TestPrincipal;
         "swiftdrop.security.google.client-id="})
 @AutoConfigureMockMvc
 @MockitoBean(types = {
-        com.swiftdrop.pricing.domain.DistrictRepository.class,
-        com.swiftdrop.pricing.domain.PricingConfigRepository.class,
-        com.swiftdrop.identity.domain.UserAddressRepository.class,
         com.swiftdrop.delivery.domain.ParcelAssignmentRepository.class,
         com.swiftdrop.delivery.domain.HubRepository.class,
-        com.swiftdrop.delivery.domain.HubLinkRepository.class,
-        com.swiftdrop.delivery.domain.HubStaffRepository.class,
-        com.swiftdrop.notification.domain.NotificationRecordRepository.class})
+        com.swiftdrop.notification.domain.NotificationRecordRepository.class,
+        com.swiftdrop.assistant.application.AssistantService.class,
+        com.swiftdrop.assistant.application.LlmClient.class
+})
 class MerchantControllerTest {
 
     @Autowired
@@ -282,7 +280,7 @@ class MerchantControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/merchants requires ADMIN")
+    @DisplayName("GET /api/v1/merchants requires DISPATCHER_ADMIN")
     void listMerchantsRequiresAdmin() throws Exception {
         when(approvalService.findMerchants(any(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -395,7 +393,7 @@ class MerchantControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/merchants/{id}/approval requires ADMIN")
+    @DisplayName("POST /api/v1/merchants/{id}/approval-decisions requires DISPATCHER_ADMIN")
     void approvalRequiresAdmin() throws Exception {
         UUID merchantId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
