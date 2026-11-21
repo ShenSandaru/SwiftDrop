@@ -7,10 +7,6 @@ on:
       - 'v*.*.*'
   pull_request:
     branches: [main, dev]
-    paths:
-      - 'frontend/**'
-      - 'backend/**'
-      - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
     inputs:
       deploy_production:
