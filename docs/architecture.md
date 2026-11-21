@@ -548,17 +548,19 @@ whether springdoc and Actuator details are exposed outside local development.
 
 - **Required:** containerized deployment of frontend, backend, database and message broker
   (SYS-6); Dockerize all services and use docker-compose for local orchestration (IMP-7).
-- **Implemented:** Docker Compose runs PostgreSQL and RabbitMQ only; the frontend and backend run on
-  the developer machine. Spring Boot Actuator health includes database and RabbitMQ checks.
+- **Implemented:** Docker Compose (`compose.yaml`) runs local PostgreSQL and RabbitMQ; multi-stage
+  non-root production Dockerfiles (`frontend/Dockerfile`, `backend/Dockerfile`) and the `prod`
+  Spring profile (`application-prod.properties`) are implemented. Spring Boot Actuator health
+  includes database and RabbitMQ checks, with liveness/readiness probes enabled in `prod`.
 - **Decided ([ADR 0004](adr/0004-messaging-and-integration-reliability.md)):** messaging
   metrics through Micrometer (outbox backlog, consumer failures, pending and stuck parcels, dead
   letters, webhook outcomes) and log lines without personal data or secrets. Not implemented yet.
-- **Open:** Dockerfiles and Compose services for the frontend and backend; production deployment,
-  hosting, logging and monitoring beyond Actuator.
-- **Decided:** Kubernetes is excluded by the project rules and was rejected in
-  [ADR 0001](adr/0001-modular-monolith-in-a-monorepo.md)'s alternatives. The brief offers
-  Kubernetes only as an optional bonus (BON-1); pursuing it needs
-  a separate, explicitly reviewed ADR.
+- **Decided ([ADR 0013](adr/0013-containerized-and-k3s-deployment.md), Accepted):** production
+  deployment uses Docker Compose (`compose.prod.yaml`) with Nginx and Let's Encrypt HTTPS on a
+  single VM, prebuilt GHCR images from GitHub Actions, and single-node K3s manifests
+  (`swiftdrop-k8s/`) for the optional Kubernetes bonus (`BON-1`). This amends ADR 0001's exclusion
+  of Kubernetes for `BON-1` while keeping the single-replica modular monolith architecture.
+- **Open:** logging and monitoring beyond Actuator.
 - **Proposed and implemented ([ADR 0010](adr/0010-ai-delivery-assistant-and-mcp-server.md)):** the AI delivery
   assistant (BON-2). `POST /api/v1/assistant/messages` (public, rate limited per client) sends the
   conversation to the Gemini API with function calling. The model may call three read-only tools,
@@ -593,6 +595,7 @@ whether springdoc and Actuator details are exposed outside local development.
 - [ADR 0004: Messaging and integration reliability](adr/0004-messaging-and-integration-reliability.md)
 - [ADR 0006: Delivery lifecycle and transition rules](adr/0006-delivery-lifecycle-and-transition-rules.md)
 - [ADR 0007: Public SSE tracking stream](adr/0007-public-sse-tracking-stream.md) (Proposed)
+- [ADR 0013: Containerized production deployment and K3s manifests](adr/0013-containerized-and-k3s-deployment.md)
 - [Delivery authorization matrix](testing/delivery-authorization-matrix.md)
 - [AI agent guidelines](ai-agent-guidelines.md) and [AGENTS.md](../AGENTS.md)
 - [Contributing and task workflow](../CONTRIBUTING.md)

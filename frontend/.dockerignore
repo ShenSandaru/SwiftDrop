@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+coverage
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+README.md
+AGENTS.md
+CLAUDE.md
+*.log
+npm-debug.log*

@@ -1,0 +1,23 @@
+# K3s ships with the Rancher local-path provisioner (`local-path` StorageClass) by default.
+# Both StatefulSets (postgres and rabbitmq) use `volumeClaimTemplates` with
+# `storageClassName: local-path` so PersistentVolumes are dynamically provisioned and survive
+# pod restarts and rescheduling on single-node K3s.
+#
+# Verify your K3s cluster's default StorageClass before deploying:
+#   kubectl get storageclass
+#
+# If your cluster uses a different StorageClass (e.g., `standard` or `managed-csi` on AKS),
+# update `storageClassName` in:
+#   - swiftdrop-k8s/database/postgres-statefulset.yaml (default: 5Gi)
+#   - swiftdrop-k8s/rabbitmq/rabbitmq-statefulset.yaml (default: 2Gi)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swiftdrop-storage-notes
+  namespace: swiftdrop
+  labels:
+    app.kubernetes.io/part-of: swiftdrop
+data:
+  storageClass: "local-path"
+  postgresPvcSize: "5Gi"
+  rabbitmqPvcSize: "2Gi"
