@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { cn } from "cn";
@@ -42,9 +42,13 @@ export default function CourierDeliveryHistoryPage() {
   const [taskFilter, setTaskFilter] = useState<CourierTask | "ALL">("ALL");
   const [sortOrder, setSortOrder] = useState<HistorySortOrder>("UPDATED_DESC");
   const [page, setPage] = useState(0);
+  const mountedRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    mountedRef.current = true;
 
     listCourierParcels()
       .then((loaded) => {
@@ -66,6 +70,9 @@ export default function CourierDeliveryHistoryPage() {
 
     return () => {
       cancelled = true;
+      mountedRef.current = false;
+      refreshSequenceRef.current += 1;
+      refreshInFlightRef.current = false;
     };
   }, []);
 
@@ -91,15 +98,20 @@ export default function CourierDeliveryHistoryPage() {
   const summary = summarizeCompletedTasks(parcels ?? []);
 
   async function refreshHistory() {
-    if (isLoading || isRefreshing) return;
+    if (isLoading || refreshInFlightRef.current) return;
 
+    refreshInFlightRef.current = true;
+    const requestSequence = ++refreshSequenceRef.current;
     setIsRefreshing(true);
     setRefreshError(null);
     setError(null);
     try {
-      setParcels(await listCourierParcels());
+      const loaded = await listCourierParcels();
+      if (!mountedRef.current || requestSequence !== refreshSequenceRef.current) return;
+      setParcels(loaded);
       setPage(0);
     } catch (failure) {
+      if (!mountedRef.current || requestSequence !== refreshSequenceRef.current) return;
       const message = formatApiError(failure);
       if (parcels === null) {
         setError(message);
@@ -107,7 +119,12 @@ export default function CourierDeliveryHistoryPage() {
         setRefreshError(message);
       }
     } finally {
-      setIsRefreshing(false);
+      if (requestSequence === refreshSequenceRef.current) {
+        refreshInFlightRef.current = false;
+        if (mountedRef.current) {
+          setIsRefreshing(false);
+        }
+      }
     }
   }
 
