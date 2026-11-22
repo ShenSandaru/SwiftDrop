@@ -1,4 +1,4 @@
-import type { CourierParcel, ParcelStatus } from "@/lib/delivery";
+import type { CourierParcel, CourierTask, ParcelStatus } from "@/lib/delivery";
 
 export interface CourierHistorySummary {
   totalCompletedTasks: number;
@@ -17,6 +17,10 @@ export function searchCompletedTasks(tasks: CourierParcel[], query: string): Cou
 
 export function filterTasksByStatus(tasks: CourierParcel[], status: ParcelStatus | "ALL"): CourierParcel[] {
   return status === "ALL" ? tasks : tasks.filter((parcel) => parcel.status === status);
+}
+
+export function filterTasksByType(tasks: CourierParcel[], task: CourierTask | "ALL"): CourierParcel[] {
+  return task === "ALL" ? tasks : tasks.filter((parcel) => parcel.task === task);
 }
 
 export function summarizeCompletedTasks(parcels: CourierParcel[]): CourierHistorySummary {
