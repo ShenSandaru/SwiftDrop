@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +34,9 @@ const HISTORY_PAGE_SIZE = 8;
 export default function CourierDeliveryHistoryPage() {
   const [parcels, setParcels] = useState<CourierParcel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ParcelStatus | "ALL">("ALL");
   const [taskFilter, setTaskFilter] = useState<CourierTask | "ALL">("ALL");
@@ -53,6 +56,11 @@ export default function CourierDeliveryHistoryPage() {
       .catch((failure) => {
         if (!cancelled) {
           setError(formatApiError(failure));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       });
 
@@ -82,6 +90,27 @@ export default function CourierDeliveryHistoryPage() {
   const lastResult = Math.min((visiblePage + 1) * HISTORY_PAGE_SIZE, matchingCompleted.length);
   const summary = summarizeCompletedTasks(parcels ?? []);
 
+  async function refreshHistory() {
+    if (isLoading || isRefreshing) return;
+
+    setIsRefreshing(true);
+    setRefreshError(null);
+    setError(null);
+    try {
+      setParcels(await listCourierParcels());
+      setPage(0);
+    } catch (failure) {
+      const message = formatApiError(failure);
+      if (parcels === null) {
+        setError(message);
+      } else {
+        setRefreshError(message);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   function resetFilters() {
     setSearch("");
     setStatusFilter("ALL");
@@ -93,13 +122,26 @@ export default function CourierDeliveryHistoryPage() {
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <section aria-labelledby="courier-history-heading" className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-foreground" id="courier-history-heading">
-            Delivery History
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Showing tasks completed today · {formatDate(new Date().toISOString())}. Previous days&apos; delivery history is not available from the existing API.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold tracking-tight text-foreground" id="courier-history-heading">
+              Delivery History
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Showing tasks completed today · {formatDate(new Date().toISOString())}. Previous days&apos; delivery history is not available from the existing API.
+            </p>
+          </div>
+          <Button
+            aria-busy={isRefreshing}
+            aria-label={error && parcels === null ? "Retry loading delivery history" : "Refresh delivery history"}
+            disabled={isLoading || isRefreshing}
+            onClick={refreshHistory}
+            size="sm"
+            variant="outline"
+          >
+            <RefreshCw aria-hidden="true" />
+            {isRefreshing ? "Refreshing" : error && parcels === null ? "Retry" : "Refresh"}
+          </Button>
         </div>
 
         {parcels !== null && !error && (
@@ -207,7 +249,13 @@ export default function CourierDeliveryHistoryPage() {
           </p>
         )}
 
-        {parcels === null && !error && (
+        {refreshError && (
+          <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            Could not refresh the latest tasks. Showing the last loaded data. {refreshError}
+          </p>
+        )}
+
+        {parcels === null && (isLoading || isRefreshing) && (
           <div className="space-y-3" role="status" aria-label="Loading completed tasks">
             {[0, 1, 2].map((index) => (
               <div key={index} className="h-24 animate-pulse rounded-2xl border border-border bg-muted" />
