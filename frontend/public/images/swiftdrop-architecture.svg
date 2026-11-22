@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 740" width="760" height="740" font-family="Inter, -apple-system, 'Segoe UI', DejaVu Sans, sans-serif" font-size="13" role="img" aria-labelledby="t d">
-  <title id="t">SwiftDrop system architecture</title>
-  <desc id="d">Next.js portals, the public tracking page, merchant systems and MCP clients call a Spring Boot modular monolith with eight business modules. The monolith uses PostgreSQL and RabbitMQ, calls the Gemini API and sends signed webhooks to merchants.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1190" width="760" height="1190" font-family="Inter, -apple-system, 'Segoe UI', DejaVu Sans, sans-serif" font-size="13" role="img" aria-labelledby="t d">
+  <title id="t">SwiftDrop system architecture and deployment</title>
+  <desc id="d">Next.js portals, the public tracking page, merchant systems and MCP clients call a Spring Boot modular monolith with eight business modules. The monolith uses PostgreSQL and RabbitMQ, calls the Gemini API and sends signed webhooks to merchants. In production all traffic enters through Nginx on a Google Cloud VM that runs the frontend, backend, PostgreSQL and RabbitMQ with Docker Compose; GitHub Actions builds the images, publishes them to GHCR and deploys them over SSH. Single-node K3s manifests are an alternative target.</desc>
   <defs>
     <marker id="grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9b998f"/></marker>
     <marker id="teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0f766e"/></marker>
   </defs>
-  <rect width="760" height="740" fill="#ffffff"/>
+  <rect width="760" height="1190" fill="#ffffff"/>
 
-  <text x="24" y="30" font-size="17" font-weight="700" fill="#1f1e1d">SwiftDrop system architecture</text>
+  <text x="24" y="30" font-size="17" font-weight="700" fill="#1f1e1d">SwiftDrop system architecture and deployment</text>
   <text x="736" y="30" text-anchor="end" font-size="11.5" fill="#5f5e5a">Modular monolith · REST · SSE · RabbitMQ</text>
 
   <!-- Presentation layer -->
@@ -73,7 +73,7 @@
   </g>
 
   <!-- Data and external services -->
-  <rect x="24" y="530" width="712" height="134" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
+  <rect x="24" y="530" width="712" height="204" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
 
   <rect x="40" y="562" width="158" height="88" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
   <text x="119" y="584" text-anchor="middle" font-weight="600" fill="#1f1e1d">PostgreSQL 18</text>
@@ -98,6 +98,19 @@
   <text x="641" y="602" text-anchor="middle" font-size="11" fill="#5f5e5a">HTTPS, SSRF-safe</text>
   <text x="641" y="617" text-anchor="middle" font-size="11" fill="#5f5e5a">HMAC-signed requests</text>
   <text x="641" y="632" text-anchor="middle" font-size="11" fill="#5f5e5a">Retries with backoff</text>
+
+
+  <!-- Optional integrations (mock or disabled unless configured) -->
+  <rect x="40" y="664" width="158" height="52" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="119" y="684" text-anchor="middle" font-weight="600" fill="#1f1e1d">Google OAuth2</text>
+  <text x="119" y="701" text-anchor="middle" font-size="11" fill="#5f5e5a">Optional sign-in</text>
+  <rect x="214" y="664" width="158" height="52" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="293" y="684" text-anchor="middle" font-weight="600" fill="#1f1e1d">Resend (email)</text>
+  <text x="293" y="701" text-anchor="middle" font-size="11" fill="#5f5e5a">Optional, mock by default</text>
+  <rect x="388" y="664" width="158" height="52" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="467" y="684" text-anchor="middle" font-weight="600" fill="#1f1e1d">Firebase (push)</text>
+  <text x="467" y="701" text-anchor="middle" font-size="11" fill="#5f5e5a">Optional, mock by default</text>
+  <text x="562" y="694" font-size="11" fill="#5f5e5a">Enabled only when configured</text>
 
   <!-- Arrows: drawn before the panel titles so the titles stay readable -->
   <g fill="none" stroke="#9b998f" stroke-width="1.5">
@@ -131,12 +144,86 @@
   <rect x="32" y="537" width="172" height="17" rx="4" fill="#f3f2ee"/>
   <text x="40" y="550" font-weight="600" fill="#5f5e5a">Data and external services</text>
 
+
+  <!-- Delivery pipeline and hosting -->
+  <rect x="24" y="750" width="712" height="342" rx="8" fill="#f3f2ee" stroke="#e2e0d8"/>
+  <text x="40" y="770" font-weight="600" fill="#5f5e5a">Delivery pipeline and production hosting</text>
+  <rect x="40" y="782" width="150" height="60" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="115.0" y="802" text-anchor="middle" font-weight="600" fill="#1f1e1d">Developers</text>
+  <text x="115.0" y="819" text-anchor="middle" font-size="11" fill="#5f5e5a">Pull requests to dev / main</text>
+  <text x="115.0" y="834" text-anchor="middle" font-size="11" fill="#5f5e5a">CI: lint, build, tests</text>
+  <rect x="230" y="782" width="210" height="60" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="335.0" y="802" text-anchor="middle" font-weight="600" fill="#1f1e1d">GitHub Actions</text>
+  <text x="335.0" y="819" text-anchor="middle" font-size="11" fill="#5f5e5a">Tests, then builds both images</text>
+  <text x="335.0" y="834" text-anchor="middle" font-size="11" fill="#5f5e5a">Deploy job runs on push to main</text>
+  <rect x="480" y="782" width="210" height="60" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="585.0" y="802" text-anchor="middle" font-weight="600" fill="#1f1e1d">GHCR image registry</text>
+  <text x="585.0" y="819" text-anchor="middle" font-size="11" fill="#5f5e5a">swiftdrop-frontend, swiftdrop-backend</text>
+  <text x="585.0" y="834" text-anchor="middle" font-size="11" fill="#5f5e5a">Immutable sha- tags</text>
+  <g fill="none" stroke="#9b998f" stroke-width="1.5">
+    <path d="M190 812H230" marker-end="url(#grey)"/>
+    <path d="M440 812H480" marker-end="url(#grey)"/>
+    <path d="M335 842V868" marker-end="url(#grey)"/>
+    <path d="M585 842V868" marker-end="url(#grey)"/>
+  </g>
+  <g font-size="10.5" fill="#5f5e5a">
+    <text x="343" y="860">SSH: deploy-prod.sh</text>
+    <text x="593" y="860">docker compose pull</text>
+  </g>
+  <rect x="40" y="870" width="680" height="168" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+  <text x="52" y="888" font-weight="600" fill="#0f766e">Google Cloud VM (e2-micro, Debian 13) · Docker Compose (compose.prod.yaml)</text>
+  <text x="708" y="888" text-anchor="end" font-size="10.5" fill="#5f5e5a">Only ports 80 and 443 are open</text>
+  <rect x="52" y="922" width="112" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="108.0" y="942" text-anchor="middle" font-weight="600" fill="#1f1e1d">Nginx</text>
+  <text x="108.0" y="959" text-anchor="middle" font-size="11" fill="#5f5e5a">:80 / :443, HTTPS</text>
+  <text x="108.0" y="974" text-anchor="middle" font-size="11" fill="#5f5e5a">Let's Encrypt, SSE</text>
+  <rect x="180" y="922" width="112" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="236.0" y="942" text-anchor="middle" font-weight="600" fill="#1f1e1d">Frontend</text>
+  <text x="236.0" y="959" text-anchor="middle" font-size="11" fill="#5f5e5a">Next.js :3000</text>
+  <text x="236.0" y="974" text-anchor="middle" font-size="11" fill="#5f5e5a">Standalone build</text>
+  <rect x="308" y="922" width="128" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="372.0" y="942" text-anchor="middle" font-weight="600" fill="#1f1e1d">Backend</text>
+  <text x="372.0" y="959" text-anchor="middle" font-size="11" fill="#5f5e5a">Spring Boot :8080</text>
+  <text x="372.0" y="974" text-anchor="middle" font-size="11" fill="#5f5e5a">Profile prod, 1 replica</text>
+  <rect x="452" y="922" width="112" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="508.0" y="942" text-anchor="middle" font-weight="600" fill="#1f1e1d">PostgreSQL 18</text>
+  <text x="508.0" y="959" text-anchor="middle" font-size="11" fill="#5f5e5a">Volume:</text>
+  <text x="508.0" y="974" text-anchor="middle" font-size="11" fill="#5f5e5a">postgres-data</text>
+  <rect x="580" y="922" width="128" height="66" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25"/>
+  <text x="644.0" y="942" text-anchor="middle" font-weight="600" fill="#1f1e1d">RabbitMQ 4.3</text>
+  <text x="644.0" y="959" text-anchor="middle" font-size="11" fill="#5f5e5a">Volume:</text>
+  <text x="644.0" y="974" text-anchor="middle" font-size="11" fill="#5f5e5a">rabbitmq-data</text>
+  <g fill="none" stroke="#9b998f" stroke-width="1.5">
+    <path d="M164 955H180" marker-end="url(#grey)"/>
+    <path d="M108 922V908H340V922" marker-end="url(#grey)"/>
+    <path d="M436 955H452" marker-end="url(#grey)"/>
+  </g>
+  <g fill="none" stroke="#0f766e" stroke-width="1.75" stroke-dasharray="6 4">
+    <path d="M404 922V908H644V922" marker-start="url(#teal)" marker-end="url(#teal)"/>
+  </g>
+  <g font-size="10.5" fill="#5f5e5a">
+    <text x="150" y="904">/ to frontend · /api /oauth2 /mcp and SSE to backend</text>
+  </g>
+  <g font-size="10.5" fill="#0f766e">
+    <text x="470" y="904">AMQP</text>
+  </g>
+  <!-- Docker networks -->
+  <path d="M52 1004H436" stroke="#9b998f" stroke-width="2"/>
+  <text x="52" y="1019" font-size="10.5" fill="#5f5e5a">edge network: Nginx, frontend, backend</text>
+  <path d="M308 1026H708" stroke="#0f766e" stroke-width="2"/>
+  <text x="708" y="1019" text-anchor="end" font-size="10.5" fill="#0f766e">internal network (no outside access): backend, PostgreSQL, RabbitMQ</text>
+  <rect x="40" y="1048" width="680" height="34" rx="8" fill="#ffffff" stroke="#9b998f" stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text x="380" y="1062" text-anchor="middle" font-weight="600" fill="#1f1e1d">Kubernetes deployment: single-node K3s (swiftdrop-k8s/)</text>
+  <text x="380" y="1076" text-anchor="middle" font-size="10.5" fill="#5f5e5a">Namespace, ConfigMap, Secret, Deployments, StatefulSets with PVCs, Services, Traefik Ingress · same images · needs 4 GB RAM or more</text>
+
   <!-- Legend -->
-  <line x1="24" y1="690" x2="60" y2="690" stroke="#9b998f" stroke-width="1.5"/>
-  <text x="68" y="694" font-size="11" fill="#1f1e1d">Synchronous call (REST, SQL, HTTPS)</text>
-  <line x1="320" y1="690" x2="356" y2="690" stroke="#0f766e" stroke-width="1.75" stroke-dasharray="6 4"/>
-  <text x="364" y="694" font-size="11" fill="#1f1e1d">Asynchronous (RabbitMQ, webhooks)</text>
-  <rect x="600" y="683" width="18" height="13" rx="3" fill="#ffffff" stroke="#9b998f" stroke-dasharray="4 3"/>
-  <text x="626" y="694" font-size="11" fill="#1f1e1d">External system</text>
-  <text x="24" y="722" font-size="11" fill="#5f5e5a">Local infrastructure: Docker Compose (PostgreSQL and RabbitMQ). No API gateway, Kubernetes or WebSocket is used.</text>
+  <line x1="24" y1="1116" x2="60" y2="1116" stroke="#9b998f" stroke-width="1.5"/>
+  <text x="68" y="1120" font-size="11" fill="#1f1e1d">Synchronous call (REST, SQL, HTTPS, SSH)</text>
+  <line x1="320" y1="1116" x2="356" y2="1116" stroke="#0f766e" stroke-width="1.75" stroke-dasharray="6 4"/>
+  <text x="364" y="1120" font-size="11" fill="#1f1e1d">Asynchronous (RabbitMQ, webhooks)</text>
+  <rect x="600" y="1109" width="18" height="13" rx="3" fill="#ffffff" stroke="#9b998f" stroke-dasharray="4 3"/>
+  <text x="626" y="1120" font-size="11" fill="#1f1e1d">External or optional</text>
+  <text x="24" y="1148" font-size="11" fill="#5f5e5a">Local development uses Docker Compose for PostgreSQL and RabbitMQ only (compose.yaml).</text>
+  <text x="24" y="1165" font-size="11" fill="#5f5e5a">The backend stays one replica: live-tracking streams and rate limiters keep state in memory (ADR 0013).</text>
+  <text x="24" y="1182" font-size="11" fill="#5f5e5a">No API gateway, service mesh or WebSocket is used.</text>
 </svg>
