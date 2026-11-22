@@ -3,7 +3,8 @@ import { PortalShell, type PortalNavItem } from "@/components/portal/portal-shel
 
 // Proof of delivery is captured on each parcel's page, so it has no tab of its own
 const COURIER_NAV: PortalNavItem[] = [
-  { href: "/courier", label: "Today's run" },
+  { href: "/courier", label: "Today's run", exact: true },
+  { href: "/courier/history", label: "Delivery History", exact: true },
   { href: "/profile", label: "My Profile" },
 ];
 
