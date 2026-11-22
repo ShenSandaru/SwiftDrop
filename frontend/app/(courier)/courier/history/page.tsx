@@ -1,21 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { TASK_LABELS } from "@/components/delivery/courier-task";
 import { formatDate, formatDateTime } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
 import { listCourierParcels, type CourierParcel } from "@/lib/delivery";
-import { summarizeCompletedTasks } from "./model";
+import { searchCompletedTasks, summarizeCompletedTasks } from "./model";
 
 export default function CourierDeliveryHistoryPage() {
   const [parcels, setParcels] = useState<CourierParcel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +40,8 @@ export default function CourierDeliveryHistoryPage() {
     };
   }, []);
 
-  const completed = parcels?.filter((parcel) => parcel.taskDone) ?? [];
+  const completed = useMemo(() => parcels?.filter((parcel) => parcel.taskDone) ?? [], [parcels]);
+  const matchingCompleted = useMemo(() => searchCompletedTasks(completed, search), [completed, search]);
   const summary = summarizeCompletedTasks(parcels ?? []);
 
   return (
@@ -63,6 +66,22 @@ export default function CourierDeliveryHistoryPage() {
           </div>
         )}
 
+        <label className="relative block">
+          <span className="sr-only">Search by tracking number</span>
+          <Search
+            aria-hidden="true"
+            className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            autoComplete="off"
+            className="pl-9"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by tracking number"
+            type="search"
+            value={search}
+          />
+        </label>
+
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             {error}
@@ -83,9 +102,15 @@ export default function CourierDeliveryHistoryPage() {
           </p>
         )}
 
-        {completed.length > 0 && (
+        {parcels !== null && !error && completed.length > 0 && matchingCompleted.length === 0 && (
+          <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No completed tasks match that tracking number.
+          </p>
+        )}
+
+        {matchingCompleted.length > 0 && (
           <ul className="space-y-3">
-            {completed.map((parcel) => (
+            {matchingCompleted.map((parcel) => (
               <li key={parcel.id}>
                 <article className="grid gap-3 rounded-2xl border border-border bg-card p-4 transition-all sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6">
                   <div className="min-w-0 space-y-1">

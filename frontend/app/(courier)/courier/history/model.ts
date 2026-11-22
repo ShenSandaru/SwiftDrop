@@ -8,6 +8,13 @@ export interface CourierHistorySummary {
   otherOutcomes: number;
 }
 
+export function searchCompletedTasks(tasks: CourierParcel[], query: string): CourierParcel[] {
+  const searchTerm = query.trim().toLowerCase();
+  if (!searchTerm) return tasks;
+
+  return tasks.filter((parcel) => parcel.trackingNumber.toLowerCase().includes(searchTerm));
+}
+
 export function summarizeCompletedTasks(parcels: CourierParcel[]): CourierHistorySummary {
   const completed = parcels.filter((parcel) => parcel.taskDone);
   const delivered = completed.filter((parcel) => parcel.status === "DELIVERED").length;
