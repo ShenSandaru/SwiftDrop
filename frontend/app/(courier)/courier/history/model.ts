@@ -1,5 +1,7 @@
 import type { CourierParcel, CourierTask, ParcelStatus } from "@/lib/delivery";
 
+export type HistorySortOrder = "UPDATED_DESC" | "UPDATED_ASC" | "TRACKING_ASC" | "TRACKING_DESC";
+
 export interface CourierHistorySummary {
   totalCompletedTasks: number;
   delivered: number;
@@ -21,6 +23,28 @@ export function filterTasksByStatus(tasks: CourierParcel[], status: ParcelStatus
 
 export function filterTasksByType(tasks: CourierParcel[], task: CourierTask | "ALL"): CourierParcel[] {
   return task === "ALL" ? tasks : tasks.filter((parcel) => parcel.task === task);
+}
+
+export function sortHistoryTasks(tasks: CourierParcel[], order: HistorySortOrder): CourierParcel[] {
+  return [...tasks].sort((left, right) => {
+    let comparison: number;
+    switch (order) {
+      case "UPDATED_DESC":
+        comparison = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+        break;
+      case "UPDATED_ASC":
+        comparison = Date.parse(left.updatedAt) - Date.parse(right.updatedAt);
+        break;
+      case "TRACKING_ASC":
+        comparison = left.trackingNumber.localeCompare(right.trackingNumber, undefined, { numeric: true });
+        break;
+      case "TRACKING_DESC":
+        comparison = right.trackingNumber.localeCompare(left.trackingNumber, undefined, { numeric: true });
+        break;
+    }
+
+    return comparison || left.id.localeCompare(right.id);
+  });
 }
 
 export function summarizeCompletedTasks(parcels: CourierParcel[]): CourierHistorySummary {

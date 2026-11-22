@@ -19,7 +19,14 @@ import {
   type CourierTask,
   type ParcelStatus,
 } from "@/lib/delivery";
-import { filterTasksByStatus, filterTasksByType, searchCompletedTasks, summarizeCompletedTasks } from "./model";
+import {
+  filterTasksByStatus,
+  filterTasksByType,
+  searchCompletedTasks,
+  sortHistoryTasks,
+  summarizeCompletedTasks,
+  type HistorySortOrder,
+} from "./model";
 
 const TASK_FILTERS: Array<CourierTask | "ALL"> = ["ALL", "PICKUP", "DELIVERY", "RETURN"];
 
@@ -29,6 +36,7 @@ export default function CourierDeliveryHistoryPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ParcelStatus | "ALL">("ALL");
   const [taskFilter, setTaskFilter] = useState<CourierTask | "ALL">("ALL");
+  const [sortOrder, setSortOrder] = useState<HistorySortOrder>("UPDATED_DESC");
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +61,12 @@ export default function CourierDeliveryHistoryPage() {
 
   const completed = useMemo(() => parcels?.filter((parcel) => parcel.taskDone) ?? [], [parcels]);
   const matchingCompleted = useMemo(
-    () => filterTasksByType(filterTasksByStatus(searchCompletedTasks(completed, search), statusFilter), taskFilter),
-    [completed, search, statusFilter, taskFilter]
+    () =>
+      sortHistoryTasks(
+        filterTasksByType(filterTasksByStatus(searchCompletedTasks(completed, search), statusFilter), taskFilter),
+        sortOrder
+      ),
+    [completed, search, statusFilter, taskFilter, sortOrder]
   );
   const summary = summarizeCompletedTasks(parcels ?? []);
 
@@ -122,6 +134,22 @@ export default function CourierDeliveryHistoryPage() {
                 label: task === "ALL" ? "All task types" : TASK_LABELS[task],
               }))}
               value={taskFilter}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="courier-history-sort">
+              Sort by
+            </label>
+            <ThemedSelect
+              id="courier-history-sort"
+              onChange={(value) => setSortOrder(value as HistorySortOrder)}
+              options={[
+                { value: "UPDATED_DESC", label: "Recently updated" },
+                { value: "UPDATED_ASC", label: "Oldest updated" },
+                { value: "TRACKING_ASC", label: "Tracking number (A–Z)" },
+                { value: "TRACKING_DESC", label: "Tracking number (Z–A)" },
+              ]}
+              value={sortOrder}
             />
           </div>
         </div>
