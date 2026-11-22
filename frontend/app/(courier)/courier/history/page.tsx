@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { cn } from "cn";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/select";
@@ -29,6 +29,7 @@ import {
 } from "./model";
 
 const TASK_FILTERS: Array<CourierTask | "ALL"> = ["ALL", "PICKUP", "DELIVERY", "RETURN"];
+const HISTORY_PAGE_SIZE = 8;
 
 export default function CourierDeliveryHistoryPage() {
   const [parcels, setParcels] = useState<CourierParcel[] | null>(null);
@@ -37,6 +38,7 @@ export default function CourierDeliveryHistoryPage() {
   const [statusFilter, setStatusFilter] = useState<ParcelStatus | "ALL">("ALL");
   const [taskFilter, setTaskFilter] = useState<CourierTask | "ALL">("ALL");
   const [sortOrder, setSortOrder] = useState<HistorySortOrder>("UPDATED_DESC");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,12 @@ export default function CourierDeliveryHistoryPage() {
         sortOrder
       ),
     [completed, search, statusFilter, taskFilter, sortOrder]
+  );
+  const pageCount = Math.ceil(matchingCompleted.length / HISTORY_PAGE_SIZE);
+  const visiblePage = Math.min(page, Math.max(pageCount - 1, 0));
+  const pagedCompleted = matchingCompleted.slice(
+    visiblePage * HISTORY_PAGE_SIZE,
+    (visiblePage + 1) * HISTORY_PAGE_SIZE
   );
   const summary = summarizeCompletedTasks(parcels ?? []);
 
@@ -102,7 +110,10 @@ export default function CourierDeliveryHistoryPage() {
             <Input
               autoComplete="off"
               className="pl-9"
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(0);
+              }}
               placeholder="Search by tracking number"
               type="search"
               value={search}
@@ -114,7 +125,10 @@ export default function CourierDeliveryHistoryPage() {
             </label>
             <ThemedSelect
               id="courier-history-status"
-              onChange={(value) => setStatusFilter(value as ParcelStatus | "ALL")}
+              onChange={(value) => {
+                setStatusFilter(value as ParcelStatus | "ALL");
+                setPage(0);
+              }}
               options={[
                 { value: "ALL", label: "All statuses" },
                 ...PARCEL_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
@@ -128,7 +142,10 @@ export default function CourierDeliveryHistoryPage() {
             </label>
             <ThemedSelect
               id="courier-history-task"
-              onChange={(value) => setTaskFilter(value as CourierTask | "ALL")}
+              onChange={(value) => {
+                setTaskFilter(value as CourierTask | "ALL");
+                setPage(0);
+              }}
               options={TASK_FILTERS.map((task) => ({
                 value: task,
                 label: task === "ALL" ? "All task types" : TASK_LABELS[task],
@@ -142,7 +159,10 @@ export default function CourierDeliveryHistoryPage() {
             </label>
             <ThemedSelect
               id="courier-history-sort"
-              onChange={(value) => setSortOrder(value as HistorySortOrder)}
+              onChange={(value) => {
+                setSortOrder(value as HistorySortOrder);
+                setPage(0);
+              }}
               options={[
                 { value: "UPDATED_DESC", label: "Recently updated" },
                 { value: "UPDATED_ASC", label: "Oldest updated" },
@@ -182,7 +202,7 @@ export default function CourierDeliveryHistoryPage() {
 
         {matchingCompleted.length > 0 && (
           <ul className="space-y-3">
-            {matchingCompleted.map((parcel) => (
+            {pagedCompleted.map((parcel) => (
               <li key={parcel.id}>
                 <article className="grid gap-3 rounded-2xl border border-border bg-card p-4 transition-all sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6">
                   <div className="min-w-0 space-y-1">
@@ -211,6 +231,25 @@ export default function CourierDeliveryHistoryPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {pageCount > 1 && (
+          <nav aria-label="Delivery history pages" className="flex items-center justify-between">
+            <Button disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)} size="sm" variant="outline">
+              <ChevronLeft aria-hidden="true" /> Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {visiblePage + 1} of {pageCount}
+            </span>
+            <Button
+              disabled={visiblePage + 1 >= pageCount}
+              onClick={() => setPage(visiblePage + 1)}
+              size="sm"
+              variant="outline"
+            >
+              Next <ChevronRight aria-hidden="true" />
+            </Button>
+          </nav>
         )}
       </section>
     </div>
