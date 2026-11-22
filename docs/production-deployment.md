@@ -2,7 +2,7 @@
 
 This guide covers deploying SwiftDrop on a single Linux VM (targeted at a **GCP Debian 13 `e2-micro` VM** with 1 GB RAM + 2 GB swap) using [`compose.prod.yaml`](../compose.prod.yaml), Nginx, and Let's Encrypt HTTPS.
 
-Local development continues to use [`compose.yaml`](../compose.yaml) and [`.env.example`](../.env.example); see [docs/development-setup.md](development-setup.md).
+Local development continues to use [`compose.yaml`](../compose.yaml) and [`.env.example`](../.env.example); see [docs/development-setup.md](development-setup.md). For the full CI/CD workflow architecture, GitHub environment configuration, and image tagging matrix, see [docs/ci-cd-and-deployment.md](ci-cd-and-deployment.md).
 
 ---
 

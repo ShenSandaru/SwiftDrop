@@ -229,13 +229,17 @@ for PostgreSQL. The verified test state is recorded in [docs/project-status.md](
 
 ```text
 .
-├── backend/              Spring Boot modular monolith (com.swiftdrop.*), Flyway migrations
-├── frontend/             Next.js App Router application
+├── backend/              Spring Boot modular monolith (com.swiftdrop.*), Flyway migrations, Dockerfile
+├── frontend/             Next.js App Router application, Dockerfile
+├── deploy/               Production Nginx configs and automated VM deployment script
+├── swiftdrop-k8s/        Single-node K3s Kubernetes manifests (BON-1, ADR 0013)
 ├── tools/                Local development tools, for example the webhook receiver
-├── docs/                 Architecture, ADRs, contracts, requirements, status and reviews
+├── docs/                 Architecture, ADRs, CI/CD, deployment guides, contracts and status
 ├── compose.yaml          Local PostgreSQL and RabbitMQ
+├── compose.prod.yaml     Production 5-service Docker Compose stack (with Nginx)
 ├── .env.example          Template for the git-ignored local .env
-├── .github/workflows/    GitHub Actions CI
+├── .env.prod.example     Template for the git-ignored production .env.prod
+├── .github/workflows/    GitHub Actions CI and Docker Publish / GCP deployment
 ├── AGENTS.md, CLAUDE.md  Entry points for AI coding agents
 └── CONTRIBUTING.md       Task workflow and team conventions
 ```
@@ -248,8 +252,8 @@ Each application has its own README: [backend/README.md](backend/README.md) and
 The core backend modules, database migrations, RabbitMQ eventing and the frontend portals are implemented and
 verified; see [docs/project-status.md](docs/project-status.md). Known limits:
 
-- Email and SMS notifications use a mock channel; in-app notifications are real.
-- Production hosting, TLS and a deployment pipeline are not configured. Docker Compose is for local use.
+- Email and SMS notifications default to a mock channel unless external provider credentials are configured; in-app notifications are real.
+- Production deployment is automated via GitHub Actions (`docker-publish.yml`) to a GCP VM using `compose.prod.yaml` and Nginx, with separate K3s manifests in `swiftdrop-k8s/` ([CI/CD & deployment record](docs/ci-cd-and-deployment.md)).
 - Parcels are scanned one at a time; batch scanning and truck manifests are not built.
 - Some ADRs are still marked *Proposed* while the team reviews them.
 
@@ -291,6 +295,9 @@ More cases: [development setup](docs/development-setup.md#troubleshooting) and
 | [Architecture decision records](docs/adr/README.md) | Accepted and proposed decisions |
 | [Project status](docs/project-status.md) | What is implemented and verified |
 | [Development setup](docs/development-setup.md) | Detailed setup and local operations |
+| [CI/CD & deployment record](docs/ci-cd-and-deployment.md) | GitHub Actions workflows, GHCR publishing, GCP VM deployment, and K3s overview |
+| [Production deployment](docs/production-deployment.md) | GCP VM Docker Compose + Nginx + Let's Encrypt runbook |
+| [Kubernetes deployment](docs/kubernetes-deployment.md) | Single-node K3s deployment guide (`BON-1`) |
 | [Merchant integration guide](docs/merchant-integration-guide.md) | Using the order API and webhooks |
 | [Implementation contract](docs/implementation-contract.md) | Delivery and tracking contracts |
 | [Contributing](CONTRIBUTING.md) | Task workflow, branches, commits, pull requests |
