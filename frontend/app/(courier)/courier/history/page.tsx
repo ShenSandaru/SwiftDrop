@@ -162,7 +162,11 @@ export default function CourierDeliveryHistoryPage() {
         </div>
 
         {parcels !== null && !error && (
-          <div className="grid gap-3 sm:grid-cols-2" aria-label="Today's completed task summary">
+          <div
+            aria-label="Today's completed task summary"
+            className="grid gap-3 sm:grid-cols-2"
+            role="group"
+          >
             <SummaryCard label="Completed tasks" value={summary.totalCompletedTasks} />
             <SummaryCard label="Delivered parcels" value={summary.delivered} />
             <SummaryCard label="Failed attempts" value={summary.failedAttempts} />
@@ -247,7 +251,12 @@ export default function CourierDeliveryHistoryPage() {
 
         {hasActiveFilters && (
           <div className="flex justify-end">
-            <Button onClick={resetFilters} size="sm" variant="ghost">
+            <Button
+              aria-label="Clear all history filters and sorting"
+              onClick={resetFilters}
+              size="sm"
+              variant="ghost"
+            >
               <X aria-hidden="true" />
               Clear filters
             </Button>
@@ -281,13 +290,19 @@ export default function CourierDeliveryHistoryPage() {
         )}
 
         {parcels !== null && !error && completed.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          <p
+            className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
+            role="status"
+          >
             No completed tasks today.
           </p>
         )}
 
         {parcels !== null && !error && completed.length > 0 && matchingCompleted.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          <p
+            className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
+            role="status"
+          >
             No completed tasks match the selected criteria.
           </p>
         )}
@@ -330,7 +345,7 @@ export default function CourierDeliveryHistoryPage() {
             <Button disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)} size="sm" variant="outline">
               <ChevronLeft aria-hidden="true" /> Previous
             </Button>
-            <span className="text-sm text-muted-foreground">
+            <span aria-atomic="true" aria-live="polite" className="text-sm text-muted-foreground" role="status">
               Page {visiblePage + 1} of {pageCount}
             </span>
             <Button
