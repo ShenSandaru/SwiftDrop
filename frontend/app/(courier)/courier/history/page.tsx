@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,7 +76,19 @@ export default function CourierDeliveryHistoryPage() {
     visiblePage * HISTORY_PAGE_SIZE,
     (visiblePage + 1) * HISTORY_PAGE_SIZE
   );
+  const hasActiveFilters =
+    Boolean(search.trim()) || statusFilter !== "ALL" || taskFilter !== "ALL" || sortOrder !== "UPDATED_DESC";
+  const firstResult = matchingCompleted.length === 0 ? 0 : visiblePage * HISTORY_PAGE_SIZE + 1;
+  const lastResult = Math.min((visiblePage + 1) * HISTORY_PAGE_SIZE, matchingCompleted.length);
   const summary = summarizeCompletedTasks(parcels ?? []);
+
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("ALL");
+    setTaskFilter("ALL");
+    setSortOrder("UPDATED_DESC");
+    setPage(0);
+  }
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -173,6 +185,21 @@ export default function CourierDeliveryHistoryPage() {
             />
           </div>
         </div>
+
+        {hasActiveFilters && (
+          <div className="flex justify-end">
+            <Button onClick={resetFilters} size="sm" variant="ghost">
+              <X aria-hidden="true" />
+              Clear filters
+            </Button>
+          </div>
+        )}
+
+        {parcels !== null && !error && matchingCompleted.length > 0 && (
+          <p className="text-xs text-muted-foreground" role="status">
+            Showing {firstResult}–{lastResult} of {matchingCompleted.length} completed tasks
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
