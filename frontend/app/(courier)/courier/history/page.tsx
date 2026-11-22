@@ -12,14 +12,23 @@ import { StatusBadge } from "@/components/delivery/status-badge";
 import { TASK_LABELS } from "@/components/delivery/courier-task";
 import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
-import { listCourierParcels, PARCEL_STATUSES, type CourierParcel, type ParcelStatus } from "@/lib/delivery";
-import { filterTasksByStatus, searchCompletedTasks, summarizeCompletedTasks } from "./model";
+import {
+  listCourierParcels,
+  PARCEL_STATUSES,
+  type CourierParcel,
+  type CourierTask,
+  type ParcelStatus,
+} from "@/lib/delivery";
+import { filterTasksByStatus, filterTasksByType, searchCompletedTasks, summarizeCompletedTasks } from "./model";
+
+const TASK_FILTERS: Array<CourierTask | "ALL"> = ["ALL", "PICKUP", "DELIVERY", "RETURN"];
 
 export default function CourierDeliveryHistoryPage() {
   const [parcels, setParcels] = useState<CourierParcel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ParcelStatus | "ALL">("ALL");
+  const [taskFilter, setTaskFilter] = useState<CourierTask | "ALL">("ALL");
 
   useEffect(() => {
     let cancelled = false;
@@ -44,8 +53,8 @@ export default function CourierDeliveryHistoryPage() {
 
   const completed = useMemo(() => parcels?.filter((parcel) => parcel.taskDone) ?? [], [parcels]);
   const matchingCompleted = useMemo(
-    () => filterTasksByStatus(searchCompletedTasks(completed, search), statusFilter),
-    [completed, search, statusFilter]
+    () => filterTasksByType(filterTasksByStatus(searchCompletedTasks(completed, search), statusFilter), taskFilter),
+    [completed, search, statusFilter, taskFilter]
   );
   const summary = summarizeCompletedTasks(parcels ?? []);
 
@@ -71,7 +80,7 @@ export default function CourierDeliveryHistoryPage() {
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-3">
           <label className="relative block">
             <span className="sr-only">Search by tracking number</span>
             <Search
@@ -99,6 +108,20 @@ export default function CourierDeliveryHistoryPage() {
                 ...PARCEL_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
               ]}
               value={statusFilter}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="courier-history-task">
+              Task type
+            </label>
+            <ThemedSelect
+              id="courier-history-task"
+              onChange={(value) => setTaskFilter(value as CourierTask | "ALL")}
+              options={TASK_FILTERS.map((task) => ({
+                value: task,
+                label: task === "ALL" ? "All task types" : TASK_LABELS[task],
+              }))}
+              value={taskFilter}
             />
           </div>
         </div>
