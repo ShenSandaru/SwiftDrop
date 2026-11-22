@@ -162,7 +162,7 @@ export default function CourierDeliveryHistoryPage() {
         </div>
 
         {parcels !== null && !error && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Today's completed task summary">
+          <div className="grid gap-3 sm:grid-cols-2" aria-label="Today's completed task summary">
             <SummaryCard label="Completed tasks" value={summary.totalCompletedTasks} />
             <SummaryCard label="Delivered parcels" value={summary.delivered} />
             <SummaryCard label="Failed attempts" value={summary.failedAttempts} />
@@ -171,7 +171,7 @@ export default function CourierDeliveryHistoryPage() {
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
           <label className="relative block">
             <span className="sr-only">Search by tracking number</span>
             <Search
