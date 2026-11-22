@@ -7,17 +7,19 @@ import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/select";
 import { StatusBadge } from "@/components/delivery/status-badge";
 import { TASK_LABELS } from "@/components/delivery/courier-task";
-import { formatDate, formatDateTime } from "@/components/delivery/format";
+import { formatDate, formatDateTime, STATUS_LABELS } from "@/components/delivery/format";
 import { formatApiError } from "@/lib/api";
-import { listCourierParcels, type CourierParcel } from "@/lib/delivery";
-import { searchCompletedTasks, summarizeCompletedTasks } from "./model";
+import { listCourierParcels, PARCEL_STATUSES, type CourierParcel, type ParcelStatus } from "@/lib/delivery";
+import { filterTasksByStatus, searchCompletedTasks, summarizeCompletedTasks } from "./model";
 
 export default function CourierDeliveryHistoryPage() {
   const [parcels, setParcels] = useState<CourierParcel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ParcelStatus | "ALL">("ALL");
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +43,10 @@ export default function CourierDeliveryHistoryPage() {
   }, []);
 
   const completed = useMemo(() => parcels?.filter((parcel) => parcel.taskDone) ?? [], [parcels]);
-  const matchingCompleted = useMemo(() => searchCompletedTasks(completed, search), [completed, search]);
+  const matchingCompleted = useMemo(
+    () => filterTasksByStatus(searchCompletedTasks(completed, search), statusFilter),
+    [completed, search, statusFilter]
+  );
   const summary = summarizeCompletedTasks(parcels ?? []);
 
   return (
@@ -66,21 +71,37 @@ export default function CourierDeliveryHistoryPage() {
           </div>
         )}
 
-        <label className="relative block">
-          <span className="sr-only">Search by tracking number</span>
-          <Search
-            aria-hidden="true"
-            className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            autoComplete="off"
-            className="pl-9"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by tracking number"
-            type="search"
-            value={search}
-          />
-        </label>
+        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+          <label className="relative block">
+            <span className="sr-only">Search by tracking number</span>
+            <Search
+              aria-hidden="true"
+              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              autoComplete="off"
+              className="pl-9"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by tracking number"
+              type="search"
+              value={search}
+            />
+          </label>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="courier-history-status">
+              Status
+            </label>
+            <ThemedSelect
+              id="courier-history-status"
+              onChange={(value) => setStatusFilter(value as ParcelStatus | "ALL")}
+              options={[
+                { value: "ALL", label: "All statuses" },
+                ...PARCEL_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
+              ]}
+              value={statusFilter}
+            />
+          </div>
+        </div>
 
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -104,7 +125,7 @@ export default function CourierDeliveryHistoryPage() {
 
         {parcels !== null && !error && completed.length > 0 && matchingCompleted.length === 0 && (
           <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No completed tasks match that tracking number.
+            No completed tasks match the selected criteria.
           </p>
         )}
 
