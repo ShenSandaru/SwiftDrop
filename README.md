@@ -253,7 +253,7 @@ The core backend modules, database migrations, RabbitMQ eventing and the fronten
 verified; see [docs/project-status.md](docs/project-status.md). Known limits:
 
 - Email and SMS notifications default to a mock channel unless external provider credentials are configured; in-app notifications are real.
-- Production deployment is automated via GitHub Actions (`docker-publish.yml`) to a GCP VM using `compose.prod.yaml` and Nginx, with separate K3s manifests in `swiftdrop-k8s/` ([CI/CD & deployment record](docs/ci-cd-and-deployment.md)).
+- Production deployment is automated via GitHub Actions (`docker-publish.yml`) to a GCP VM using `compose.prod.yaml` and Nginx, with separate K3s manifests in `swiftdrop-k8s/` ([Deployment & CI/CD docs](docs/deployment/README.md)).
 - Parcels are scanned one at a time; batch scanning and truck manifests are not built.
 - Some ADRs are still marked *Proposed* while the team reviews them.
 
@@ -295,7 +295,7 @@ More cases: [development setup](docs/development-setup.md#troubleshooting) and
 | [Architecture decision records](docs/adr/README.md) | Accepted and proposed decisions |
 | [Project status](docs/project-status.md) | What is implemented and verified |
 | [Development setup](docs/development-setup.md) | Detailed setup and local operations |
-| [CI/CD & deployment record](docs/ci-cd-and-deployment.md) | GitHub Actions workflows, GHCR publishing, GCP VM deployment, and K3s overview |
+| [Deployment & CI/CD](docs/deployment/README.md) | Server specs, GitHub Actions CI/CD, deployment scripts, and K3s architecture |
 | [Production deployment](docs/production-deployment.md) | GCP VM Docker Compose + Nginx + Let's Encrypt runbook |
 | [Kubernetes deployment](docs/kubernetes-deployment.md) | Single-node K3s deployment guide (`BON-1`) |
 | [Merchant integration guide](docs/merchant-integration-guide.md) | Using the order API and webhooks |

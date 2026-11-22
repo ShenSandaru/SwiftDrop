@@ -30,14 +30,14 @@ Core feature development across all primary user roles (Customer, Merchant, Cour
 | `assistant` | **Implemented and tested** | Gemini-powered delivery assistant and MCP server (`track_parcel`, `estimate_fee`, `list_service_areas`) with rate limiting. |
 | `config` & `shared` | **Implemented and tested** | Spring Security filter chains, CORS, JWT/API-key auth, global exception handling, pagination. |
 | Frontend Portals | **Implemented and tested** | 30 Next.js routes across Customer, Merchant, Courier, Dispatcher, Admin, Auth, Tracking, Profile, and Notifications. |
-| CI/CD & Deployment | **Implemented and verified** | GitHub Actions (`ci.yml`, `docker-publish.yml`), multi-stage Dockerfiles, GHCR publishing, automated GCP VM deployment (`compose.prod.yaml`, Nginx, `deploy/scripts/deploy-prod.sh`), and K3s manifests (`swiftdrop-k8s/`, ADR 0013). See [docs/ci-cd-and-deployment.md](ci-cd-and-deployment.md). |
+| CI/CD & Deployment | **Implemented and verified** | GitHub Actions (`ci.yml`, `docker-publish.yml`), multi-stage Dockerfiles, GHCR publishing, automated GCP VM deployment (`compose.prod.yaml`, Nginx, `deploy/scripts/deploy-prod.sh`), and K3s manifests (`swiftdrop-k8s/`, ADR 0013). See [docs/deployment/](deployment/README.md). |
 
 ---
 
 ## 4. Partially Implemented / Blocked Functionality
 
 - **SMS & Email Notification Channels:** **Blocked / Mocked** — Notification persistence and in-app delivery are implemented; email/push providers default to `mock` unless external credentials (`RESEND_API_KEY`, Firebase service account) are configured.
-- **Production Deployment:** **Implemented** — Containerized production deployment (`compose.prod.yaml` + Nginx + Let's Encrypt), GHCR image publishing, and automated GCP VM deployment via GitHub Actions (`production` environment) are implemented and verified on `main` (PR #170, PR #171). Separate K3s manifests (`swiftdrop-k8s/`) are prepared for `BON-1` ([docs/ci-cd-and-deployment.md](ci-cd-and-deployment.md)).
+- **Production Deployment:** **Implemented** — Containerized production deployment (`compose.prod.yaml` + Nginx + Let's Encrypt), GHCR image publishing, and automated GCP VM deployment via GitHub Actions (`production` environment) are implemented and verified on `main` (PR #170, PR #171). Separate K3s manifests (`swiftdrop-k8s/`) are prepared for `BON-1` ([docs/deployment/](deployment/README.md)).
 
 ---
 
